@@ -24,7 +24,7 @@ Auth scheme is committed in [../../project-info.md §8](../../project-info.md#8-
 - **Password hashing:** account passwords MUST be hashed with a memory-hard algorithm (Argon2id preferred; bcrypt acceptable with cost ≥ 12). Plain SHA-256 / MD5 / SHA-1 are forbidden. The persisted column is `account.password_hash` ([../../docs/database/README.md](../../docs/database/README.md) `account`).
 - **Account recovery:** MUST be a separate authenticated flow that issues a single-use, time-bounded token; recovery tokens MUST NOT extend or re-issue an existing JWT.
 - **Enumeration prevention:** sign-in failures MUST return the same `errorKey: "auth.invalid_credentials"` regardless of whether the email exists. The same applies to password-reset acknowledgement.
-- **Audit trail:** authentication events (login success, login failure, password reset request, password change) MUST write to `audit_log` ([../../docs/database/README.md](../../docs/database/README.md) `audit_log`).
+- **Audit trail:** authentication events (login success, login failure, password reset request, password change) MUST write to `audit_log` ([../../docs/database/README.md](../../docs/database/README.md) `audit_log`). Fraud-driven blocks (FR2.1–FR2.2) and account suspensions / un-suspensions (FR2.4) MUST also write to `audit_log` per [../../project-info.md §8](../../project-info.md#8-security-baseline).
 - **`auth.rate_limited`:** repeated failed sign-ins MUST trigger the rate-limit envelope (§8) — no silent exponential lockout.
 
 ## 3. Authorization
@@ -99,7 +99,7 @@ Source: [../../project-info.md §8](../../project-info.md#8-security-baseline), 
 | `POST /auth/login` | Progressive back-off on repeated failure `<!-- not-yet-adopted -->` | Redis counter keyed on (account, IP) | — |
 
 - **Failure mode:** exceeded limit returns HTTP 429 with `errorKey: "ratelimit.exceeded"` and a `Retry-After` header ([backend_coding.md §8](backend_coding.md#8-exception-handling)).
-- **Distinction from fraud rules:** the velocity (FR2.1) and volume (FR2.2) checks are observation rules with reactive semantics — they raise alerts but do not block transactions ([../../docs/business-rules/fraud-detection-engine-rules.md](../../docs/business-rules/fraud-detection-engine-rules.md)). The rate limit above is preventive (rejects the request). The two systems MUST NOT be conflated.
+- **Distinction from fraud rules:** velocity (FR2.1), volume (FR2.2), and the `account.fraud_status` check (FR2.4) are **also** preventive — they reject the offending transaction inline on the synchronous money path per NFR9 ([../../project-info.md §6](../../project-info.md#6-non-functional-requirements--invariants), [../../docs/business-rules/fraud-detection-engine-rules.md](../../docs/business-rules/fraud-detection-engine-rules.md)). The two systems MUST NOT be conflated, however: rate limits return `ratelimit.exceeded` (HTTP 429) and signal abuse of the endpoint; fraud blocks return `fraud.velocity_exceeded` / `fraud.volume_exceeded` (HTTP 422) or `account.suspended` (HTTP 403) and signal account-level risk. Each has its own counter, its own envelope, and its own audit trail. Cross-event fraud analysis, alerting (FR2.5), and the suspension-policy decision (FR2.4) remain on the Kafka consumer.
 - **Progressive back-off:** repeated 429s for the same user SHOULD back off in client retry policy, but the server does not increase the limit window. Server policy is fixed-window token bucket per the env vars.
 
 ## 9. Dependencies
@@ -139,7 +139,7 @@ See [testing.md](testing.md) for the testing contract. The required security tes
 | Boundary | `threshold_percent` outside `[1, 100]`, `amount <= 0`, malformed currency code → `validation.*`. | DTO validation tests. |
 | XSS payload | A free-form string containing `<script>` is rendered as text in the frontend, not executed. | Vitest + React Testing Library. |
 | Rate limit | The 11th transfer per minute returns 429 with `Retry-After`; the 6th advisor call per hour returns 429. | Rate-limit middleware tests. |
-| Audit log | A transfer / role grant / admin read writes the expected `audit_log` row. | Service integration tests. |
+| Audit log | A transfer / role grant / admin read / fraud-driven block (FR2.1–FR2.2) / account suspension or un-suspension (FR2.4) writes the expected `audit_log` row. | Service integration tests. |
 
 ## 12. Code-review checklist — CRITICAL
 

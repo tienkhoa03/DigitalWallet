@@ -66,7 +66,7 @@ DigitalWallet/
 │   │   ├── api/  service/  persistence/
 │   ├── wallet/                    # FR1.2, FR1.3, FR1.4
 │   │   ├── api/  service/  persistence/  event/
-│   ├── fraud/                     # FR2.1, FR2.2, FR2.3
+│   ├── fraud/                     # FR2.1, FR2.2, FR2.3, FR2.4, FR2.5
 │   │   ├── consumer/  service/  event/
 │   ├── pfm/                       # FR4.x, FR5.x
 │   │   ├── api/  service/  consumer/  persistence/

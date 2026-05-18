@@ -65,6 +65,7 @@ public class WalletResource {
 - **Naming:** `<Noun>Service` for the business class, `<Verb><Noun>Service` only when behaviour is verb-shaped (e.g. `OutboxPublisherService`). Methods MUST be verb phrases (`deposit`, `transfer`, `recordFraudAlert`).
 - **Transaction boundary:** `@Transactional` MUST be applied at the service method, NOT at the resource or repository. A method that both reads and writes the ledger MUST be `@Transactional` (default `REQUIRED`). Read-only flows SHOULD declare `@Transactional(TxType.SUPPORTS)` or omit the annotation entirely.
 - **Hybrid concurrency (NFR1):** every wallet mutation MUST follow the exact order — (1) acquire the Redis distributed lock keyed on `wallet_id` with a short TTL via the helper in `shared/`; (2) open the `@Transactional` boundary; (3) read the wallet row with `LockModeType.PESSIMISTIC_WRITE`; (4) write the ledger row + outbox row; (5) commit; (6) release the Redis lock in a `finally`. See [../../docs/business-rules/README.md NFR1](../../docs/business-rules/README.md#nfr-enforcement-matrix) and [../../docs/decisions/0003-concurrency-strategy.md](../../docs/decisions/0003-concurrency-strategy.md).
+- **Synchronous fraud pre-check (NFR9):** every wallet mutation MUST run the bounded fraud pre-check (velocity FR2.1 + volume FR2.2 Redis sliding-window lookups + `account.fraud_status` read FR2.4) **before** the Redis wallet lock is acquired. A breach rejects with the typed exception in §8 (`fraud.velocity_exceeded` / `fraud.volume_exceeded` / `account.suspended`) and writes one `audit_log` row + one `transaction.blocked` outbox event in a short `@Transactional` boundary — no ledger row, no wallet lock. See [../../docs/business-rules/fraud-detection-engine-rules.md](../../docs/business-rules/fraud-detection-engine-rules.md) and [../../docs/decisions/0010-fraud-enforcement-model.md](../../docs/decisions/0010-fraud-enforcement-model.md).
 - **Validation flow:**
   - Bean Validation on DTOs runs at the resource boundary (annotation-driven).
   - Cross-field and domain invariants (insufficient funds, FX missing, currency mismatch, recipient identity) run inside the service.
@@ -73,7 +74,7 @@ public class WalletResource {
 - **What MUST NOT happen on the request thread:**
   - Kafka publishing (§15, NFR2/NFR5).
   - LLM calls (NFR8).
-  - Fraud rule evaluation, PFM aggregation, dashboard aggregation — these are Kafka-consumer concerns ([../../docs/business-rules/README.md NFR5](../../docs/business-rules/README.md#nfr-enforcement-matrix)).
+  - Cross-event fraud analysis, alert fan-out (FR2.5), the suspension-policy decision (FR2.4), PFM aggregation, dashboard aggregation — these are Kafka-consumer concerns ([../../docs/business-rules/README.md NFR5](../../docs/business-rules/README.md#nfr-enforcement-matrix)). The bounded fraud pre-check (FR2.1 / FR2.2 Redis counters + `account.fraud_status` read) is the only fraud step permitted inline (NFR9; see the §3 hybrid-concurrency / pre-check rules).
   - Blocking I/O outside the configured worker / virtual-thread executor.
 
 ## 4. Data models / entities
@@ -123,9 +124,9 @@ public class WalletResource {
   | `validation.*` | 400 | `ValidationException` |
   | `idempotency.key_required` | 400 | `IdempotencyKeyRequiredException` |
   | `auth.invalid_credentials` | 401 | `AuthInvalidCredentialsException` |
-  | `auth.forbidden` | 403 | `AuthForbiddenException` |
+  | `auth.forbidden`, `account.suspended` | 403 | `AuthForbiddenException` / `AccountSuspendedException` (FR2.4) |
   | `wallet.duplicate_currency`, `budget.duplicate_month`, `idempotency.replay_conflict`, `wallet.locked` | 409 | `ConflictException` (subclassed per domain) |
-  | `wallet.insufficient_funds`, `transfer.fx_rate_missing`, `transfer.recipient_not_found`, `transfer.same_wallet`, `wallet.currency_mismatch`, `advisor.month_not_ready`, `validation.invalid_amount` | 422 | `BusinessRuleException` (subclassed per domain) |
+  | `wallet.insufficient_funds`, `transfer.fx_rate_missing`, `transfer.recipient_not_found`, `transfer.same_wallet`, `wallet.currency_mismatch`, `advisor.month_not_ready`, `validation.invalid_amount`, `fraud.velocity_exceeded`, `fraud.volume_exceeded` | 422 | `BusinessRuleException` (subclassed per domain — fraud subclasses for FR2.1 / FR2.2) |
   | `ratelimit.exceeded` | 429 (`Retry-After` header required) | `RateLimitException` |
   | `advisor.circuit_open` | 503 | `CircuitOpenException` |
   | `audit.write_failed` | 500 | `AuditFailureException` |
