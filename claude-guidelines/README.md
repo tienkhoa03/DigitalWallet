@@ -84,7 +84,7 @@ Each prompt is a standalone, copy-paste block. Open a fresh Claude session, past
 | [02-how-to-fill-template.md](02-how-to-fill-template.md) | Field-by-field instructions for filling the template, with do/don't examples. |
 | [03-initialization-workflow.md](03-initialization-workflow.md) | The full end-to-end workflow — prerequisites, ordering, what to commit when, how to iterate later. |
 | [04-ongoing-development-workflow.md](04-ongoing-development-workflow.md) | What to do **after** the bootstrap: day-to-day plan→implement→verify→review→ship loop, plus the propagation flow for when `project-info.md` changes. |
-| [prompts/](prompts/) | One prompt per step. Copy and paste into a Claude Code session. |
+| [prompts/](prompts/) | Two families: `step-N-*.md` for sequential bootstrap (run once, in order), `ongoing-*.md` for event-driven procedures (run when triggered — spec change, marker sweep, health check, new artefact). Copy and paste into a Claude Code session. |
 | [reference/](reference/) | Mental models and conventions. Read once; refer back when an edge case shows up. |
 | [examples/](examples/) | A worked example based on the Digital Wallet project (this repo's own `docs/`, `.claude/rules/`, etc. are the live reference). |
 

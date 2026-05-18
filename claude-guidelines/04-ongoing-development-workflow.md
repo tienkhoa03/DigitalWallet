@@ -20,6 +20,8 @@ What to do **after** the seven bootstrap steps have shipped a Claude-ready basel
 | You learned a coding rule the hard way | Tighten [.claude/rules/](../.claude/rules/) — codify the lesson |
 | You made an architectural decision | Write an ADR under [docs/decisions/](../docs/decisions/) |
 
+> Each of the procedures below has a matching copy-paste prompt under [prompts/](prompts/) — so you can run them in a fresh Claude session the same way the bootstrap steps work. See [§7 Prompts index](#7-prompts-index) at the bottom of this file for the full map.
+
 ---
 
 ## 1. The daily development loop
@@ -122,7 +124,7 @@ The bootstrap defaults to **greenfield**. Every `(verify)` and `(spec — not ye
 
 ### 2.1 The `(verify)` sweep
 
-After any PR that adds or moves real code, do a quick sweep:
+After any PR that adds or moves real code, do a quick sweep. The automated version is [prompts/ongoing-verify-marker-sweep.md](prompts/ongoing-verify-marker-sweep.md) — paste it into a fresh session and it produces a triage report at `docs/plans/marker-sweep-<date>.md`. Manual fast-path:
 
 ```
 grep -rn "(verify)\|spec — not yet implemented" docs/ .claude/rules/
@@ -231,7 +233,7 @@ The rule of thumb:
 
 ### 3.4 The end-to-end update procedure
 
-A clean, repeatable procedure for any spec change:
+A clean, repeatable procedure for any spec change. The automated version is [prompts/ongoing-propagate-project-info-change.md](prompts/ongoing-propagate-project-info-change.md) — paste it into a fresh session after committing the `project-info.md` edit on a feature branch, and it produces a propagation report + surgical edits + a PR-body fragment.
 
 ```
 0. Open a feature branch.
@@ -285,7 +287,7 @@ The wrong fix is to silently align one to the other and walk away. Drift surface
 
 ## 4. Adding artefacts after bootstrap
 
-The bootstrap creates a baseline. The project will grow new skills, new commands, new agents. The mental model is the same as during bootstrap, just one artefact at a time.
+The bootstrap creates a baseline. The project will grow new skills, new commands, new agents. The mental model is the same as during bootstrap, just one artefact at a time. The automated version is [prompts/ongoing-add-artefact.md](prompts/ongoing-add-artefact.md) — it expects five inputs (type, slug, purpose, triggers, exclusions), validates against the decision tree in [reference/what-each-artifact-is-for.md](reference/what-each-artifact-is-for.md), checks for overlap, and copies from a sibling template.
 
 ### 4.1 Adding a new skill
 
@@ -328,7 +330,7 @@ Never put the same rule in two places. Cite from one to the other.
 
 ## 5. Health checks (do these monthly)
 
-Once you're three months in, the playbook will reward a recurring sanity pass.
+Once you're three months in, the playbook will reward a recurring sanity pass. The automated version is [prompts/ongoing-baseline-health-check.md](prompts/ongoing-baseline-health-check.md) — it walks the six checks below, captures measurements, assigns PASS / WARN / FAIL verdicts, and writes a dated report under `docs/plans/`.
 
 | Check | How | Frequency |
 |---|---|---|
@@ -365,6 +367,26 @@ Same answer as during bootstrap — no. Each prompt is an input to the next. The
 
 **My team isn't using slash commands. Are the commands wasted?**
 The commands are entry points; the actual work lives in skills and agents. If a teammate prefers to invoke the skill directly ("run code-review"), that's identical behaviour. The commands exist so the workflow has *one* canonical surface, not because the surface is mandatory.
+
+---
+
+## 7. Prompts index
+
+Each procedure in this file has a copy-paste prompt under [prompts/](prompts/). Pattern: open a fresh Claude Code session at the repo root, paste the prompt body verbatim, review the output, commit per the prompt's "Commit" section.
+
+| Procedure | Section in this file | Prompt | When |
+|---|---|---|---|
+| Propagate a `project-info.md` change | §3 | [prompts/ongoing-propagate-project-info-change.md](prompts/ongoing-propagate-project-info-change.md) | Any time `project-info.md` changes beyond cosmetic |
+| `(verify)` marker sweep | §2.1 | [prompts/ongoing-verify-marker-sweep.md](prompts/ongoing-verify-marker-sweep.md) | After a PR that lands real code under `backend/` or `frontend/` |
+| Baseline health check | §5 | [prompts/ongoing-baseline-health-check.md](prompts/ongoing-baseline-health-check.md) | Monthly (or immediately on suspected drift) |
+| Add a new artefact (skill / command / agent / rule) | §4 | [prompts/ongoing-add-artefact.md](prompts/ongoing-add-artefact.md) | One artefact at a time |
+
+Distinguishing rule:
+
+- **`prompts/step-N-*.md`** — sequential, run once at bootstrap, in order.
+- **`prompts/ongoing-*.md`** — event-driven, run as the trigger fires, in any order.
+
+Both share the same shape (When / Output / Prereqs → What this produces → Copy-paste prompt → How to review → Commit) so the muscle memory carries across.
 
 ---
 
