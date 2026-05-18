@@ -27,11 +27,12 @@ DigitalWallet is a **greenfield** multi-currency internal wallet platform with r
 
 ## Architecture
 
-Modular monolith organised under `backend/` as feature modules (`account`, `wallet`, `fraud`, `pfm`, `advisor`, `dashboard`, `shared`), with two parallel execution streams decoupled by Kafka: the synchronous money path commits the ledger on the request thread, and one or more asynchronous Kafka consumers (Fraud, PFM, Dashboard, AI Advisor) run on separate thread pools. Cross-system consistency between the two streams is achieved with the Transactional Outbox Pattern, not by writing to Kafka inside the request handler (NFR2, NFR5). The frontend is a single React app serving both end users and the admin dashboard, with realtime updates over WebSocket.
+Modular monolith organised under `backend/` as feature modules (`account`, `wallet`, `fraud`, `pfm`, `advisor`, `dashboard`, `shared`), with two parallel execution streams decoupled by Kafka: the synchronous money path commits the ledger on the request thread (after a bounded fraud pre-check at the edge, NFR9), and one or more asynchronous Kafka consumers (Fraud, PFM, Dashboard, AI Advisor) run on separate thread pools. Cross-system consistency between the two streams is achieved with the Transactional Outbox Pattern, not by writing to Kafka inside the request handler (NFR2, NFR5). The frontend is a single React app serving both end users and the admin dashboard, with realtime updates over WebSocket.
 
 ### Synchronous stream (money path)
 
 - Entry: REST endpoints for account, wallet, deposit, withdraw, transfer, statement.
+- Fraud pre-check: bounded Redis sliding-window counter lookups (velocity FR2.1, volume FR2.2) plus an `account.fraud_status` read (FR2.4) before opening the DB transaction; a breach rejects the request inline with `fraud.velocity_exceeded` / `fraud.volume_exceeded` / `account.suspended` (NFR9). Blocked attempts append an `audit_log` row and a `transaction.blocked` outbox event in a short `@Transactional` boundary.
 - Concurrency: outer Redis distributed lock keyed on `wallet_id` (fast-fail), inner DB `SELECT … FOR UPDATE` via JPA `PESSIMISTIC_WRITE` (NFR1).
 - Persistence: `@Transactional` boundary on the service layer; ledger row + outbox row committed atomically.
 - Idempotency: mutating endpoints require an `Idempotency-Key` header; replays return the original outcome (NFR3).
@@ -41,7 +42,7 @@ Modular monolith organised under `backend/` as feature modules (`account`, `wall
 ### Asynchronous stream (Kafka consumers)
 
 - Outbox poller: Quarkus `@Scheduled` drains the outbox into `transaction-events` with at-least-once semantics (NFR2). Consumers must be idempotent.
-- Fraud path: `transaction-events` → velocity (FR2.1) + volume (FR2.2) checks → `fraud-alerts` → WebSocket fan-out to admin dashboard (FR3.2).
+- Fraud path: `transaction-events` → asynchronous fraud engine (cross-event analysis, repeat-breach detection, suspension policy — flipping `account.fraud_status` to `SUSPENDED` per FR2.4) → `fraud-alerts` (FR2.5) → WebSocket fan-out to admin / fraud analyst (FR3.2). Inline blocking lives in the sync pre-check; the async path owns alerting and suspension state changes.
 - PFM path: `transaction-events` → budget updater (event-time via `transaction_timestamp`, NFR7) → Redis hot read-model + Postgres materialized view backup (NFR6) → threshold checker → `pfm-threshold-alerts` → WebSocket / push (FR5.x).
 - Dashboard path: `transaction-events` aggregator → live daily count/volume metrics → WebSocket push (FR3.1).
 - AI advisor path: month-end aggregator → anonymised LLM prompt (NFR8 circuit-breaker wrapped) → response topic → WebSocket reply to user (HTTP 202 on request).
@@ -54,10 +55,11 @@ Treat any change that weakens these as a regression.
 - **ACID + Outbox (NFR2):** ledger writes and outbox writes commit in a single DB transaction; Kafka publishing is performed only by the scheduled outbox poller. Consumers must be idempotent.
 - **Idempotency (NFR3):** all mutating transfer/deposit/withdraw endpoints require an `Idempotency-Key` header and MUST return the original outcome on replay.
 - **Coverage floor (NFR4):** ≥80% line coverage on the service layer; CI fails below this threshold.
-- **Latency isolation (NFR5):** fraud, PFM, dashboard, and advisor logic MUST run in Kafka-consumer threads. The HTTP handler only persists the ledger row and emits an outbox event.
+- **Latency isolation (NFR5):** the HTTP path MAY perform fast, bounded Redis-counter pre-checks (fraud velocity / volume per FR2.1–FR2.2, plus `account.fraud_status` lookup per FR2.4), but MUST NOT run heavy fraud / PFM / dashboard analytics inline. Cross-event fraud analysis, alert fan-out, suspension policy, PFM aggregation, and dashboard aggregation MUST run in Kafka-consumer threads.
 - **CQRS for budgets (NFR6):** budget state is NEVER maintained by direct `UPDATE`s against ledger tables. Redis is the hot read-model; a Postgres materialized view is the durable backup and rebuild source for Redis.
 - **Event-time correctness (NFR7):** PFM uses `transaction_timestamp` from the Kafka payload, not consumer wall-clock; late events must not corrupt accounting.
 - **LLM isolation (NFR8):** outbound LLM calls are wrapped in a SmallRye circuit breaker; the advisor endpoint follows async request-reply (HTTP 202 + WebSocket result) and never blocks HTTP threads.
+- **Synchronous fraud blocking (NFR9):** every wallet mutation MUST evaluate velocity (FR2.1), volume (FR2.2), and `account.fraud_status` (FR2.4) on the request thread before opening the DB transaction. Counters live in Redis (sliding window); suspension state lives in Postgres. Async fraud analytics, alert fan-out (FR2.5), and the suspension-policy decision (when to flip an account to `SUSPENDED`) remain on the Kafka consumer.
 
 ## Commands
 
@@ -86,6 +88,7 @@ Full glossary will live under [docs/domain-knowledge/](docs/domain-knowledge/) i
 - **Outbox:** DB table written in the same transaction as a money mutation; drained to Kafka by a scheduled poller.
 - **Idempotency Key:** client-supplied UUID guaranteeing at-most-once side effects on a mutating endpoint.
 - **Event time:** `transaction_timestamp` carried in the Kafka payload (NFR7), distinct from the consumer's processing time.
+- **Fraud counter / Fraud status / Fraud block:** Redis sliding-window counter and `account.fraud_status` enum used by the sync pre-check (NFR9) to reject suspicious transactions inline; full definitions in [project-info.md §9](project-info.md#9-domain-glossary).
 
 ## Module layout (planned)
 
@@ -98,7 +101,7 @@ DigitalWallet/
 │   │   ├── api/  service/  persistence/
 │   ├── wallet/                    # FR1.2, FR1.3, FR1.4
 │   │   ├── api/  service/  persistence/  event/
-│   ├── fraud/                     # FR2.1, FR2.2, FR2.3
+│   ├── fraud/                     # FR2.1, FR2.2, FR2.3, FR2.4, FR2.5
 │   │   ├── consumer/  service/  event/
 │   ├── pfm/                       # FR4.x, FR5.x
 │   │   ├── api/  service/  consumer/  persistence/
@@ -119,6 +122,6 @@ Feature-based + layered: group by feature module, keep `api/` / `service/` / `pe
 - **§7 / §10 ADR #2 LLM provider** — provider is unanswered (Claude / OpenAI / Gemini / local). Blocks any concrete advisor integration, retry budgets, and the prompt sanitisation contract referenced in §8.
 - **§8 / §16 #15 LLM data retention & training opt-out** — provider-dependent; cannot finalise the anonymisation rule until ADR #2 is closed.
 - **§15 design/wireframes and prior art** — both TBD; frontend module conventions (component boundaries, layout primitives) will need a placeholder until designs land.
-- **§17.1 performance budget** — only suggested numbers (≤200 ms P95 on `/transfers`, ≤1 s WebSocket fan-out). No committed SLO; the architecture review in NFR5 needs a concrete latency target.
+- **§17.1 performance budget** — MVP dev-target budget committed (`/transfers` ≤ 200 ms P95 incl. fraud pre-check; async suspension propagation ≤ 1 s; WebSocket alert fan-out ≤ 1 s) on a single-node docker-compose stack; not a production SLO. Revisit once observability (§17.2) lands and we have real measurements.
 - **§17.2 observability** — metrics sink and tracing stack TBD. Without these, the audit-log + SOC 2 invariants in §8 only cover business events, not operational signals.
 - **§17.3 accessibility floor** — WCAG target TBD; affects frontend coding rules in step 2.
