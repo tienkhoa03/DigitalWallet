@@ -196,6 +196,8 @@ The bootstrap creates a baseline, not a frozen artifact. As the project evolves:
 
 Re-running the full bootstrap is **not** the right answer for incremental change. Use it only when the project undergoes a foundational rewrite (e.g. swap Quarkus for Spring Boot — but at that point, the project is essentially new).
 
+For the **day-to-day** AI workflow after this bootstrap (plan → implement → verify → review → ship) and the **propagation procedure** when `project-info.md` changes, see [04-ongoing-development-workflow.md](04-ongoing-development-workflow.md).
+
 ---
 
 ## Frequently asked questions
