@@ -233,45 +233,55 @@ The rule of thumb:
 
 ### 3.4 The end-to-end update procedure
 
-A clean, repeatable procedure for any spec change. The automated version is [prompts/ongoing-propagate-project-info-change.md](prompts/ongoing-propagate-project-info-change.md) — paste it into a fresh session after committing the `project-info.md` edit on a feature branch, and it produces a propagation report + surgical edits + a PR-body fragment.
+A clean, repeatable procedure for any spec change. The automated version is [prompts/ongoing-propagate-project-info-change.md](prompts/ongoing-propagate-project-info-change.md) — edit `project-info.md` and leave it **uncommitted** (staged or unstaged is fine), then paste the prompt into a fresh session. It detects the change by running `git diff HEAD -- project-info.md` against the last commit, classifies the change, locates downstream citations (including the OLD wording that may still linger in rule files), produces surgical edits, and prints a PR-body fragment.
 
 ```
 0. Open a feature branch.
 
-1. EDIT  project-info.md.
+1. EDIT  project-info.md  — LEAVE IT UNCOMMITTED.
    - Bump §16 if an open question closed.
    - Mark old rows as ❌ Superseded by §X if you replaced one.
+   - Do NOT `git commit` yet. The propagation prompt detects the change via
+     `git diff HEAD -- project-info.md`, which only sees the diff if the
+     edit is still in the working tree (staged or unstaged).
 
-2. CLASSIFY  per §3.1 above.
-   - Cosmetic   → commit, done.
-   - Spec       → continue.
-   - Stack      → continue.
-   - Architect. → continue, plan a prompt rerun.
-   - Pivot      → re-run the whole bootstrap on a new branch.
+2. RUN  prompts/ongoing-propagate-project-info-change.md  in a fresh Claude session.
+   - The prompt classifies the change (cosmetic / spec / stack / architectural / pivot).
+   - For cosmetic / pivot it exits with guidance; for the other three it continues.
+   - It locates downstream citations (propagation table + grep for old wording).
+   - It produces SURGICAL edits to each downstream file — also uncommitted.
+   - It prints a propagation report + PR-body fragment.
 
-3. PROPAGATE  per §3.2 above.
-   - Open the propagation table for §<X> you edited.
-   - Edit each downstream file. Keep edits surgical — change only the citing sentence/section.
-   - If touching ≥5 files, rerun the bootstrap prompt for that layer in a fresh session.
+3. REVIEW  the staged edits in your editor or with `git diff`.
+   - Per-file diff should be small (one citing sentence / row / section).
+   - If any diff is > ~20 lines, suspect a "while you're there" rewrite — push back.
+   - If the prompt recommended a bootstrap prompt rerun (architectural change,
+     ≥5 downstream files), run that rerun NOW in another fresh session before
+     committing — the rerun is what edits the affected layer in bulk.
 
 4. ADR  if the change reflects a decision with trade-offs.
-   - Use docs/decisions/template.md.
-   - Status: Proposed → Accepted on merge.
+   - The prompt drafts/flips it for you; you decide Proposed vs Accepted.
    - If it supersedes a previous ADR, add Supersedes: / Superseded by: markers.
 
 5. VERIFY  the artefacts still cross-link.
-   - Run grep for the old wording in case it lingers somewhere.
+   - Re-run `grep -rn "<old wording>" docs/ .claude/rules/ CLAUDE.md` to confirm
+     the old wording is gone everywhere.
    - Run Skill code-review on the docs diff — it catches stale rule citations.
    - Run prompts/step-7-validate-and-iterate.md if architectural change.
 
-6. COMMIT  in two stages, separated:
-   - One commit for project-info.md (source change).
-   - One commit per downstream artefact layer (CLAUDE.md, docs/, .claude/rules/, …)
-     so a reviewer can see the propagation chain.
+6. COMMIT  in this order — source first, then each downstream layer separately:
+   a. git add project-info.md            && git commit -m "docs: update project-info.md §<X> — <reason>"
+   b. git add CLAUDE.md                  && git commit -m "docs: propagate §<X> into CLAUDE.md"
+   c. git add docs/                      && git commit -m "docs: propagate §<X> into docs/"
+   d. git add .claude/rules/             && git commit -m "claude: propagate §<X> into rules"
+   e. (optional) git add docs/decisions/ && git commit -m "docs: <draft|accept> ADR NNNN <slug>"
+
+   Reviewers walk the chain top-to-bottom: source change in (a), propagation
+   evidence in (b)–(d), ADR decision in (e).
 
 7. PR  via Skill create-merge-request.
-   - The PR body MUST list the propagation: "edited §<X> → updated <files>".
-   - Reviewers check that the chain is complete.
+   - Paste the prompt's PR-body fragment into the body.
+   - The PR description MUST list the propagation chain explicitly.
 ```
 
 ### 3.5 What to do when you find drift after the fact
