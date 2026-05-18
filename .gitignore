@@ -1,0 +1,59 @@
+# --- Secrets / env files ---
+.env
+.env.*
+!.env.example
+!.env.template
+*.env
+*.env.local
+.envrc
+secrets/
+secrets.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+credentials.json
+*credentials*.json
+
+# --- Claude Code local ---
+.claude/settings.local.json
+.claude/.credentials.json
+
+# --- Java / Maven ---
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.log
+hs_err_pid*
+.mvn/wrapper/maven-wrapper.jar
+
+# --- Node / pnpm / frontend ---
+node_modules/
+dist/
+build/
+coverage/
+.pnpm-store/
+.vite/
+*.tsbuildinfo
+npm-debug.log*
+pnpm-debug.log*
+
+# --- IDE / editor ---
+.idea/
+.vscode/
+!.vscode/extensions.json
+*.iml
+*.swp
+*.swo
+.DS_Store
+
+# --- OS ---
+Thumbs.db
+
+# --- Docker / runtime ---
+*.pid
+docker-compose.override.yml
