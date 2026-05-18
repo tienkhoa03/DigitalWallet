@@ -28,6 +28,9 @@ Source: [../../project-info.md §9](../../project-info.md#9-domain-glossary).
 | Event time | The `transaction_timestamp` carried in the Kafka payload (NFR7), distinct from the consumer's processing time. |
 | Velocity | Number of transactions per account per unit time (input to FR2.1). |
 | Volume | Cumulative transaction amount per account per unit time (input to FR2.2). |
+| Fraud counter | Redis sliding-window counter (per account, per rule — velocity / volume) read by the sync pre-check (NFR9) to decide whether a candidate transaction would breach a threshold. |
+| Fraud status | Account-level enum (`ACTIVE`, `SUSPENDED`) stored on the `account` row. `SUSPENDED` accounts are rejected by the sync money path with `account.suspended`. Set by the async fraud consumer (FR2.4); cleared only by a `FRAUD_ANALYST` action with an `audit_log` entry. |
+| Fraud block | A money mutation rejected synchronously by the fraud pre-check (NFR9). Persists an `audit_log` row and an outbox `transaction.blocked` event — no ledger row is written. |
 
 See also the database expression of these concepts in [../database/README.md](../database/README.md).
 
@@ -66,9 +69,10 @@ This persona acts occasionally and is kept separate from `ADMIN` to enforce leas
 
 1. **Log in** with an account granted the `FRAUD_ANALYST` role.
 2. **Subscribe to the fraud-alert stream** (`WS /admin/ws/alerts`) and **list historical alerts** via `GET /fraud/alerts`.
-3. **Investigate evidence** attached to each alert (window, counts, sums recorded by the fraud engine — FR2.1, FR2.2).
-4. **Tune thresholds** by changing the corresponding env vars (`FRAUD_VELOCITY_*`, `FRAUD_VOLUME_*` in [../architecture/README.md#7-config--profiles](../architecture/README.md#7-config--profiles)).
+3. **Investigate evidence** attached to each alert (window, counts, sums, suspension transitions recorded by the fraud engine — FR2.1, FR2.2, FR2.4, FR2.5).
+4. **Tune thresholds** by changing the corresponding env vars (`FRAUD_VELOCITY_*`, `FRAUD_VOLUME_*`, `FRAUD_SUSPENSION_*` in [../architecture/README.md#7-config--profiles](../architecture/README.md#7-config--profiles)).
 5. **Mark an alert as confirmed or false-positive** via `POST /fraud/alerts/{alertId}/resolution` `(verify — endpoint derived, not explicit in §5)`.
+6. **Un-suspend an account** (FR2.4) — `FRAUD_ANALYST`-only action; writes an `audit_log` row with the analyst's principal id and a justification. `ADMIN` does NOT inherit this permission.
 
 See [../business-rules/fraud-detection-engine-rules.md](../business-rules/fraud-detection-engine-rules.md).
 

@@ -37,6 +37,7 @@ Identity record per user. Owns wallets, budgets, and role assignments.
 | `email` | `varchar` | UNIQUE NOT NULL | Login identity, PII ([../../project-info.md §8](../../project-info.md#8-security-baseline)). |
 | `full_name` | `varchar` | NOT NULL | PII. |
 | `password_hash` | `varchar` | NOT NULL | Hashed credential. Algorithm `(verify)`. |
+| `fraud_status` | `varchar` | NOT NULL CHECK (in `ACTIVE`,`SUSPENDED`) DEFAULT `'ACTIVE'` | Read by the sync money path pre-check (NFR9); flipped to `SUSPENDED` by the async fraud consumer (FR2.4). Cleared only by a `FRAUD_ANALYST` action with an `audit_log` entry. |
 | `created_at` | `timestamptz` | NOT NULL | Creation time, UTC. |
 | `updated_at` | `timestamptz` | NOT NULL | Last mutation time. |
 
@@ -176,28 +177,28 @@ Static seed of `(from_currency, to_currency) → rate`; admin-mutable ([../../pr
 
 ### `fraud_alert`
 
-Output of the fraud engine (FR2.1, FR2.2); fed onto `fraud-alerts` for WebSocket fan-out (FR3.2).
+Output of the async fraud engine (FR2.1, FR2.2, FR2.4, FR2.5); fed onto `fraud-alerts` for WebSocket fan-out (FR3.2). Inline blocking lives in the sync money path (NFR9, [../../project-info.md §6](../../project-info.md#6-non-functional-requirements--invariants)).
 
 | Column | Type | Constraint | Purpose |
 |---|---|---|---|
 | `id` | `uuid` | PK | — |
 | `account_id` | `uuid` | FK → `account.id`, NOT NULL | Subject account. |
-| `rule` | `varchar` | NOT NULL CHECK (in `velocity`,`volume`) | Rule that fired. |
-| `evidence` | `jsonb` | NOT NULL | Window, counts, sums — enough to reproduce the decision. |
+| `rule` | `varchar` | NOT NULL CHECK (in `velocity`,`volume`,`suspension`) | Rule that fired (`suspension` covers FR2.4 transitions). |
+| `evidence` | `jsonb` | NOT NULL | Window, counts, sums, transition state — enough to reproduce the decision. |
 | `raised_at` | `timestamptz` | NOT NULL | Detection time. |
 | `resolved_at` | `timestamptz` | NULL | Set by a fraud analyst `(verify)`. |
 | `resolution` | `varchar` | NULL CHECK (in `confirmed`,`false_positive`) | Outcome `(verify)`. |
 
 ### `audit_log`
 
-Immutable append-only record covering authentication events, role grants, transfers, fraud-rule changes, and admin reads of user data ([../../project-info.md §8](../../project-info.md#8-security-baseline)).
+Immutable append-only record covering authentication events, role grants, transfers, fraud-rule changes, fraud-driven blocks (FR2.1–FR2.2), account suspensions / un-suspensions (FR2.4), and admin reads of user data ([../../project-info.md §8](../../project-info.md#8-security-baseline)).
 
 | Column | Type | Constraint | Purpose |
 |---|---|---|---|
 | `id` | `uuid` | PK | — |
 | `actor_account_id` | `uuid` | FK → `account.id`, NULL | Who took the action (NULL for system events). |
 | `subject_account_id` | `uuid` | FK → `account.id`, NULL | Whose data was touched. |
-| `action` | `varchar` | NOT NULL | e.g. `auth.login`, `role.grant`, `transfer.commit`, `fraud.rule.update`, `admin.user.read`. |
+| `action` | `varchar` | NOT NULL | e.g. `auth.login`, `role.grant`, `transfer.commit`, `transfer.blocked`, `fraud.rule.update`, `fraud.account.suspend`, `fraud.account.unsuspend`, `admin.user.read`. |
 | `payload` | `jsonb` | NOT NULL | Minimal redacted context (no PII). |
 | `occurred_at` | `timestamptz` | NOT NULL | UTC. |
 

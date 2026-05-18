@@ -44,3 +44,4 @@ The status column reflects the bootstrap state of each ADR. ADRs whose decisions
 | 7 | [Build tool](0007-build-tool.md) | Proposed | 2026-05-13 |
 | 8 | [Frontend stack](0008-frontend-stack.md) | Proposed | 2026-05-13 |
 | 9 | [RBAC roles in MVP](0009-rbac-roles.md) | Proposed | 2026-05-13 |
+| 10 | [Fraud enforcement model](0010-fraud-enforcement-model.md) | Proposed | 2026-05-18 |

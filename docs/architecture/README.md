@@ -4,7 +4,7 @@ This page describes the system's high-level shape, module layout, integration wi
 
 ## 1. What it is
 
-DigitalWallet is a multi-currency internal wallet platform with real-time fraud detection and an AI-driven personal finance manager (PFM) that learns from each user's spending stream ([../../project-info.md §1](../../project-info.md#1-project-identity)). The system is shaped as a **modular monolith with a two-stream architecture**: a synchronous transactional core that commits the authoritative ledger on the request thread, and one or more asynchronous Kafka consumers (Fraud, PFM, Admin Dashboard, AI Advisor) that derive insights without coupling them to the money path. The primary value the project proves is that a single event-driven backbone can serve both a strict ACID money ledger and a derived, AI-augmented analytics stream without coupling them on the request thread.
+DigitalWallet is a multi-currency internal wallet platform with real-time fraud detection and an AI-driven personal finance manager (PFM) that learns from each user's spending stream ([../../project-info.md §1](../../project-info.md#1-project-identity)). The system is shaped as a **modular monolith with a two-stream architecture**: a synchronous transactional core that commits the authoritative ledger on the request thread (after a bounded fraud pre-check at the edge — velocity, volume, and `account.fraud_status`, per [../../project-info.md §6 NFR9](../../project-info.md#6-non-functional-requirements--invariants)), and one or more asynchronous Kafka consumers (Fraud, PFM, Admin Dashboard, AI Advisor) that derive insights and own deeper fraud analysis, alerting, and suspension-policy decisions without coupling them to the money path. The primary value the project proves is that a single event-driven backbone can serve both a strict ACID money ledger and a derived, AI-augmented analytics stream without coupling them on the request thread.
 
 ## 2. Tech stack at a glance
 
@@ -73,7 +73,7 @@ DigitalWallet/
 │   │   ├── api/  service/  persistence/
 │   ├── wallet/                    # FR1.2, FR1.3, FR1.4
 │   │   ├── api/  service/  persistence/  event/
-│   ├── fraud/                     # FR2.1, FR2.2, FR2.3
+│   ├── fraud/                     # FR2.1, FR2.2, FR2.3, FR2.4, FR2.5
 │   │   ├── consumer/  service/  event/
 │   ├── pfm/                       # FR4.x, FR5.x
 │   │   ├── api/  service/  consumer/  persistence/
@@ -110,6 +110,7 @@ Once the internal split lands, it is expected to reflect at minimum:
 | Idempotency | `Idempotency-Key` HTTP header on every mutating transfer/deposit/withdraw endpoint; replays return the original outcome. | [../../project-info.md §6 NFR3](../../project-info.md#6-non-functional-requirements--invariants) |
 | Real-time channel | Native WebSocket — fraud alerts (FR3.2), budget alerts (FR5.1), advisor async reply (NFR8). | [../../project-info.md §3](../../project-info.md#3-architecture-style), [../../project-info.md §4.2](../../project-info.md#42-frontend) |
 | Money path → analytics | Transactional Outbox Pattern: the ledger row and the outbox row commit in the same DB transaction; a Quarkus `@Scheduled` poller drains the outbox into `transaction-events`. The HTTP handler does not publish to Kafka. | [../../project-info.md §6 NFR2/NFR5](../../project-info.md#6-non-functional-requirements--invariants), [../decisions/0005-outbox-publisher.md](../decisions/0005-outbox-publisher.md) |
+| Synchronous fraud blocking | Bounded Redis sliding-window counter lookups (velocity FR2.1, volume FR2.2) plus `account.fraud_status` read (FR2.4) before the wallet lock; breach rejects inline with `fraud.velocity_exceeded` / `fraud.volume_exceeded` / `account.suspended`. Blocked attempts persist an `audit_log` row + a `transaction.blocked` outbox event in a short transaction. Async analytics, alerts (FR2.5), and the suspension-policy decision remain on the Kafka consumer. | [../../project-info.md §6 NFR9](../../project-info.md#6-non-functional-requirements--invariants), [../decisions/0010-fraud-enforcement-model.md](../decisions/0010-fraud-enforcement-model.md) |
 | Concurrency | Outer Redis distributed lock keyed on `wallet_id` (short TTL, fail-fast) + inner DB `SELECT … FOR UPDATE` via JPA `PESSIMISTIC_WRITE`. | [../../project-info.md §6 NFR1](../../project-info.md#6-non-functional-requirements--invariants), [../decisions/0003-concurrency-strategy.md](../decisions/0003-concurrency-strategy.md) |
 | Rate limiting | Redis token bucket: `POST /transfers` 10/min/user, `POST /advisor/*` 5/hour/user. | [../../project-info.md §8](../../project-info.md#8-security-baseline) |
 | Error envelope | Typed exception hierarchy rooted at `DomainException(error_key, message)`, mapped to HTTP by a single JAX-RS exception mapper. Canonical envelope in [../api/README.md](../api/README.md#error-response-shape). | [../../project-info.md §13](../../project-info.md#13-coding-conventions-highest-level-project-wide) |
@@ -142,6 +143,8 @@ Source: [../../project-info.md §14](../../project-info.md#14-environment--confi
 | `app.fraud.velocity.threshold` | `FRAUD_VELOCITY_THRESHOLD` | Max txns per window | `5` | all |
 | `app.fraud.volume.window-seconds` | `FRAUD_VOLUME_WINDOW_SECONDS` | Volume check window (FR2.2) | `3600` | all |
 | `app.fraud.volume.threshold` | `FRAUD_VOLUME_THRESHOLD` | Max cumulative volume per window (USD-equivalent) | `50000` | all |
+| `app.fraud.suspension.breach-count` | `FRAUD_SUSPENSION_BREACH_COUNT` | Number of FR2.1 / FR2.2 breaches within the suspension window before the async consumer flips `account.fraud_status` to `SUSPENDED` (FR2.4) | `3` | all |
+| `app.fraud.suspension.window-seconds` | `FRAUD_SUSPENSION_WINDOW_SECONDS` | Sliding window over which suspension-triggering breaches are counted (FR2.4) | `3600` | all |
 | `app.ratelimit.transfer.per-minute` | `RATELIMIT_TRANSFER_PER_MINUTE` | Per-user transfer rate cap | `10` | all |
 | `app.ratelimit.advisor.per-hour` | `RATELIMIT_ADVISOR_PER_HOUR` | Per-user LLM advisor rate cap | `5` | all |
 | `app.fx.rate-ttl-seconds` | `FX_RATE_TTL_SECONDS` | Redis TTL for cached FX rates | `300` | all |
