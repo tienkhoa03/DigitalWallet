@@ -46,8 +46,8 @@
     - Admin dashboard live-metrics aggregator (pushed to clients via WebSocket).
     - LLM-backed PFM advisor (async request-reply: HTTP 202 → result via WebSocket).
 - **Major streams / paths:**
-  1. **Money path** — REST → service (pessimistic lock + ACID) → Outbox row → Kafka publisher.
-  2. **Fraud path** — Kafka `transaction-events` → fraud rules → Kafka `fraud-alerts` → WebSocket fan-out.
+  1. **Money path** — REST → idempotency check → rate limit → **synchronous fraud pre-check** (Redis sliding-window counters for velocity + volume, plus `account.fraud_status` lookup) → service (Redis wallet lock + ACID DB transaction with `PESSIMISTIC_WRITE`) → ledger row + outbox row committed atomically → return. A breach of velocity / volume rejects the transaction inline (HTTP 422 `fraud.velocity_exceeded` / `fraud.volume_exceeded`); a suspended account is rejected with `account.suspended`. Blocked attempts also append to `audit_log` and emit a `transaction.blocked` event via the outbox so the async stream retains a full record.
+  2. **Fraud path** — Kafka `transaction-events` → asynchronous fraud engine (cross-event analysis, repeat-breach detection, **account-suspension policy** — flipping `account.fraud_status` to `SUSPENDED`) → Kafka `fraud-alerts` → WebSocket fan-out to admin / fraud analyst. The async path owns alerting and suspension state changes; immediate per-transaction blocking lives in the sync pre-check.
   3. **PFM path** — Kafka `transaction-events` → budget updater (event-time) → Redis/MV → threshold checker → WebSocket / Push.
   4. **AI advisor path** — month-end aggregator → LLM (circuit-breaker wrapped) → result topic → WebSocket reply to user.
 - **Deployment topology:** docker-compose stack (app, Postgres, Kafka, Redis, frontend) for local-first dev. No K8s targeted in MVP.
@@ -155,9 +155,13 @@ DigitalWallet/
 
 ### Epic 2: Fraud Detection Engine
 
-- **FR2.1:** Velocity check — flag accounts that exceed 5 transactions within a 1-minute sliding window.
-- **FR2.2:** Volume check — flag accounts whose cumulative transaction amount crosses a configurable threshold (e.g. > $50,000 within 1 hour).
-- **FR2.3:** Event publishing — every successful transaction MUST publish an event to the Kafka `transaction-events` topic.
+> Enforcement model: the fraud engine is **preventive**, not purely observational. Velocity (FR2.1) and volume (FR2.2) checks reject the offending transaction inline on the synchronous money path; the async fraud consumer (FR2.4, FR2.5) owns deeper analysis, analyst alerting, and account-level suspension policy.
+
+- **FR2.1:** Velocity check — the sync money path MUST reject any deposit / withdraw / transfer that would push the account past 5 transactions within a 1-minute sliding window. Rejection returns HTTP 422 `fraud.velocity_exceeded`. Counters are maintained in Redis (per account, per rule); the pre-check runs before the wallet lock is acquired.
+- **FR2.2:** Volume check — the sync money path MUST reject any transaction that would push the account's cumulative volume above a configurable threshold (default > $50,000 within 1 hour). Rejection returns HTTP 422 `fraud.volume_exceeded`. Same Redis-counter model as FR2.1.
+- **FR2.3:** Event publishing — every **successful** transaction MUST publish an event to Kafka `transaction-events`; every **blocked** transaction MUST also be persisted (audit-log row + outbox `transaction.blocked` event) so analysts retain a full record of denied attempts alongside committed ones. The block path opens its own short `@Transactional` boundary (no ledger row, no wallet lock) so the audit-log row and the outbox row commit atomically — preserving the NFR2 outbox invariant even when no ledger movement occurs.
+- **FR2.4:** Account suspension — when an account accumulates repeated fraud rule breaches within a tunable window (see §14 `app.fraud.suspension.*`), the async fraud consumer MUST flip `account.fraud_status` from `ACTIVE` to `SUSPENDED`. Subsequent money mutations from a suspended account are rejected by the sync pre-check with HTTP 403 `account.suspended`. Unblocking is a `FRAUD_ANALYST`-only action that writes to `audit_log`.
+- **FR2.5:** Alert stream — every rule breach (block + optional suspension) MUST publish a record to Kafka `fraud-alerts` for the admin / fraud-analyst dashboard (FR3.2). Blocking the user does not replace analyst notification — both happen.
 
 ### Epic 3: Real-time Admin Dashboard
 
@@ -191,10 +195,11 @@ DigitalWallet/
 | NFR2 | ACID-strict writes via `@Transactional`; cross-system consistency via the **Transactional Outbox Pattern** — the DB row and the outbox row are committed in the same transaction, and a Quarkus `@Scheduled` poller drains the outbox into Kafka with at-least-once delivery semantics (consumers are idempotent) | Money cannot be created or destroyed; events cannot be lost or duplicated relative to DB state | Service layer + scheduled outbox poller |
 | NFR3 | Transfer endpoints require an `Idempotency-Key` HTTP header; replays return the original outcome | Retry safety against network flakiness or spam clicks | Idempotency middleware (shared module) |
 | NFR4 | ≥80% line coverage on service layer with JUnit 5 + Mockito | Regression safety | JaCoCo gate in CI |
-| NFR5 | The HTTP path only records the transaction and emits a Kafka event. Fraud and PFM logic MUST run in separate Kafka-consumer threads | Latency isolation; heavy logic never blocks the money path | Architecture review + module boundaries |
+| NFR5 | The HTTP path MAY perform fast, bounded Redis-counter pre-checks (fraud velocity / volume per FR2.1–FR2.2, plus `account.fraud_status` lookup per FR2.4) but MUST NOT run heavy fraud / PFM / dashboard analytics inline. Cross-event fraud analysis, alert fan-out, suspension policy, PFM aggregation, and dashboard aggregation MUST run in separate Kafka-consumer threads | Block visibly fraudulent activity at the edge without coupling the request thread to heavy analytics | Architecture review + module boundaries |
 | NFR6 | Budget state MUST NOT be maintained by direct `UPDATE`s against core tables. **CQRS dual read-model**: Redis hashes are the hot path (updated by the Kafka consumer in real time); a Postgres materialized view is refreshed periodically as the durable backup and is the source of truth for rebuilding Redis after a cache loss | Prevent row-locks on Core Banking tables; scale reads independently; survive Redis flushes without data loss | Service layer + PFM consumer + scheduled MV refresh + Redis rebuild job |
 | NFR7 | PFM calculations use `transaction_timestamp` from the Kafka payload (event time), not consumer wall-clock. Late-arriving events MUST be handled without corrupting accounting reports | Distributed-system correctness | Consumer logic with watermarks / reconciliation job |
 | NFR8 | Outbound LLM calls are wrapped in a Circuit Breaker. The PFM Advisor endpoint follows Asynchronous Request-Reply (return HTTP 202 immediately, deliver the result over WebSocket) | LLM calls are slow and expensive — must never block HTTP threads | SmallRye Fault Tolerance + WebSocket reply channel |
+| NFR9 | **Synchronous fraud blocking**: the sync money path MUST evaluate velocity (FR2.1), volume (FR2.2), and `account.fraud_status` (FR2.4) before opening the DB transaction. Counters live in Redis (sliding window); suspension state lives in Postgres. Async fraud analytics, alert fan-out (FR2.5), and the suspension-policy decision (when to flip an account to `SUSPENDED`) remain on the Kafka consumer | Fraud is prevented at the edge — suspicious activity never reaches the ledger — without coupling the request thread to heavy analytics | Service layer + Redis counters + Postgres `account.fraud_status` + fraud consumer for policy/alerting |
 
 ---
 
@@ -220,7 +225,8 @@ DigitalWallet/
 - **Secret management:** 12-factor env vars in MVP via `.env` (gitleaks pre-commit); production secret manager deferred.
 - **HTTPS-only:** yes in production; HTTP allowed inside the local docker-compose network.
 - **LLM payload sanitisation:** prompts sent to the LLM (FR6.1) must be anonymised — no user identifiers, only aggregated amounts and category labels.
-- **Audit log:** dedicated append-only table covering authentication events, role grants, transfers, fraud-rule changes, and admin reads of user data. Required for SOC 2 alignment.
+- **Audit log:** dedicated append-only table covering authentication events, role grants, transfers, fraud-rule changes, **fraud-driven blocks (FR2.1–FR2.2), account suspensions / un-suspensions (FR2.4)**, and admin reads of user data. Required for SOC 2 alignment.
+- **Account suspension is a privileged state change:** flipping `account.fraud_status` to `SUSPENDED` is performed by the async fraud consumer under a documented policy; un-suspending an account is a `FRAUD_ANALYST`-only action and MUST write to `audit_log` with the analyst's principal id and a justification field. `ADMIN` MUST NOT inherit this permission transitively (see §2.2 least-privilege boundary).
 
 ---
 
@@ -244,6 +250,9 @@ DigitalWallet/
 | Event time | The `transaction_timestamp` carried in the Kafka payload (NFR7), distinct from the consumer's processing time. |
 | Velocity | Number of transactions per account per unit time (input to FR2.1). |
 | Volume | Cumulative transaction amount per account per unit time (input to FR2.2). |
+| Fraud counter | Redis sliding-window counter (per account, per rule — velocity / volume) read by the sync pre-check (NFR9) to decide whether a candidate transaction would breach a threshold. |
+| Fraud status | Account-level enum (`ACTIVE`, `SUSPENDED`) stored on the `account` row. `SUSPENDED` accounts are rejected by the sync money path with `account.suspended`. Set by the async fraud consumer; cleared only by a `FRAUD_ANALYST` action with an `audit_log` entry. |
+| Fraud block | A money mutation rejected synchronously by the fraud pre-check (NFR9). Persists an `audit_log` row and an outbox `transaction.blocked` event — no ledger row is written. |
 
 ---
 
@@ -262,6 +271,7 @@ DigitalWallet/
 | 7 | Build tool | Maven | ✅ Decided — write ADR |
 | 8 | Frontend stack | React 18 + TypeScript strict + Tailwind + Redux Toolkit + React Hook Form + Zod + pnpm + Vitest + Playwright | ✅ Decided — write ADR |
 | 9 | RBAC roles | `USER`, `ADMIN`, `FRAUD_ANALYST` (three roles) | ✅ Decided — write ADR |
+| 10 | Fraud enforcement model | Hybrid: synchronous Redis-counter pre-check + `account.fraud_status` lookup on the money path (blocks the user); async Kafka consumer for analyst alerts and the suspension-policy decision | ✅ Decided — write ADR |
 
 ---
 
@@ -318,6 +328,8 @@ DigitalWallet/
 | `app.fraud.velocity.threshold` | `FRAUD_VELOCITY_THRESHOLD` | Max txns per window | `5` | all |
 | `app.fraud.volume.window-seconds` | `FRAUD_VOLUME_WINDOW_SECONDS` | Volume check window (FR2.2) | `3600` | all |
 | `app.fraud.volume.threshold` | `FRAUD_VOLUME_THRESHOLD` | Max cumulative volume per window (USD-equivalent) | `50000` | all |
+| `app.fraud.suspension.breach-count` | `FRAUD_SUSPENSION_BREACH_COUNT` | Number of FR2.1 / FR2.2 breaches within the suspension window before the async consumer flips `account.fraud_status` to `SUSPENDED` (FR2.4) | `3` | all |
+| `app.fraud.suspension.window-seconds` | `FRAUD_SUSPENSION_WINDOW_SECONDS` | Sliding window over which suspension-triggering breaches are counted (FR2.4) | `3600` | all |
 | `app.ratelimit.transfer.per-minute` | `RATELIMIT_TRANSFER_PER_MINUTE` | Per-user transfer rate cap | `10` | all |
 | `app.ratelimit.advisor.per-hour` | `RATELIMIT_ADVISOR_PER_HOUR` | Per-user LLM advisor rate cap | `5` | all |
 | `app.fx.rate-ttl-seconds` | `FX_RATE_TTL_SECONDS` | Redis TTL for cached FX rates | `300` | all |
@@ -352,6 +364,7 @@ DigitalWallet/
 | 13 | Rate-limiting policy? | ✅ Answered | Token bucket on `/transfers` (10/min/user) and `/advisor/*` (5/hour/user) |
 | 14 | FX rate source? | ✅ Answered | Static seed in DB table `fx_rates` (loaded via Flyway migration); no external FX provider in MVP. Cached in Redis with TTL on read. |
 | 15 | LLM payload retention / training opt-out (provider-dependent)? | ❓ Unanswered | Resolve together with ADR #2 |
+| 16 | Suspension un-block policy: manual-only by `FRAUD_ANALYST`, or auto-clear after a TTL? | ✅ Answered | Manual-only by `FRAUD_ANALYST`, with mandatory `audit_log` entry (principal id + justification). `ADMIN` does NOT inherit this permission. Codified in FR2.4 and §8. |
 
 ---
 
@@ -359,13 +372,16 @@ DigitalWallet/
 
 ### 17.1 Performance budget
 
-> ❓ TBD — no hard numbers committed yet. Suggested starting points:
+> MVP dev-target budget. Single-node `docker-compose` stack on a developer machine — not a production SLO. Revisit once observability (§17.2) lands and we have real measurements.
 
 | Endpoint / scenario | P95 latency | Throughput |
 |---|---|---|
-| `POST /transfers` (sync path only) | ≤ 200 ms | ≥ 100 rps single-node dev target |
+| `POST /transfers` (sync path: idempotency + rate limit + **fraud pre-check** + wallet lock + DB commit) | ≤ 200 ms | ≥ 100 rps single-node dev target |
 | `POST /advisor/analyze` (returns 202) | ≤ 100 ms | — |
 | WebSocket alert fan-out (ingest → broadcast) | ≤ 1 s | — |
+| Async suspension propagation (`fraud_status = SUSPENDED` visible to sync path) | ≤ 1 s | — |
+
+> The fraud pre-check (NFR9) is intentionally inside the `/transfers` budget. It is bounded — two Redis sliding-window lookups plus one `account.fraud_status` read — so the existing ≤ 200 ms target holds. If observability later shows the pre-check eating more than ~10 ms P95, revisit the counter implementation before relaxing the budget.
 
 ### 17.2 Observability requirements
 
