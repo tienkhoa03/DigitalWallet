@@ -22,7 +22,7 @@ Read the target file end-to-end. Identify:
 - Injected collaborators on the constructor (per [backend_coding.md §3](../../rules/backend_coding.md), constructor injection only).
 - Whether the class injects a `Clock` (required for time-aware logic per [testing.md §2.2](../../rules/testing.md)) — if it calls `Instant.now()` directly inside time-dependent behaviour, surface this as a defect candidate.
 - Domain exceptions thrown — every typed `DomainException` subclass needs an own scenario per [backend_coding.md §8](../../rules/backend_coding.md) and [testing.md §2.5](../../rules/testing.md).
-- Whether the class is on the money path (Redis lock + `LockModeType.PESSIMISTIC_WRITE` sequence per [backend_coding.md §3](../../rules/backend_coding.md) and NFR1) or handles idempotency (NFR3).
+- Whether the class is on the money path — if so it MUST run the synchronous fraud pre-check (velocity FR2.1 + volume FR2.2 + `account.fraud_status` FR2.4) BEFORE the Redis lock per [backend_coding.md §3](../../rules/backend_coding.md) and NFR9, then the Redis lock + `LockModeType.PESSIMISTIC_WRITE` sequence per NFR1 — and whether it handles idempotency (NFR3).
 
 ## Step 2 — Decide what to mock
 
@@ -54,11 +54,12 @@ Build the scenario list before writing any code:
    - Fraud velocity at threshold and at threshold + 1.
    - Fraud volume at threshold and at threshold + smallest unit.
    - `@ParameterizedTest` with `@ValueSource` / `@MethodSource` for value-driven cases.
-4. **Concurrency / lock path** — when applicable, assert Redis lock acquired before the DB call and released in `finally`; assert `LockModeType.PESSIMISTIC_WRITE` is requested before the mutation. Cover NFR1 per [testing.md §2.9](../../rules/testing.md).
-5. **Idempotency replay** — for mutating money endpoints, assert same body + same key returns the original outcome; different body + same key returns `idempotency.replay_conflict`. Cover NFR3 per [testing.md §2.9](../../rules/testing.md).
-6. **Event-time correctness** — for PFM-class consumers, assert use of `transaction_timestamp` from the payload rather than `Clock.instant()` per [testing.md §2.9](../../rules/testing.md).
-7. **LLM circuit-open** — for advisor-class code, force consecutive failures and assert `advisor.circuit_open` per [testing.md §2.8](../../rules/testing.md) and [testing.md §2.9](../../rules/testing.md).
-8. **Security context** — `unauthenticated`, `wrong role`, `wrong tenant` per [security.md §11](../../rules/security.md) and [testing.md §2.10](../../rules/testing.md) — only when the unit under test is the enforcement point (most are integration tests; flag and defer if so).
+4. **Synchronous fraud pre-check** — for money-path services, assert the pre-check runs BEFORE the Redis lock and that a velocity / volume / suspension breach short-circuits without touching the wallet row: type + `errorKey` `fraud.velocity_exceeded` / `fraud.volume_exceeded` / `account.suspended`, plus a `transaction.blocked` outbox event and an `audit_log` row. Cover NFR9 per [backend_coding.md §3](../../rules/backend_coding.md) and [backend_coding.md §8](../../rules/backend_coding.md); reuse the boundary cases from §2.6 in [testing.md](../../rules/testing.md).
+5. **Concurrency / lock path** — when applicable, assert Redis lock acquired AFTER the fraud pre-check and BEFORE the DB call, and released in `finally`; assert `LockModeType.PESSIMISTIC_WRITE` is requested before the mutation. Cover NFR1 per [testing.md §2.9](../../rules/testing.md).
+6. **Idempotency replay** — for mutating money endpoints, assert same body + same key returns the original outcome; different body + same key returns `idempotency.replay_conflict`. Cover NFR3 per [testing.md §2.9](../../rules/testing.md).
+7. **Event-time correctness** — for PFM-class consumers, assert use of `transaction_timestamp` from the payload rather than `Clock.instant()` per [testing.md §2.9](../../rules/testing.md).
+8. **LLM circuit-open** — for advisor-class code, force consecutive failures and assert `advisor.circuit_open` per [testing.md §2.8](../../rules/testing.md) and [testing.md §2.9](../../rules/testing.md).
+9. **Security context** — `unauthenticated`, `wrong role`, `wrong tenant` per [security.md §11](../../rules/security.md) and [testing.md §2.10](../../rules/testing.md) — only when the unit under test is the enforcement point (most are integration tests; flag and defer if so).
 
 ## Step 4 — Generate the test file
 
