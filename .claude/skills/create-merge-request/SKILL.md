@@ -5,7 +5,7 @@ description: Open a GitHub pull request from the current branch — pre-flight c
 
 # Create Merge Request
 
-This skill opens a GitHub pull request from the current branch, mirroring the workflow committed in [project-info.md §12](../../../project-info.md) (GitHub pull requests, Conventional Commits, branch model). The platform CLI is `gh`.
+This skill opens a GitHub pull request from the current branch, mirroring the workflow committed in [project-info.md §12](../../../project-info.md#12-development-workflow) (GitHub pull requests, Conventional Commits, branch model). The platform CLI is `gh`.
 
 ## When NOT to invoke
 
@@ -23,22 +23,22 @@ Run in parallel:
 - `git remote get-url origin` — confirm a remote is configured.
 - `gh auth status` — confirm `gh` is authenticated against the right host.
 
-Stop with an actionable message if `gh auth status` fails or the remote is missing. The PR platform per [project-info.md §12](../../../project-info.md) is GitHub; do not substitute another tool.
+Stop with an actionable message if `gh auth status` fails or the remote is missing. The PR platform per [project-info.md §12](../../../project-info.md#12-development-workflow) is GitHub; do not substitute another tool.
 
 ## Step 2 — Handle uncommitted changes
 
 If `git status --short` reports any modification, ASK via a single `AskUserQuestion` call. Never silently commit:
 
-- **Commit all** — stage and commit every modified file with a user-provided Conventional-Commits message per [project-info.md §12](../../../project-info.md).
+- **Commit all** — stage and commit every modified file with a user-provided Conventional-Commits message per [project-info.md §12](../../../project-info.md#12-development-workflow).
 - **Commit specific files** — ask which files to stage, then commit.
 - **Stash** — `git stash push -u -m "create-merge-request stash"`; warn the user the stash will be left in place.
 - **Cancel** — stop the skill without taking action.
 
-If the user picks a commit option, draft the commit message in Conventional Commits style (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:` — the exact prefixes from [project-info.md §12](../../../project-info.md)) using a HEREDOC. Run pre-commit hooks normally (gitleaks per [security.md §10](../../rules/security.md), formatter, fast lint per [project-info.md §12](../../../project-info.md)); on hook failure, fix the underlying issue and create a NEW commit — do NOT pass `--no-verify`.
+If the user picks a commit option, draft the commit message in Conventional Commits style (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:` — the exact prefixes from [project-info.md §12](../../../project-info.md#12-development-workflow)) using a HEREDOC. Run pre-commit hooks normally (gitleaks per [security.md §10](../../rules/security.md#10-secret-scanning), formatter, fast lint per [project-info.md §12](../../../project-info.md#12-development-workflow)); on hook failure, fix the underlying issue and create a NEW commit — do NOT pass `--no-verify`.
 
 ## Step 3 — Resolve working branch
 
-If the current branch is the default (`main`), refuse to push directly. Per [project-info.md §12](../../../project-info.md) the model is trunk-based with short-lived feature branches off `main`; PRs land via branches only. Ask the user for a new branch name following the project's branch convention and run `git checkout -b <name>`.
+If the current branch is the default (`main`), refuse to push directly. Per [project-info.md §12](../../../project-info.md#12-development-workflow) the model is trunk-based with short-lived feature branches off `main`; PRs land via branches only. Ask the user for a new branch name following the project's branch convention and run `git checkout -b <name>`.
 
 If the current branch is not `main`, proceed.
 
@@ -55,7 +55,7 @@ Check whether the branch tracks a remote:
 
 ## Step 6 — Draft title and body
 
-**Title:** Conventional Commits prefix per [project-info.md §12](../../../project-info.md), imperative mood, ≤ 70 characters total. Examples: `feat: add wallet deposit endpoint`, `fix(transfer): reuse idempotency key on retry`, `refactor(pfm): move budget reader to materialized view`.
+**Title:** Conventional Commits prefix per [project-info.md §12](../../../project-info.md#12-development-workflow), imperative mood, ≤ 70 characters total. Examples: `feat: add wallet deposit endpoint`, `fix(transfer): reuse idempotency key on retry`, `refactor(pfm): move budget reader to materialized view`.
 
 **Body** sections (use a HEREDOC for the `gh pr create --body` argument):
 

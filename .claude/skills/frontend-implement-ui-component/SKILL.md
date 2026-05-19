@@ -16,7 +16,7 @@ This skill scaffolds a single React component plus its dependencies (slice, API 
 
 ## Step 1 — Gather inputs
 
-Confirm `frontend/` is scaffolded by checking for `frontend/package.json` and `frontend/tsconfig.json`. If they do not exist, **stop** and tell the user — this skill does not bootstrap the project (the stack is mandated in [project-info.md §4.2](../../../project-info.md) and ADR #8).
+Confirm `frontend/` is scaffolded by checking for `frontend/package.json` and `frontend/tsconfig.json`. If they do not exist, **stop** and tell the user — this skill does not bootstrap the project (the stack is mandated in [project-info.md §4.2](../../../project-info.md#42-frontend) and ADR #8).
 
 Read the target feature folder under `frontend/src/features/<feature>/` to learn its existing slice, API, and route conventions per [frontend_coding.md §1](../../rules/frontend_coding.md).
 

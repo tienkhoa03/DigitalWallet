@@ -22,7 +22,7 @@ Confirm `frontend/package.json` exists. If it does not, emit:
 PASS (skipped) — frontend module not yet scaffolded.
 ```
 
-…and stop. Do not run `npm`, `pnpm`, or any package-manager command against a missing project. The stack is mandated in [project-info.md §4.2](../../../project-info.md) and ADR #8.
+…and stop. Do not run `npm`, `pnpm`, or any package-manager command against a missing project. The stack is mandated in [project-info.md §4.2](../../../project-info.md#42-frontend) and ADR #8.
 
 Detect the package manager from the lockfile:
 
@@ -41,7 +41,7 @@ Run in order. Stop on the first failure and capture the tail of stderr/stdout fo
 
 **CRITICAL — non-interactive flags:** the Vitest runner defaults to watch mode in a TTY. Always pass an explicit non-watch flag so the run terminates:
 
-- Vitest (the mandated runner per [project-info.md §4.5](../../../project-info.md)): `--run` (preferred) or `--watch=false`.
+- Vitest (the mandated runner per [project-info.md §4.5](../../../project-info.md#45-testing--quality)): `--run` (preferred) or `--watch=false`.
 - If the project still wires Jest anywhere: `--watch=false --ci`.
 - If a Karma legacy script appears: `--watch=false --browsers=ChromeHeadless`.
 

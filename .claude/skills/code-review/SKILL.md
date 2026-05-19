@@ -56,7 +56,7 @@ Then apply the **[security.md §12](../../rules/security.md) checklist line-by-l
 
 - Do not invent rules. If a concern is not in the rule files, leave it out — or surface it as a suggestion for `docs/decisions/` rather than a review finding.
 - Always cite section numbers; reviewers should be able to click through.
-- No stylistic findings outside the rules — formatting is the formatter's job per [project-info.md §12](../../../project-info.md) pre-commit hooks.
+- No stylistic findings outside the rules — formatting is the formatter's job per [project-info.md §12](../../../project-info.md#12-development-workflow) pre-commit hooks.
 - An `info`-only file (only `<!-- not-yet-adopted -->` matches) does NOT block PASS.
 
 ## Step 4 — Structured report

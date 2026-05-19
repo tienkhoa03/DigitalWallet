@@ -3,7 +3,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-DigitalWallet is a **greenfield** multi-currency internal wallet platform with real-time fraud detection and an AI-driven personal finance manager. **No application code exists yet** — only the design contract in [project-info.md](project-info.md) and supporting documents (see [§15](project-info.md#15-reference-materials)). The PRD source is the FR/NFR summary captured directly into `project-info.md` on 2026-05-12. When the code and `project-info.md` conflict, `project-info.md` is authoritative until an ADR under [.claude/rules/adr/](.claude/rules/adr/) supersedes it (spec — not yet implemented).
+DigitalWallet is a multi-currency internal wallet platform with real-time fraud detection and an AI-driven personal finance manager. The Claude-ready baseline (Phase A–E of the bootstrap) is scaffolded: `backend/` (Quarkus 3.15.6 LTS, Java 21, 7 modules with `shared/` infrastructure and Flyway V1), `frontend/` (Vite 5 + React 18 + TS 5 strict + Tailwind 3 + Redux Toolkit + RTK Query), `deploy/` (Postgres 16 + Kafka KRaft + Redis 7 docker-compose), and `.github/workflows/ci.yml` (parallel backend/frontend jobs with JaCoCo 80% gate). Feature code is not yet written — only the cross-cutting shared infrastructure. The design contract lives in [project-info.md](project-info.md) and supporting documents (see [§15](project-info.md#15-reference-materials)). The PRD source is the FR/NFR summary captured directly into `project-info.md` on 2026-05-12. When the code and `project-info.md` conflict, `project-info.md` is authoritative until an ADR under [docs/decisions/](docs/decisions/) supersedes it.
 
 ## Tech Stack (Mandated by Spec)
 
@@ -63,17 +63,17 @@ Treat any change that weakens these as a regression.
 
 ## Commands
 
-No build tooling is committed yet. When introducing it, use **Maven** for the backend (per §4.1, ADR #7) and **pnpm** for the frontend (per §4.2, ADR #8). Add the standard lifecycle commands here once they exist:
+Backend uses **Maven** (per §4.1, ADR #7); frontend uses **pnpm** (per §4.2, ADR #8). Run commands from the relevant subdirectory unless otherwise noted:
 
-- Backend build: `./mvnw clean install` (spec — not yet implemented)
-- Backend dev mode: `./mvnw quarkus:dev` (spec — not yet implemented)
-- Backend tests (unit + integration via Testcontainers): `./mvnw test` (spec — not yet implemented)
-- Backend coverage: `./mvnw verify` (JaCoCo report under `target/site/jacoco/`) (spec — not yet implemented)
-- Frontend install: `pnpm install` (spec — not yet implemented)
-- Frontend dev: `pnpm dev` (spec — not yet implemented)
-- Frontend lint: `pnpm lint` (spec — not yet implemented)
-- Frontend tests: `pnpm test` (Vitest); `pnpm e2e` (Playwright) (spec — not yet implemented)
-- Local stack: `docker compose -f deploy/docker-compose.yml up` (spec — not yet implemented)
+- Backend build: `cd backend && ./mvnw clean install`
+- Backend dev mode: `cd backend && ./mvnw quarkus:dev`
+- Backend tests (unit + integration via Testcontainers): `cd backend && ./mvnw test`
+- Backend coverage: `cd backend && ./mvnw verify` (JaCoCo report under `backend/target/site/jacoco/`; 80% gate on `com/digitalwallet/*/service/**`)
+- Frontend install: `cd frontend && pnpm install`
+- Frontend dev: `cd frontend && pnpm dev`
+- Frontend lint: `cd frontend && pnpm lint`
+- Frontend tests: `cd frontend && pnpm test` (Vitest); `cd frontend && pnpm e2e` (Playwright)
+- Local stack: `docker compose -f deploy/docker-compose.yml up`
 
 Detailed coding rules will land under [.claude/rules/backend_coding.md](.claude/rules/backend_coding.md) and [.claude/rules/frontend_coding.md](.claude/rules/frontend_coding.md) in step 2.
 
@@ -90,9 +90,9 @@ Full glossary will live under [docs/domain-knowledge/](docs/domain-knowledge/) i
 - **Event time:** `transaction_timestamp` carried in the Kafka payload (NFR7), distinct from the consumer's processing time.
 - **Fraud counter / Fraud status / Fraud block:** Redis sliding-window counter and `account.fraud_status` enum used by the sync pre-check (NFR9) to reject suspicious transactions inline; full definitions in [project-info.md §9](project-info.md#9-domain-glossary).
 
-## Module layout (planned)
+## Module layout
 
-(spec — not yet implemented)
+Module skeleton scaffolded under `backend/src/main/java/com/digitalwallet/` (each module is currently a `package-info.java` placeholder plus, for `shared/`, the cross-cutting infrastructure). Feature code lands per-vertical-slice.
 
 ```
 DigitalWallet/

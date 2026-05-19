@@ -9,7 +9,7 @@ This page is the runbook for bringing the DigitalWallet stack up locally from a 
 | Tool | Min version | Source |
 |---|---|---|
 | Java JDK | 21 (LTS) | Eclipse Temurin / Azul Zulu / Liberica `(verify)` |
-| Maven wrapper | bundled `mvnw` | shipped with the backend module `(spec — not yet implemented)` |
+| Maven wrapper | bundled `mvnw` | shipped under `backend/mvnw` |
 | Node.js | 20.x (Vitest + Playwright support) `(verify)` | nodejs.org / nvm |
 | pnpm | latest | `npm install -g pnpm` |
 | Docker Engine | 24.x or newer `(verify)` | docker.com |
@@ -27,35 +27,35 @@ All steps below are scaffolded against the mandated stack in [../../project-info
    git clone https://github.com/tienkhoa03/DigitalWallet.git
    cd DigitalWallet
    ```
-2. **Copy the environment template.** `(spec — not yet implemented)`
+2. **Copy the environment template.**
    ```bash
-   cp deploy/.env.example .env
+   cp deploy/env.template .env
    ```
    Fill in the variables listed in [../architecture/README.md#7-config--profiles](../architecture/README.md#7-config--profiles). At minimum: `DB_URL`, `DB_USER`, `DB_PASSWORD`, `KAFKA_BOOTSTRAP_SERVERS`, `REDIS_URL`, `JWT_PUBLIC_KEY`, `JWT_PRIVATE_KEY`, and (if the advisor path will be exercised) `LLM_API_KEY` and `LLM_BASE_URL`.
-3. **Bring up the infrastructure stack** (Postgres 16, Kafka, Redis 7). `(spec — not yet implemented)`
+3. **Bring up the infrastructure stack** (Postgres 16, Kafka, Redis 7).
    ```bash
    docker compose -f deploy/docker-compose.yml up -d postgres kafka redis
    ```
-4. **Apply database migrations.** Flyway runs automatically on backend startup; for an explicit pre-migration run use the Flyway plugin. `(spec — not yet implemented)`
+4. **Apply database migrations.** Flyway runs automatically on backend startup; for an explicit pre-migration run use the Flyway plugin.
    ```bash
-   ./mvnw -pl backend flyway:migrate
+   cd backend && ./mvnw flyway:migrate
    ```
    See [../database/migrations.md](../database/migrations.md).
-5. **Start the backend in Quarkus dev mode.** `(spec — not yet implemented)`
+5. **Start the backend in Quarkus dev mode.**
    ```bash
-   ./mvnw -pl backend quarkus:dev
+   cd backend && ./mvnw quarkus:dev
    ```
    The dev UI is exposed on `http://localhost:8080/q/dev/` by Quarkus default `(verify once port is committed)`.
-6. **Install frontend dependencies and start the dev server.** `(spec — not yet implemented)`
+6. **Install frontend dependencies and start the dev server.**
    ```bash
    cd frontend
    pnpm install
    pnpm dev
    ```
-7. **Run the test suites.** `(spec — not yet implemented)`
+7. **Run the test suites.**
    ```bash
-   ./mvnw -pl backend test          # JUnit 5 + Testcontainers
-   ./mvnw -pl backend verify        # adds JaCoCo coverage gate (≥80% service layer)
+   cd backend && ./mvnw test        # JUnit 5 + Testcontainers
+   cd backend && ./mvnw verify      # adds JaCoCo coverage gate (≥80% service layer)
    pnpm --dir frontend test         # Vitest
    pnpm --dir frontend e2e          # Playwright smoke
    ```

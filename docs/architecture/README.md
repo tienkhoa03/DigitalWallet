@@ -64,7 +64,7 @@ Sources: [../../project-info.md §3](../../project-info.md#3-architecture-style)
 
 ## 3. Backend layering
 
-`(spec — not yet implemented)` — the layout below is the target from [../../project-info.md §3.1](../../project-info.md#31-module--package-organization).
+Module skeleton scaffolded under `backend/src/main/java/com/digitalwallet/` (Phase A–E of the bootstrap); only `shared/` carries production code today. The layout below is the target from [../../project-info.md §3.1](../../project-info.md#31-module--package-organization).
 
 ```
 DigitalWallet/
@@ -90,7 +90,7 @@ DigitalWallet/
 
 ## 4. Frontend layering
 
-`(spec — not yet implemented)` — [../../project-info.md §3.1](../../project-info.md#31-module--package-organization) names a single React app under `frontend/` that serves both end users and the admin dashboard; the internal directory split is not yet committed. The frontend stack is mandated in [../../project-info.md §4.2](../../project-info.md#42-frontend) and recorded in [../decisions/0008-frontend-stack.md](../decisions/0008-frontend-stack.md).
+Frontend scaffolded under `frontend/src/` (Phase A–E): `app/` (routed shell + store wiring), `features/` (per-module folders), `routes/` (route table + guards), `shared/` (UI primitives, WebSocket client, money helpers). Per [../../project-info.md §3.1](../../project-info.md#31-module--package-organization), a single React app serves both end users and the admin dashboard. The frontend stack is mandated in [../../project-info.md §4.2](../../project-info.md#42-frontend) and recorded in [../decisions/0008-frontend-stack.md](../decisions/0008-frontend-stack.md).
 
 Once the internal split lands, it is expected to reflect at minimum:
 

@@ -8,7 +8,7 @@ This page documents how the DigitalWallet test suite is structured, what the cov
 |---|---|---|
 | Backend unit | JUnit 5 + Mockito | Service-layer logic, value objects, exception mapping. Mock external collaborators; never mock the DB. |
 | Backend integration | Testcontainers (Postgres 16 + Kafka + Redis 7) | Every public repository method and every Kafka consumer. Real containers — no embedded H2 or in-memory Kafka. |
-| Backend coverage | JaCoCo | Reported under `target/site/jacoco/` `(spec — not yet implemented)`. CI gate fails the build below the floor. |
+| Backend coverage | JaCoCo | Reported under `backend/target/site/jacoco/`; 80% gate on `com/digitalwallet/*/service/**`. CI gate fails the build below the floor. |
 | Frontend unit | Vitest + React Testing Library | Reducers, selectors, hooks with branching logic. |
 | Frontend coverage | c8 (via Vitest) | — |
 | Frontend E2E | Playwright | One smoke per epic — see below. |

@@ -16,13 +16,13 @@ This skill scaffolds the full backend vertical slice for a new REST resource ins
 
 ## Step 1 — Gather inputs
 
-Read [`CLAUDE.md`](../../../CLAUDE.md), [`project-info.md §3`](../../../project-info.md), and [`docs/api/README.md`](../../../docs/api/README.md) to confirm the feature-module list and the canonical endpoint catalog. Inspect `backend/` to confirm the target module is scaffolded. If `backend/` (or the target feature module) does not yet exist on disk, **stop** and tell the user — do NOT bootstrap build files, `pom.xml`, or module skeletons from this skill.
+Read [`CLAUDE.md`](../../../CLAUDE.md), [`project-info.md §3`](../../../project-info.md#3-architecture-style), and [`docs/api/README.md`](../../../docs/api/README.md) to confirm the feature-module list and the canonical endpoint catalog. Inspect `backend/` to confirm the target module is scaffolded. If `backend/` (or the target feature module) does not yet exist on disk, **stop** and tell the user — do NOT bootstrap build files, `pom.xml`, or module skeletons from this skill.
 
 Then collect missing inputs in a single `AskUserQuestion` call (ask only what the user did not already provide):
 
 1. **Resource name** — singular CamelCase (e.g. `Budget`, `Wallet`, `Transfer`).
 2. **Operations** — multi-select from `Create / Read / List / Update / Delete`.
-3. **Auth policy per operation** — which role(s) per operation, from [project-info.md §2.2](../../../project-info.md) (`USER`, `ADMIN`, `FRAUD_ANALYST`) — server-side RBAC is mandatory per [security.md §3](../../rules/security.md).
+3. **Auth policy per operation** — which role(s) per operation, from [project-info.md §2.2](../../../project-info.md#22-roles-in-the-system) (`USER`, `ADMIN`, `FRAUD_ANALYST`) — server-side RBAC is mandatory per [security.md §3](../../rules/security.md#3-authorization).
 4. **Constraints** — `Idempotency-Key required` (mutating money endpoints per [backend_coding.md §2](../../rules/backend_coding.md) and NFR3), `Hybrid concurrency + fraud pre-check` (wallet mutations: synchronous fraud pre-check before the Redis lock per [backend_coding.md §3](../../rules/backend_coding.md) and NFR9, then Redis lock + DB `PESSIMISTIC_WRITE` per NFR1), or `Neither`.
 
 Also gather (free-form, in the same turn or follow-up): the **feature module** to land in (`account`, `wallet`, `fraud`, `pfm`, `advisor`, `dashboard`, `shared`), the **base path** (must match [docs/api/README.md](../../../docs/api/README.md)), and the **entity fields** (name, Java type, nullability, validation hints — money is `BigDecimal`, timestamps are `Instant`, currency is `varchar(3)` per [backend_coding.md §4](../../rules/backend_coding.md)).
