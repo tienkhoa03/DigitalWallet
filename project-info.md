@@ -57,7 +57,11 @@
 
 ```
 DigitalWallet/
-├── backend/                       # Quarkus application
+├── backend/                       # Quarkus application + its deploy tier
+│   ├── Dockerfile                 # multi-stage JVM (eclipse-temurin:21-jre)
+│   ├── docker-compose.yml         # Postgres 16 + Kafka KRaft + Redis 7 + (--profile app) backend
+│   ├── env.template               # backend + infra env (DB / Kafka / Redis / JWT / LLM / fraud)
+│   ├── postgres/init/             # init scripts (test DB bootstrap)
 │   ├── account/                   # FR1.1
 │   │   ├── api/  service/  persistence/
 │   ├── wallet/                    # FR1.2, FR1.3, FR1.4
@@ -71,8 +75,11 @@ DigitalWallet/
 │   ├── dashboard/                 # FR3.x
 │   │   ├── api/  ws/  consumer/
 │   └── shared/                    # money, idempotency, outbox, security
-├── frontend/                      # React app (user app + admin dashboard)
-└── deploy/                        # docker-compose, init scripts, env templates
+└── frontend/                      # React app (user app + admin dashboard) + its deploy tier
+    ├── Dockerfile                 # multi-stage Node 20 build → nginx 1.27
+    ├── docker-compose.yml         # nginx serving dist/, joins backend's dw-net
+    ├── nginx.conf                 # static + /api reverse-proxy + WebSocket upgrade
+    └── env.template               # public-only config (no secrets — VITE_* is readable in the browser)
 ```
 
 **Organising principle:** Feature-based + layered. Group code by feature module under `backend/`, separate the standard layers (`api/`, `service/`, `persistence/`, plus `consumer/` and `event/` where applicable) inside each module. The `shared/` module holds cross-cutting concerns (money type, idempotency middleware, outbox poller, security).

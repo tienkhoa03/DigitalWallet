@@ -27,30 +27,40 @@ All steps below are scaffolded against the mandated stack in [../../project-info
    git clone https://github.com/tienkhoa03/DigitalWallet.git
    cd DigitalWallet
    ```
-2. **Copy the environment template.**
+2. **Copy the per-tier environment templates.**
    ```bash
-   cp deploy/env.template .env
+   cp backend/env.template  backend/.env
+   cp frontend/env.template frontend/.env
    ```
-   Fill in the variables listed in [../architecture/README.md#7-config--profiles](../architecture/README.md#7-config--profiles). At minimum: `DB_URL`, `DB_USER`, `DB_PASSWORD`, `KAFKA_BOOTSTRAP_SERVERS`, `REDIS_URL`, `JWT_PUBLIC_KEY`, `JWT_PRIVATE_KEY`, and (if the advisor path will be exercised) `LLM_API_KEY` and `LLM_BASE_URL`.
-3. **Bring up the infrastructure stack** (Postgres 16, Kafka, Redis 7).
+   Fill in the variables documented in each template. Backend secrets — `DB_PASSWORD`, `JWT_PUBLIC_KEY`, `JWT_PRIVATE_KEY`, and (when the advisor path is exercised) `LLM_API_KEY` — MUST NOT have committed defaults ([../../.claude/rules/security.md §1](../../.claude/rules/security.md)). The frontend tier holds public-only config (anything prefixed with `VITE_` is readable in the browser bundle).
+3. **Bring up the infrastructure stack** (Postgres 16, Kafka, Redis 7) from the backend compose. This also creates the shared `dw-net` network that the frontend compose joins later.
    ```bash
-   docker compose -f deploy/docker-compose.yml up -d postgres kafka redis
+   docker compose -f backend/docker-compose.yml up -d
+   ```
+   For a production-like local run that also containerises the Quarkus backend, enable the `app` profile:
+   ```bash
+   docker compose -f backend/docker-compose.yml --profile app up -d --build
    ```
 4. **Apply database migrations.** Flyway runs automatically on backend startup; for an explicit pre-migration run use the Flyway plugin.
    ```bash
    cd backend && ./mvnw flyway:migrate
    ```
    See [../database/migrations.md](../database/migrations.md).
-5. **Start the backend in Quarkus dev mode.**
+5. **Start the backend in Quarkus dev mode** (skip if you already brought up the `--profile app` container in step 3).
    ```bash
    cd backend && ./mvnw quarkus:dev
    ```
    The dev UI is exposed on `http://localhost:8080/q/dev/` by Quarkus default `(verify once port is committed)`.
-6. **Install frontend dependencies and start the dev server.**
+6. **Install frontend dependencies and start the dev server.** The Vite dev server proxies `/api/*` and WebSocket upgrades to the backend on `localhost:8080`, matching the production nginx config.
    ```bash
    cd frontend
    pnpm install
    pnpm dev
+   ```
+   For a production-like local run, bring up the frontend compose (requires the backend's `dw-net` to already exist — step 3):
+   ```bash
+   docker compose -f frontend/docker-compose.yml up -d --build
+   # browse http://localhost:${FRONTEND_HOST_PORT:-8090}
    ```
 7. **Run the test suites.**
    ```bash

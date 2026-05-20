@@ -31,7 +31,7 @@ Migrations are **forward-only**.
 ## Seed data
 
 - **Reference seeds** (currencies, FX rates, default categories) are applied via Flyway versioned migrations so every environment converges to the same baseline.
-- **Demo / fixture data** for local development belongs under `deploy/` (e.g. SQL fragments invoked by `docker-compose` init scripts), **not** under Flyway. This keeps test fixtures out of the production migration timeline.
+- **Demo / fixture data** for local development belongs under `backend/postgres/init/` (SQL fragments invoked by the Postgres container's `docker-entrypoint-initdb.d` hook from `backend/docker-compose.yml`), **not** under Flyway. This keeps test fixtures out of the production migration timeline.
 - The `fx_rates` table is populated by a Flyway seed migration and is otherwise mutated only through an admin-only path ([../../project-info.md §9](../../project-info.md#9-domain-glossary), [../../project-info.md §11](../../project-info.md#11-explicit-non-goals-out-of-scope)).
 - Test suites that need bespoke data must insert it within the test (or via Testcontainers init scripts) — they must never depend on demo-fixture rows.
 

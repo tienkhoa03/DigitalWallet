@@ -13,6 +13,19 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Dev-mode parity with the nginx reverse proxy in frontend/Dockerfile —
+    // /api/* and WebSocket upgrades are forwarded to the Quarkus backend so the
+    // application code can always call the same paths regardless of environment.
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+      '/admin/ws': { target: 'ws://localhost:8080', ws: true },
+      '/users/ws': { target: 'ws://localhost:8080', ws: true },
+      '/advisor/ws': { target: 'ws://localhost:8080', ws: true },
+    },
   },
   build: {
     outDir: 'dist',

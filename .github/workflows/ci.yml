@@ -5,6 +5,7 @@
 #   3. JaCoCo service-layer coverage gate (≥80 %, NFR4).
 #   4. Frontend lint.
 #   5. Frontend tests.
+#   6. Container image smoke — verify backend/ and frontend/ Dockerfiles still build.
 # Playwright E2E runs as a non-blocking nightly suite (deferred).
 
 name: CI
@@ -83,3 +84,40 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  docker-images:
+    name: Docker images (smoke build)
+    runs-on: ubuntu-latest
+    # Validates that backend/ and frontend/ Dockerfiles still build after a refactor.
+    # Does not push — pure verification gate.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image (JVM, no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/Dockerfile
+          push: false
+          load: false
+          tags: digitalwallet/backend:ci
+
+      - name: Build frontend image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          push: false
+          load: false
+          tags: digitalwallet/frontend:ci
+
+      - name: Validate compose configs
+        run: |
+          docker compose -f backend/docker-compose.yml  config --quiet
+          # Frontend compose joins an external network owned by the backend compose,
+          # so `config` may report a warning about the unmanaged network — that's
+          # expected. Use --no-interpolate to keep the check pure-syntactic.
+          docker compose -f frontend/docker-compose.yml config --no-interpolate --quiet

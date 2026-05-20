@@ -3,7 +3,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-DigitalWallet is a multi-currency internal wallet platform with real-time fraud detection and an AI-driven personal finance manager. The Claude-ready baseline (Phase A–E of the bootstrap) is scaffolded: `backend/` (Quarkus 3.15.6 LTS, Java 21, 7 modules with `shared/` infrastructure and Flyway V1), `frontend/` (Vite 5 + React 18 + TS 5 strict + Tailwind 3 + Redux Toolkit + RTK Query), `deploy/` (Postgres 16 + Kafka KRaft + Redis 7 docker-compose), and `.github/workflows/ci.yml` (parallel backend/frontend jobs with JaCoCo 80% gate). Feature code is not yet written — only the cross-cutting shared infrastructure. The design contract lives in [project-info.md](project-info.md) and supporting documents (see [§15](project-info.md#15-reference-materials)). The PRD source is the FR/NFR summary captured directly into `project-info.md` on 2026-05-12. When the code and `project-info.md` conflict, `project-info.md` is authoritative until an ADR under [docs/decisions/](docs/decisions/) supersedes it.
+DigitalWallet is a multi-currency internal wallet platform with real-time fraud detection and an AI-driven personal finance manager. The Claude-ready baseline (Phase A–E of the bootstrap) is scaffolded: `backend/` (Quarkus 3.15.6 LTS, Java 21, 7 modules with `shared/` infrastructure and Flyway V1; ships its own `Dockerfile` + `docker-compose.yml` that owns Postgres 16 + Kafka KRaft + Redis 7 + the optional Quarkus container), `frontend/` (Vite 5 + React 18 + TS 5 strict + Tailwind 3 + Redux Toolkit + RTK Query; ships its own `Dockerfile` + `docker-compose.yml` that serves the build via nginx and reverse-proxies `/api` to the backend), and `.github/workflows/ci.yml` (parallel backend/frontend jobs with JaCoCo 80% gate). Feature code is not yet written — only the cross-cutting shared infrastructure. The design contract lives in [project-info.md](project-info.md) and supporting documents (see [§15](project-info.md#15-reference-materials)). The PRD source is the FR/NFR summary captured directly into `project-info.md` on 2026-05-12. When the code and `project-info.md` conflict, `project-info.md` is authoritative until an ADR under [docs/decisions/](docs/decisions/) supersedes it.
 
 ## Tech Stack (Mandated by Spec)
 
@@ -73,7 +73,9 @@ Backend uses **Maven** (per §4.1, ADR #7); frontend uses **pnpm** (per §4.2, A
 - Frontend dev: `cd frontend && pnpm dev`
 - Frontend lint: `cd frontend && pnpm lint`
 - Frontend tests: `cd frontend && pnpm test` (Vitest); `cd frontend && pnpm e2e` (Playwright)
-- Local stack: `docker compose -f deploy/docker-compose.yml up`
+- Local infra (Postgres + Kafka + Redis): `docker compose -f backend/docker-compose.yml up -d`
+- Local stack incl. containerised backend: `docker compose -f backend/docker-compose.yml --profile app up -d`
+- Local frontend (nginx + dist, joins `dw-net` external network — start backend first): `docker compose -f frontend/docker-compose.yml up -d`
 
 Detailed coding rules will land under [.claude/rules/backend_coding.md](.claude/rules/backend_coding.md) and [.claude/rules/frontend_coding.md](.claude/rules/frontend_coding.md) in step 2.
 
@@ -96,7 +98,11 @@ Module skeleton scaffolded under `backend/src/main/java/com/digitalwallet/` (eac
 
 ```
 DigitalWallet/
-├── backend/                       # Quarkus application
+├── backend/                       # Quarkus application + its deploy tier
+│   ├── Dockerfile                 # multi-stage JVM (eclipse-temurin:21-jre)
+│   ├── docker-compose.yml         # Postgres 16 + Kafka KRaft + Redis 7 + (--profile app) backend
+│   ├── env.template               # backend + infra env (DB / Kafka / Redis / JWT / LLM / fraud)
+│   ├── postgres/init/             # Postgres init scripts (bootstraps test DB)
 │   ├── account/                   # FR1.1
 │   │   ├── api/  service/  persistence/
 │   ├── wallet/                    # FR1.2, FR1.3, FR1.4
@@ -110,8 +116,11 @@ DigitalWallet/
 │   ├── dashboard/                 # FR3.x
 │   │   ├── api/  ws/  consumer/
 │   └── shared/                    # money, idempotency, outbox, security
-├── frontend/                      # React app (user app + admin dashboard)
-└── deploy/                        # docker-compose, init scripts, env templates
+└── frontend/                      # React app (user app + admin dashboard) + its deploy tier
+    ├── Dockerfile                 # multi-stage Node 20 build → nginx 1.27
+    ├── docker-compose.yml         # nginx serving dist/, joins backend's dw-net
+    ├── nginx.conf                 # static + /api reverse-proxy + WebSocket upgrade
+    └── env.template               # FRONTEND_HOST_PORT, VITE_API_BASE_URL (no secrets — VITE_* is public)
 ```
 
 Feature-based + layered: group by feature module, keep `api/` / `service/` / `persistence/` (and `consumer/` / `event/` where applicable) inside each module. Cross-cutting concerns live in `shared/`.

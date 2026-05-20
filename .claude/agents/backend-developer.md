@@ -61,7 +61,11 @@ Target layout from [docs/architecture/README.md §3](../../docs/architecture/REA
 
 ```
 DigitalWallet/
-├── backend/                       # Quarkus application
+├── backend/                       # Quarkus application + its deploy tier
+│   ├── Dockerfile                 # multi-stage JVM (eclipse-temurin:21-jre)
+│   ├── docker-compose.yml         # Postgres 16 + Kafka KRaft + Redis 7 + (--profile app) backend
+│   ├── env.template               # backend + infra env template
+│   ├── postgres/init/             # Postgres init scripts (test DB bootstrap)
 │   ├── account/                   # FR1.1
 │   │   ├── api/  service/  persistence/
 │   ├── wallet/                    # FR1.2, FR1.3, FR1.4
@@ -75,8 +79,7 @@ DigitalWallet/
 │   ├── dashboard/                 # FR3.x
 │   │   ├── api/  ws/  consumer/
 │   └── shared/                    # money, idempotency, outbox, security, lock, rate-limit
-├── frontend/                      # React app (handled by frontend-developer)
-└── deploy/                        # docker-compose, init scripts, env templates
+└── frontend/                      # React app + its deploy tier (handled by frontend-developer)
 ```
 
 Cross-feature import rules from [backend_coding.md §1](../rules/backend_coding.md#1-project-structure):

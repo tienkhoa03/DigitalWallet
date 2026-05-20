@@ -68,7 +68,11 @@ Module skeleton scaffolded under `backend/src/main/java/com/digitalwallet/` (Pha
 
 ```
 DigitalWallet/
-├── backend/                       # Quarkus application
+├── backend/                       # Quarkus application + its deploy tier
+│   ├── Dockerfile                 # multi-stage JVM (eclipse-temurin:21-jre)
+│   ├── docker-compose.yml         # Postgres 16 + Kafka KRaft + Redis 7 + (--profile app) backend
+│   ├── env.template               # backend + infra env template
+│   ├── postgres/init/             # init scripts (test DB bootstrap)
 │   ├── account/                   # FR1.1
 │   │   ├── api/  service/  persistence/
 │   ├── wallet/                    # FR1.2, FR1.3, FR1.4
@@ -82,8 +86,11 @@ DigitalWallet/
 │   ├── dashboard/                 # FR3.x
 │   │   ├── api/  ws/  consumer/
 │   └── shared/                    # money, idempotency, outbox, security
-├── frontend/                      # React app (user app + admin dashboard)
-└── deploy/                        # docker-compose, init scripts, env templates
+└── frontend/                      # React app (user app + admin dashboard) + its deploy tier
+    ├── Dockerfile                 # multi-stage Node 20 build → nginx 1.27
+    ├── docker-compose.yml         # nginx serving dist/, joins the backend's dw-net
+    ├── nginx.conf                 # static + /api reverse-proxy + WebSocket upgrade
+    └── env.template               # public-only config (VITE_* is readable in the browser)
 ```
 
 **Organising principle:** Feature-based + layered. Group code by feature module under `backend/`; inside each module the standard layers `api/`, `service/`, `persistence/` (plus `consumer/` and `event/` where applicable) are kept separate. The `shared/` module holds cross-cutting concerns (money type, idempotency middleware, outbox poller, security).
@@ -151,4 +158,13 @@ Source: [../../project-info.md §14](../../project-info.md#14-environment--confi
 
 ## 8. Deployment topology
 
-The stack is packaged as Docker containers and orchestrated via Docker Compose on a single host for both local development and demo. The compose stack runs the Quarkus backend, Postgres 16, Kafka, Redis 7, and the frontend dev server. No Kubernetes target is in scope for MVP. CI/CD is GitHub Actions: build, unit + integration tests via Testcontainers, JaCoCo coverage gate (≥80% service-layer line coverage), and frontend lint + tests ([../../project-info.md §4.6](../../project-info.md#46-deployment)).
+The stack is packaged as Docker containers and orchestrated via Docker Compose on a single host for both local development and demo. The two tiers are deployed independently — each owns its own `Dockerfile`, `docker-compose.yml`, and `env.template`:
+
+| Tier | Compose file | Services | Owns network |
+|---|---|---|---|
+| Backend + infra | [backend/docker-compose.yml](../../backend/docker-compose.yml) | Postgres 16, Kafka KRaft (3.7), Redis 7, and the optional Quarkus container behind the `app` Compose profile | Defines `dw-net` (bridge) |
+| Frontend | [frontend/docker-compose.yml](../../frontend/docker-compose.yml) | Nginx 1.27 serving the Vite build; reverse-proxies `/api` and `*/ws` upgrades to `dw-backend:8080` | Joins `dw-net` as external |
+
+Start order is fixed: bring up the backend compose first so `dw-net` exists, then the frontend compose joins it. Local development runs the Quarkus backend via `./mvnw quarkus:dev` against just the infra services (no profile flag) for hot reload; the containerised backend (`--profile app`) is reserved for production-like smoke runs.
+
+No Kubernetes target is in scope for MVP. CI/CD is GitHub Actions: build, unit + integration tests via Testcontainers, JaCoCo coverage gate (≥80% service-layer line coverage), and frontend lint + tests ([../../project-info.md §4.6](../../project-info.md#46-deployment)).

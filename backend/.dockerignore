@@ -1,0 +1,39 @@
+# Keep the build context small and safe. Mirrors .gitignore plus build artefacts.
+target/
+**/target/
+.mvn/wrapper/maven-wrapper.jar
+
+# Test artefacts — image only carries the runtime; tests run via mvn verify in CI.
+**/surefire-reports/
+**/failsafe-reports/
+**/jacoco.exec
+**/site/
+
+# Editor / IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+.DS_Store
+
+# Secrets and local env — security.md §1
+.env
+.env.*
+!.env.template
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+
+# Logs
+*.log
+hs_err_pid*
+
+# Docker meta
+Dockerfile
+.dockerignore
+docker-compose*.yml
+docker-compose*.yaml
+README.md

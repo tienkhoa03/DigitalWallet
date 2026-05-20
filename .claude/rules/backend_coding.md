@@ -194,7 +194,7 @@ private Sort resolveSort(String key) {
 - **Naming:** `V<version>__<short_snake_case_description>.sql` ([../../docs/database/migrations.md](../../docs/database/migrations.md#naming-convention)).
 - **Entity + migration in the same PR.** A JPA entity introduced or modified without a corresponding Flyway migration is a defect. The migration MUST be applied before the application code that depends on it merges.
 - **No auto-DDL.** `quarkus.hibernate-orm.database.generation` MUST be `none` in every profile ([../../docs/database/migrations.md](../../docs/database/migrations.md#tool)).
-- **Reference seeds** (currencies, FX rates, default categories) live in Flyway migrations; demo / fixture data lives under `deploy/` ([../../docs/database/migrations.md](../../docs/database/migrations.md#seed-data)).
+- **Reference seeds** (currencies, FX rates, default categories) live in Flyway migrations; demo / fixture data lives under `backend/postgres/init/` (invoked by the Postgres container's `docker-entrypoint-initdb.d` hook in `backend/docker-compose.yml`) ([../../docs/database/migrations.md](../../docs/database/migrations.md#seed-data)).
 - **Drop / rename** of columns or tables follows the staged pattern referenced in [../../docs/database/migrations.md](../../docs/database/migrations.md#conventions-for-the-migration-content): ship the read-side fallback first, then the rename in a subsequent release.
 
 ## 14. Unit tests
