@@ -13,7 +13,7 @@ Source: [../../project-info.md §9](../../project-info.md#9-domain-glossary).
 | Term | Meaning in this product |
 |---|---|
 | Account | A user identity; owns one or more wallets. |
-| Wallet | A balance-bearing record owned by an account, scoped to a single currency. |
+| Wallet | A balance-bearing record owned by an account, scoped to a single currency. An account MAY own multiple wallets in the same currency (no uniqueness on `(account_id, currency_code)`); siblings are disambiguated by an account-supplied `label`. |
 | Transfer | A two-leg atomic operation: debit the sender wallet, credit the receiver wallet. If currencies differ, an FX leg converts the debit amount using a cached rate. |
 | FX rate | A `(from_currency, to_currency) → rate` entry. Source of truth is the `fx_rates` table (static seed via Flyway, mutable through an admin-only path). Read-through cached in Redis with a TTL. Used at transfer time only; never used to revalue stored balances. |
 | Deposit | A one-leg credit to a wallet (simulated funding). |
@@ -41,7 +41,7 @@ See also the database expression of these concepts in [../database/README.md](..
 The end-user persona acts on the system daily ([../../project-info.md §2.1](../../project-info.md#21-user-personas)). A representative session:
 
 1. **Sign up** at `POST /accounts`, then log in at `POST /auth/login` to obtain a JWT.
-2. **Open a wallet** in a chosen currency via `POST /accounts/{accountId}/wallets` (FR1.1).
+2. **Open a wallet** in a chosen currency, with an account-supplied `label`, via `POST /accounts/{accountId}/wallets` (FR1.1). The same currency may be opened more than once (e.g. `"Savings USD"` + `"Travel USD"`).
 3. **Top up** the wallet via `POST /wallets/{walletId}/deposits` with an `Idempotency-Key` (FR1.2).
 4. **Transfer** money to another user via `POST /transfers`, optionally tagging the movement with a `category_id` for PFM. Cross-currency transfers convert at request time using a cached FX rate (FR1.3).
 5. **Inspect the statement** via `GET /wallets/{walletId}/transactions`, filtering by date range or transaction type (FR1.4).

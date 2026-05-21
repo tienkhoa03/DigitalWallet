@@ -125,7 +125,7 @@ public class WalletResource {
   | `idempotency.key_required` | 400 | `IdempotencyKeyRequiredException` |
   | `auth.invalid_credentials` | 401 | `AuthInvalidCredentialsException` |
   | `auth.forbidden`, `account.suspended` | 403 | `AuthForbiddenException` / `AccountSuspendedException` (FR2.4) |
-  | `wallet.duplicate_currency`, `budget.duplicate_month`, `idempotency.replay_conflict`, `wallet.locked` | 409 | `ConflictException` (subclassed per domain) |
+  | `wallet.duplicate_label`, `budget.duplicate_month`, `idempotency.replay_conflict`, `wallet.locked` | 409 | `ConflictException` (subclassed per domain) |
   | `wallet.insufficient_funds`, `transfer.fx_rate_missing`, `transfer.recipient_not_found`, `transfer.same_wallet`, `wallet.currency_mismatch`, `advisor.month_not_ready`, `validation.invalid_amount`, `fraud.velocity_exceeded`, `fraud.volume_exceeded` | 422 | `BusinessRuleException` (subclassed per domain — fraud subclasses for FR2.1 / FR2.2) |
   | `ratelimit.exceeded` | 429 (`Retry-After` header required) | `RateLimitException` |
   | `advisor.circuit_open` | 503 | `CircuitOpenException` |

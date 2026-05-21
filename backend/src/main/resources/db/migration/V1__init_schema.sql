@@ -36,21 +36,25 @@ CREATE TABLE role_assignment (
 );
 
 -- ============================================================
--- wallet (one per (account, currency); FR1.1)
+-- wallet (FR1.1; an account MAY own multiple wallets in the same
+-- currency, disambiguated by `label`. See docs/decisions/0006-multi-currency-model.md)
 -- ============================================================
 CREATE TABLE wallet (
     id              UUID            PRIMARY KEY,
     account_id      UUID            NOT NULL REFERENCES account (id) ON DELETE RESTRICT,
     currency_code   VARCHAR(3)      NOT NULL,
+    label           VARCHAR(64)     NOT NULL,
     balance         NUMERIC(19, 4)  NOT NULL DEFAULT 0,
     version         BIGINT          NOT NULL DEFAULT 0,
     created_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
-    CONSTRAINT wallet_unique_currency UNIQUE (account_id, currency_code),
-    CONSTRAINT wallet_balance_nonneg CHECK (balance >= 0)
+    CONSTRAINT wallet_unique_label UNIQUE (account_id, label),
+    CONSTRAINT wallet_balance_nonneg CHECK (balance >= 0),
+    CONSTRAINT wallet_label_nonempty CHECK (length(trim(label)) > 0)
 );
 
-CREATE INDEX idx_wallet_account ON wallet (account_id);
+CREATE INDEX idx_wallet_account          ON wallet (account_id);
+CREATE INDEX idx_wallet_account_currency ON wallet (account_id, currency_code);
 
 -- ============================================================
 -- transaction (ledger; FR1.2 / FR1.3 / FR1.4)

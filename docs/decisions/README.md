@@ -40,7 +40,7 @@ The status column reflects the bootstrap state of each ADR. ADRs whose decisions
 | 3 | [Concurrency strategy for wallet mutations](0003-concurrency-strategy.md) | Proposed | 2026-05-13 |
 | 4 | [CQRS read-model for budgets](0004-cqrs-budget-read-model.md) | Proposed | 2026-05-13 |
 | 5 | [Outbox publisher](0005-outbox-publisher.md) | Proposed | 2026-05-13 |
-| 6 | [Multi-currency model](0006-multi-currency-model.md) | Proposed | 2026-05-13 |
+| 6 | [Multi-currency model](0006-multi-currency-model.md) | Accepted | 2026-05-21 |
 | 7 | [Build tool](0007-build-tool.md) | Proposed | 2026-05-13 |
 | 8 | [Frontend stack](0008-frontend-stack.md) | Proposed | 2026-05-13 |
 | 9 | [RBAC roles in MVP](0009-rbac-roles.md) | Proposed | 2026-05-13 |

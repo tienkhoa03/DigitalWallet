@@ -65,17 +65,18 @@ Reference table of supported ISO 4217 currency codes. Seeded via Flyway.
 
 ### `wallet`
 
-A balance-bearing record scoped to a single currency ([../../project-info.md §9](../../project-info.md#9-domain-glossary)). One wallet per currency per account ([../decisions/0006-multi-currency-model.md](../decisions/0006-multi-currency-model.md)).
+A balance-bearing record scoped to a single currency ([../../project-info.md §9](../../project-info.md#9-domain-glossary)). An account MAY own multiple wallets, including more than one in the same currency — siblings are disambiguated by an account-supplied `label` ([../decisions/0006-multi-currency-model.md](../decisions/0006-multi-currency-model.md)).
 
 | Column | Type | Constraint | Purpose |
 |---|---|---|---|
 | `id` | `uuid` | PK | Internal wallet id. Also the key for the Redis lock (NFR1). |
 | `account_id` | `uuid` | FK → `account.id`, NOT NULL | Owner. |
 | `currency_code` | `varchar(3)` | FK → `currency.code`, NOT NULL | ISO 4217. |
+| `label` | `varchar(64)` | NOT NULL | Account-supplied display name (e.g. `"Savings USD"`, `"Travel USD"`). Used to disambiguate siblings in the same currency. |
 | `balance` | `numeric(19,4)` | NOT NULL DEFAULT 0 | Authoritative balance. Mutated under `LockModeType.PESSIMISTIC_WRITE` (NFR1). |
 | `opened_at` | `timestamptz` | NOT NULL | Creation time. |
 | `closed_at` | `timestamptz` | NULL | Soft-close marker `(verify — not explicit in spec)`. |
-| UNIQUE | `(account_id, currency_code)` | — | Enforces one wallet per currency per account. |
+| UNIQUE | `(account_id, label)` | — | Labels are unique per account so a wallet can be picked unambiguously in the UI. There is intentionally **no** `UNIQUE (account_id, currency_code)` — multiple wallets in the same currency are a first-class case. |
 
 ### `transaction`
 

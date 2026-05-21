@@ -4,11 +4,14 @@ This page captures the per-FR rules for Epic 1 (FR1.1–FR1.4) from [../../proje
 
 ## FR1.1 — Account creation and wallet opening
 
-- **Rule:** A user may hold exactly one wallet per ISO 4217 currency under a single account; opening a second wallet in the same currency is rejected.
-- **Why:** Required by the multi-currency model in [../decisions/0006-multi-currency-model.md](../decisions/0006-multi-currency-model.md) — every wallet is scoped to one currency, and PFM accounting assumes a single wallet per (account, currency) pair.
-- **Enforced in:** `wallet/service/` opening flow, backed by a `UNIQUE (account_id, currency_code)` DB constraint in [../database/README.md](../database/README.md). `(verify)`
-- **Failure mode:** HTTP 409 with `error_key: "wallet.duplicate_currency"`. DB constraint violation surfaces the same key through the exception mapper.
-- **Frontend shortcut:** The wallet-creation form filters out currencies already owned by the account (cosmetic — the server invariant remains).
+- **Rule:** A user MAY open multiple wallets under a single account, including more than one wallet in the same ISO 4217 currency (e.g. a "Savings USD" wallet alongside a "Travel USD" wallet). Each wallet has its own `wallet_id`, its own balance, and an account-supplied `label` used to disambiguate sibling wallets in the same currency.
+- **Why:** Required by the multi-currency model in [../decisions/0006-multi-currency-model.md](../decisions/0006-multi-currency-model.md) — each wallet remains scoped to a single currency, but users routinely want to segregate funds (saving vs. spending, per-trip budgets, etc.) without resorting to multiple accounts. PFM accounting aggregates across all wallets an account owns; it does not assume one wallet per (account, currency).
+- **Enforced in:** `wallet/service/` opening flow — there is **no** `UNIQUE (account_id, currency_code)` constraint. The service validates `currency_code` against ISO 4217, validates `label` is non-empty and unique among that account's wallets (so the label can disambiguate siblings in the UI), and persists with the account-supplied label.
+- **Failure mode:**
+  - Unsupported currency → HTTP 422 `error_key: "wallet.unsupported_currency"`.
+  - Missing or empty `label` → HTTP 400 `error_key: "validation.invalid_payload"`.
+  - Duplicate `label` on the same account → HTTP 409 `error_key: "wallet.duplicate_label"`.
+- **Frontend shortcut:** None — the wallet-creation form lists every supported currency unconditionally and asks the user for a `label`. (The previous "filter out currencies already owned" shortcut is removed; siblings in the same currency are now a first-class case.)
 
 ## FR1.2 — Deposit and withdraw
 
@@ -31,7 +34,7 @@ This page captures the per-FR rules for Epic 1 (FR1.1–FR1.4) from [../../proje
 - **Frontend shortcut:** None — server invariant.
 
 - **Rule (FX at transfer time only):** Cross-currency transfers convert the sender debit using the cached FX rate for `(from_currency, to_currency)`; the same rate is **never** used to revalue stored balances.
-- **Why:** [../decisions/0006-multi-currency-model.md](../decisions/0006-multi-currency-model.md) — one wallet per currency; FX is a per-event calculation, not a balance-revaluation policy.
+- **Why:** [../decisions/0006-multi-currency-model.md](../decisions/0006-multi-currency-model.md) — every wallet is scoped to a single currency (even when an account owns several wallets in that currency); FX is a per-event calculation on the cross-currency leg, not a balance-revaluation policy.
 - **Enforced in:** `wallet/service/` FX leg; FX cache in `shared/`. `(verify)`
 - **Failure mode:** Missing rate → HTTP 422 `error_key: "transfer.fx_rate_missing"`.
 - **Frontend shortcut:** The transfer form previews the converted amount using the same cached rate; the preview is informational and may diverge from the committed rate if the TTL expires between preview and submit.

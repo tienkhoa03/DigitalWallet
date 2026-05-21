@@ -155,7 +155,7 @@ DigitalWallet/
 
 ### Epic 1: Core Wallet Management
 
-- **FR1.1:** Users can create an account and one or more internal wallets (multi-currency: one wallet per currency per account).
+- **FR1.1:** Users can create an account and one or more internal wallets (multi-currency: an account MAY hold multiple wallets in the same currency — e.g. separate "Savings USD" and "Travel USD" wallets — in addition to wallets in different currencies).
 - **FR1.2:** Deposit / withdraw endpoints simulate top-up and cash-out by updating the wallet balance through the authoritative ledger.
 - **FR1.3:** P2P transfer — internal money movement by User ID or Account Number. Payload accepts an optional `category_id` (e.g. Entertainment, Food) to power PFM analytics. Cross-currency transfers are converted at transfer time using a cached FX rate (see ADR #6 and §9).
 - **FR1.4:** Transaction history — statement endpoint with filters by time range and transaction type.
@@ -242,7 +242,7 @@ DigitalWallet/
 | Term | Meaning in this product |
 |---|---|
 | Account | A user identity; owns one or more wallets. |
-| Wallet | A balance-bearing record owned by an account, scoped to a single currency. |
+| Wallet | A balance-bearing record owned by an account, scoped to a single currency. An account MAY own multiple wallets in the same currency (no uniqueness constraint on `(account_id, currency_code)`); each wallet is identified by its own `wallet_id` and an account-supplied label. |
 | Transfer | A two-leg atomic operation: debit the sender wallet, credit the receiver wallet. If currencies differ, an FX leg converts the debit amount using a cached rate. |
 | FX rate | A `(from_currency, to_currency) → rate` entry. Source of truth is the `fx_rates` table (static seed via Flyway, mutable through an admin-only path). Read-through cached in Redis with a TTL. Used at transfer time only; never used to revalue stored balances. |
 | Deposit | A one-leg credit to a wallet (simulated funding). |
@@ -274,7 +274,7 @@ DigitalWallet/
 | 3 | Concurrency strategy | Hybrid: Redis distributed lock (outer) + DB `SELECT … FOR UPDATE` (inner) | ✅ Decided — write ADR |
 | 4 | CQRS read-model for budgets | Both: Redis (hot path) + Postgres materialized view (durable backup, rebuild source) | ✅ Decided — write ADR |
 | 5 | Outbox publisher | Transactional outbox + Quarkus `@Scheduled` poller (no Debezium) | ✅ Decided — write ADR |
-| 6 | Multi-currency model | One wallet per currency; cross-currency transfers convert at transfer time using a cached FX rate | ✅ Decided — write ADR |
+| 6 | Multi-currency model | Multiple wallets per account, each scoped to a single currency; an account MAY own several wallets in the same currency. Cross-currency transfers convert at transfer time using a cached FX rate | ✅ Decided — write ADR |
 | 7 | Build tool | Maven | ✅ Decided — write ADR |
 | 8 | Frontend stack | React 18 + TypeScript strict + Tailwind + Redux Toolkit + React Hook Form + Zod + pnpm + Vitest + Playwright | ✅ Decided — write ADR |
 | 9 | RBAC roles | `USER`, `ADMIN`, `FRAUD_ANALYST` (three roles) | ✅ Decided — write ADR |
@@ -361,7 +361,7 @@ DigitalWallet/
 | 3 | Concurrency strategy? | ✅ Answered | Hybrid Redis lock + DB `FOR UPDATE` — ADR #3 |
 | 4 | CQRS read-model for budgets? | ✅ Answered | Redis (hot) + materialized view (backup) — ADR #4 |
 | 5 | Outbox publisher? | ✅ Answered | Transactional outbox + Quarkus scheduled poller — ADR #5 |
-| 6 | Multi-currency model? | ✅ Answered | One wallet per currency; FX at transfer time via cached rate — ADR #6 |
+| 6 | Multi-currency model? | ✅ Answered | Multiple wallets per account, each scoped to a single currency; an account MAY own several wallets in the same currency. FX at transfer time via cached rate — ADR #6 |
 | 7 | Build tool? | ✅ Answered | Maven — ADR #7 |
 | 8 | Frontend stack? | ✅ Answered | React + TS strict + Tailwind + RTK + RHF/Zod + pnpm + Vitest + Playwright — ADR #8 |
 | 9 | RBAC roles in MVP? | ✅ Answered | Three roles: USER, ADMIN, FRAUD_ANALYST |
