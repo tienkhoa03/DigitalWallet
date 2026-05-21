@@ -33,7 +33,7 @@ Walk the Progress Tracker and the Files to Modify / Create table, sorting each p
 
 - **Backend phase** — any path under `backend/`, any Flyway migration, any backend test, any ADR about backend behaviour. Dispatched to `@backend-developer` (will be created in step 6 of the bootstrap).
 - **Frontend phase** — any path under `frontend/`, any frontend test, any frontend doc. Dispatched to `@frontend-developer` (will be created in step 6 of the bootstrap).
-- **Cross-module orchestrator phase** — anything in [../../docs/](../../docs/), root config (`pom.xml`, `package.json`, `docker-compose.yml`, `application.properties`), shared contract files, and any phase that explicitly spans backend and frontend (e.g. "agree on `errorKey` for `wallet.duplicate_currency`"). The orchestrator (this command's main loop) handles these — they are NOT delegated.
+- **Cross-module orchestrator phase** — anything in [../../docs/](../../docs/), root config (`pom.xml`, `package.json`, `docker-compose.yml`, `application.properties`), shared contract files, and any phase that explicitly spans backend and frontend (e.g. "agree on `errorKey` for `wallet.duplicate_label`"). The orchestrator (this command's main loop) handles these — they are NOT delegated.
 
 If a single phase appears to mix backend and frontend work, split it. Each phase must have exactly one owner.
 
