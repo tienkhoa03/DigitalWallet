@@ -11,7 +11,7 @@ Source baselines: [../../project-info.md §8](../../project-info.md#8-security-b
 - **No committed secrets.** API keys, JWT private keys, DB passwords, LLM keys MUST NOT appear in the repository. Source: [../../project-info.md §8](../../project-info.md#8-security-baseline).
 - **Env-var loading:** 12-factor configuration in MVP, sourced from process environment. Defaults for non-secret values live in `application.properties` ([../../docs/architecture/README.md §7](../../docs/architecture/README.md#7-config--profiles)); secret values MUST resolve to env vars with no committed default. Production secret manager is deferred ([../../project-info.md §8](../../project-info.md#8-security-baseline)).
 - **Frontend env rules:** any variable readable in the browser (`VITE_*` per Vite convention) is **public**. MUST NOT prefix a secret with `VITE_`. The LLM API key, JWT signing key, and DB credentials MUST NEVER leave the backend.
-- **Log scrubbing:** the backend logger MUST NOT emit secrets, JWT bearer tokens, full `Idempotency-Key` values, full email addresses, full names, account numbers, balances, or LLM prompt / response bodies. See §7 and [backend_coding.md §11](backend_coding.md#11-logging). The frontend logger (shared error reporter) follows the same rule.
+- **Log scrubbing:** the backend logger MUST NOT emit secrets, JWT bearer tokens, full `Idempotency-Key` values, full email addresses, full names, balances, or LLM prompt / response bodies. See §7 and [backend_coding.md §11](backend_coding.md#11-logging). The frontend logger (shared error reporter) follows the same rule.
 - **Secrets in error responses:** stack traces and configuration values MUST NOT appear in user-facing error bodies (see §7).
 
 ## 2. Authentication
@@ -21,20 +21,20 @@ Auth scheme is committed in [../../project-info.md §8](../../project-info.md#8-
 - **Algorithm:** ES256 (ECDSA P-256). Tokens MUST be verified with the `ES256` algorithm and the configured public key. MUST NOT accept `alg: none`, `HS256`, or any algorithm not on a hard-coded allow-list — the canonical JWT-confusion attacks rely on lax allow-lists.
 - **Clock skew:** verification MUST allow ≤ 30 seconds of clock skew on `nbf` / `exp`. Tokens beyond skew are rejected.
 - **Verification placement:** the JWT MUST be verified before the JAX-RS request reaches the service layer. WebSocket upgrades MUST validate the JWT before accepting the connection ([../../docs/business-rules/real-time-admin-dashboard-rules.md](../../docs/business-rules/real-time-admin-dashboard-rules.md) RBAC).
-- **Password hashing:** account passwords MUST be hashed with a memory-hard algorithm (Argon2id preferred; bcrypt acceptable with cost ≥ 12). Plain SHA-256 / MD5 / SHA-1 are forbidden. The persisted column is `account.password_hash` ([../../docs/database/README.md](../../docs/database/README.md) `account`).
+- **Password hashing:** user passwords MUST be hashed with a memory-hard algorithm (Argon2id preferred; bcrypt acceptable with cost ≥ 12). Plain SHA-256 / MD5 / SHA-1 are forbidden. The persisted column is `user.password_hash` ([../../docs/database/README.md](../../docs/database/README.md) `user`).
 - **Account recovery:** MUST be a separate authenticated flow that issues a single-use, time-bounded token; recovery tokens MUST NOT extend or re-issue an existing JWT.
 - **Enumeration prevention:** sign-in failures MUST return the same `errorKey: "auth.invalid_credentials"` regardless of whether the email exists. The same applies to password-reset acknowledgement.
-- **Audit trail:** authentication events (login success, login failure, password reset request, password change) MUST write to `audit_log` ([../../docs/database/README.md](../../docs/database/README.md) `audit_log`). Fraud-driven blocks (FR2.1–FR2.2) and account suspensions / un-suspensions (FR2.4) MUST also write to `audit_log` per [../../project-info.md §8](../../project-info.md#8-security-baseline).
+- **Audit trail — DEFERRED in MVP:** the `audit_log` table is deferred (see [../../project-info.md §8](../../project-info.md#8-security-baseline), [../../docs/decisions/0009-rbac-roles.md](../../docs/decisions/0009-rbac-roles.md)). Authentication-event auditing, fraud-block auditing, and suspension/un-suspension auditing return when manual unsuspend / role-grants UI / admin PII reads ship — at which point the table and the corresponding "MUST write to `audit_log`" rules return via an ADR superseding [../../docs/decisions/0009-rbac-roles.md](../../docs/decisions/0009-rbac-roles.md).
 - **`auth.rate_limited`:** repeated failed sign-ins MUST trigger the rate-limit envelope (§8) — no silent exponential lockout.
 
 ## 3. Authorization
 
-- **Default-deny:** every endpoint and every service entrypoint MUST require an authenticated principal except the explicit public list (`POST /accounts`, `POST /auth/login`). New endpoints default to authenticated. Controller-level `@RolesAllowed` is the first line; the service layer re-checks the role and ownership ([../../project-info.md §8](../../project-info.md#8-security-baseline), [backend_coding.md §3](backend_coding.md#3-service-layer)).
-- **Ownership checks:** any handler that takes a path parameter identifying user-owned data (`{walletId}`, `{accountId}`, `{budgetId}`) MUST verify that the authenticated principal owns the resource — even when the role is correct. Role gives capability; ownership gives access.
-- **Admin reads of user data** MUST log to `audit_log` with `action = "admin.user.read"` and the subject account id ([../../project-info.md §8](../../project-info.md#8-security-baseline), [../../docs/database/README.md](../../docs/database/README.md) `audit_log`).
-- **Role separation:** `FRAUD_ANALYST` is intentionally separate from `ADMIN` to enforce least privilege ([../../project-info.md §2.2](../../project-info.md#22-roles-in-the-system), [../../docs/decisions/0009-rbac-roles.md](../../docs/decisions/0009-rbac-roles.md)). Endpoints MUST NOT promote one role's permissions to the other transitively.
-- **Role escalation prevention:** role grants are performed only through the admin role-management path. The handler that writes to `role_assignment` MUST refuse to elevate the caller's own account.
-- **Cross-account leakage:** WebSocket fan-out for user notifications MUST scope by `account_id` server-side. Client-side filtering is NEVER acceptable ([../../docs/business-rules/pfm-notifications-rules.md](../../docs/business-rules/pfm-notifications-rules.md) Cross-cutting).
+- **Default-deny:** every endpoint and every service entrypoint MUST require an authenticated principal except the explicit public list (`POST /users`, `POST /auth/login`). New endpoints default to authenticated. Controller-level `@RolesAllowed` is the first line; the service layer re-checks the role and ownership ([../../project-info.md §8](../../project-info.md#8-security-baseline), [backend_coding.md §3](backend_coding.md#3-service-layer)).
+- **Ownership checks:** any handler that takes a path parameter identifying user-owned data (`{walletId}`, `{userId}`, `{budgetId}`) MUST verify that the authenticated principal owns the resource — even when the role is correct. Role gives capability; ownership gives access.
+- **Admin reads of user data:** *(MVP defers the `audit_log` row — see [../../docs/decisions/0009-rbac-roles.md](../../docs/decisions/0009-rbac-roles.md).)* When the table returns, admin reads MUST log to `audit_log` with `action = "admin.user.read"` and the subject `user_id`.
+- **Role separation — DEFERRED:** the dedicated `FRAUD_ANALYST` role is **deferred in MVP**; only `USER` and `ADMIN` ship ([../../project-info.md §2.2](../../project-info.md#22-roles-in-the-system), [../../docs/decisions/0009-rbac-roles.md](../../docs/decisions/0009-rbac-roles.md)). Endpoints MUST NOT promote one role's permissions to the other transitively. When `FRAUD_ANALYST` returns, the least-privilege separation between admin and analyst returns with it.
+- **Role escalation prevention:** role grants are not user-mutable in MVP — every user holds the default `USER` role and admin promotion happens out-of-band. When an admin role-management path ships, the handler MUST refuse to elevate the caller's own user row.
+- **Cross-user leakage:** WebSocket fan-out for user notifications MUST scope by `user_id` server-side. Client-side filtering is NEVER acceptable ([../../docs/business-rules/pfm-notifications-rules.md](../../docs/business-rules/pfm-notifications-rules.md) Cross-cutting).
 
 ## 4. Input validation & injection
 
@@ -86,7 +86,7 @@ Storage trade-offs `<!-- not-yet-adopted -->` — the default below is the rule 
 - **User-facing error messages:** the `message` field of the error envelope is informational and human-readable ([../../docs/api/README.md](../../docs/api/README.md#error-response-shape)). MUST NOT include stack traces, SQL fragments, internal IDs, or configuration values. Clients branch on the stable `error_key`, not the message.
 - **Idempotency-Key handling in logs:** the full key is sensitive — a leaked key allows replay of a mutating request. Logs MUST emit either a salted hash or the first 8 characters only ([backend_coding.md §11](backend_coding.md#11-logging)).
 - **LLM payloads:** prompts and responses MUST NOT be persisted or logged in any form that contains user identifiers. Anonymised aggregates only ([../../docs/business-rules/ai-advisor-rules.md](../../docs/business-rules/ai-advisor-rules.md) Cross-cutting on anonymisation).
-- **PII columns:** the columns marked PII in [../../docs/database/README.md](../../docs/database/README.md) (`account.email`, `account.full_name`) MUST be considered sensitive in every projection.
+- **PII columns:** the columns marked PII in [../../docs/database/README.md](../../docs/database/README.md) (`user.email`) MUST be considered sensitive in every projection.
 
 ## 8. Rate limiting & abuse
 
@@ -96,10 +96,10 @@ Source: [../../project-info.md §8](../../project-info.md#8-security-baseline), 
 |---|---|---|---|
 | `POST /transfers` | 10 per minute per user | Redis token bucket in `shared/` rate-limit middleware | `RATELIMIT_TRANSFER_PER_MINUTE` (default 10) |
 | `POST /advisor/*` | 5 per hour per user | Redis token bucket in `shared/` rate-limit middleware | `RATELIMIT_ADVISOR_PER_HOUR` (default 5) |
-| `POST /auth/login` | Progressive back-off on repeated failure `<!-- not-yet-adopted -->` | Redis counter keyed on (account, IP) | — |
+| `POST /auth/login` | Progressive back-off on repeated failure `<!-- not-yet-adopted -->` | Redis counter keyed on (user, IP) | — |
 
 - **Failure mode:** exceeded limit returns HTTP 429 with `errorKey: "ratelimit.exceeded"` and a `Retry-After` header ([backend_coding.md §8](backend_coding.md#8-exception-handling)).
-- **Distinction from fraud rules:** velocity (FR2.1), volume (FR2.2), and the `account.fraud_status` check (FR2.4) are **also** preventive — they reject the offending transaction inline on the synchronous money path per NFR9 ([../../project-info.md §6](../../project-info.md#6-non-functional-requirements--invariants), [../../docs/business-rules/fraud-detection-engine-rules.md](../../docs/business-rules/fraud-detection-engine-rules.md)). The two systems MUST NOT be conflated, however: rate limits return `ratelimit.exceeded` (HTTP 429) and signal abuse of the endpoint; fraud blocks return `fraud.velocity_exceeded` / `fraud.volume_exceeded` (HTTP 422) or `account.suspended` (HTTP 403) and signal account-level risk. Each has its own counter, its own envelope, and its own audit trail. Cross-event fraud analysis, alerting (FR2.5), and the suspension-policy decision (FR2.4) remain on the Kafka consumer.
+- **Distinction from fraud rules:** velocity (FR2.1), volume (FR2.2), and the `user.fraud_status` check (FR2.4) are **also** preventive — they reject the offending transaction inline on the synchronous money path per NFR9 ([../../project-info.md §6](../../project-info.md#6-non-functional-requirements--invariants), [../../docs/business-rules/fraud-detection-engine-rules.md](../../docs/business-rules/fraud-detection-engine-rules.md)). The two systems MUST NOT be conflated, however: rate limits return `ratelimit.exceeded` (HTTP 429) and signal abuse of the endpoint; fraud blocks return `fraud.velocity_exceeded` / `fraud.volume_exceeded` (HTTP 422) or `account.suspended` (HTTP 403 — error key preserved for API back-compat) and signal user-level risk. Each has its own counter and its own envelope. Cross-event fraud analysis, alerting (FR2.5), and the suspension-policy decision (FR2.4) remain on the Kafka consumer.
 - **Progressive back-off:** repeated 429s for the same user SHOULD back off in client retry policy, but the server does not increase the limit window. Server policy is fixed-window token bucket per the env vars.
 
 ## 9. Dependencies
@@ -139,7 +139,7 @@ See [testing.md](testing.md) for the testing contract. The required security tes
 | Boundary | `threshold_percent` outside `[1, 100]`, `amount <= 0`, malformed currency code → `validation.*`. | DTO validation tests. |
 | XSS payload | A free-form string containing `<script>` is rendered as text in the frontend, not executed. | Vitest + React Testing Library. |
 | Rate limit | The 11th transfer per minute returns 429 with `Retry-After`; the 6th advisor call per hour returns 429. | Rate-limit middleware tests. |
-| Audit log | A transfer / role grant / admin read / fraud-driven block (FR2.1–FR2.2) / account suspension or un-suspension (FR2.4) writes the expected `audit_log` row. | Service integration tests. |
+| Outbox event on block | A fraud-driven block (FR2.1–FR2.2) writes the expected `transaction.blocked` outbox row (no ledger row). | Service integration tests. *(MVP defers the `audit_log` row originally specified here — see [../../docs/decisions/0009-rbac-roles.md](../../docs/decisions/0009-rbac-roles.md).)* |
 
 ## 12. Code-review checklist — CRITICAL
 
@@ -158,7 +158,7 @@ The `code-review` skill checks every PR against this checklist. Each item is a r
 - [ ] No `dangerouslySetInnerHTML` on user input — §4, [frontend_coding.md §19](frontend_coding.md#19-anti-patterns).
 - [ ] No new `VITE_*` env variable holds a secret — §1.
 - [ ] LLM prompts contain only aggregated amounts and category labels — no user identifiers — §4, [../../docs/business-rules/ai-advisor-rules.md](../../docs/business-rules/ai-advisor-rules.md).
-- [ ] Audit-log row written for any new admin or money-mutation action — §3, §7.
+- [ ] *(MVP defers `audit_log`. Item returns with the table — see [../../docs/decisions/0009-rbac-roles.md](../../docs/decisions/0009-rbac-roles.md).)* Audit-log row written for any new admin or money-mutation action — §3, §7.
 - [ ] Pre-commit hook (gitleaks) passes — §10.
 - [ ] Rate-limit middleware applied to any new `POST /transfers`-class or `POST /advisor/*`-class endpoint — §8.
 - [ ] WebSocket upgrades validate the JWT and the `Origin` header — §2, §5.

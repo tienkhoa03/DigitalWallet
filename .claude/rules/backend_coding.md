@@ -65,16 +65,16 @@ public class WalletResource {
 - **Naming:** `<Noun>Service` for the business class, `<Verb><Noun>Service` only when behaviour is verb-shaped (e.g. `OutboxPublisherService`). Methods MUST be verb phrases (`deposit`, `transfer`, `recordFraudAlert`).
 - **Transaction boundary:** `@Transactional` MUST be applied at the service method, NOT at the resource or repository. A method that both reads and writes the ledger MUST be `@Transactional` (default `REQUIRED`). Read-only flows SHOULD declare `@Transactional(TxType.SUPPORTS)` or omit the annotation entirely.
 - **Hybrid concurrency (NFR1):** every wallet mutation MUST follow the exact order — (1) acquire the Redis distributed lock keyed on `wallet_id` with a short TTL via the helper in `shared/`; (2) open the `@Transactional` boundary; (3) read the wallet row with `LockModeType.PESSIMISTIC_WRITE`; (4) write the ledger row + outbox row; (5) commit; (6) release the Redis lock in a `finally`. See [../../docs/business-rules/README.md NFR1](../../docs/business-rules/README.md#nfr-enforcement-matrix) and [../../docs/decisions/0003-concurrency-strategy.md](../../docs/decisions/0003-concurrency-strategy.md).
-- **Synchronous fraud pre-check (NFR9):** every wallet mutation MUST run the bounded fraud pre-check (velocity FR2.1 + volume FR2.2 Redis sliding-window lookups + `account.fraud_status` read FR2.4) **before** the Redis wallet lock is acquired. A breach rejects with the typed exception in §8 (`fraud.velocity_exceeded` / `fraud.volume_exceeded` / `account.suspended`) and writes one `audit_log` row + one `transaction.blocked` outbox event in a short `@Transactional` boundary — no ledger row, no wallet lock. See [../../docs/business-rules/fraud-detection-engine-rules.md](../../docs/business-rules/fraud-detection-engine-rules.md) and [../../docs/decisions/0010-fraud-enforcement-model.md](../../docs/decisions/0010-fraud-enforcement-model.md).
+- **Synchronous fraud pre-check (NFR9):** every wallet mutation MUST run the bounded fraud pre-check (velocity FR2.1 + volume FR2.2 Redis sliding-window lookups + `user.fraud_status` read FR2.4) **before** the Redis wallet lock is acquired. A breach rejects with the typed exception in §8 (`fraud.velocity_exceeded` / `fraud.volume_exceeded` / `account.suspended` — error key preserved for API back-compat) and writes one `transaction.blocked` outbox event in a short `@Transactional` boundary — no ledger row, no wallet lock. *(MVP defers the `audit_log` row originally specified for blocks — see [../../docs/decisions/0009-rbac-roles.md](../../docs/decisions/0009-rbac-roles.md).)* See [../../docs/business-rules/fraud-detection-engine-rules.md](../../docs/business-rules/fraud-detection-engine-rules.md) and [../../docs/decisions/0010-fraud-enforcement-model.md](../../docs/decisions/0010-fraud-enforcement-model.md).
 - **Validation flow:**
   - Bean Validation on DTOs runs at the resource boundary (annotation-driven).
   - Cross-field and domain invariants (insufficient funds, FX missing, currency mismatch, recipient identity) run inside the service.
-  - DB constraints are the last line (unique currency per account, audit-log append-only) — surfaced through the exception mapper (§8).
+  - DB constraints are the last line (unique `(user_id, label)` on `wallet`, unique `(user_id, month)` on `budget`, idempotency-key uniqueness) — surfaced through the exception mapper (§8).
 - **RBAC MUST run in the service layer**, not only at the controller. The service receives a `SecurityIdentity` or equivalent principal and rejects unauthorised callers with the typed exception in §8. Source: [../../project-info.md §8](../../project-info.md#8-security-baseline) and [security.md §3](security.md#3-authorization).
 - **What MUST NOT happen on the request thread:**
   - Kafka publishing (§15, NFR2/NFR5).
   - LLM calls (NFR8).
-  - Cross-event fraud analysis, alert fan-out (FR2.5), the suspension-policy decision (FR2.4), PFM aggregation, dashboard aggregation — these are Kafka-consumer concerns ([../../docs/business-rules/README.md NFR5](../../docs/business-rules/README.md#nfr-enforcement-matrix)). The bounded fraud pre-check (FR2.1 / FR2.2 Redis counters + `account.fraud_status` read) is the only fraud step permitted inline (NFR9; see the §3 hybrid-concurrency / pre-check rules).
+  - Cross-event fraud analysis, alert fan-out (FR2.5), the suspension-policy decision (FR2.4), PFM aggregation, dashboard aggregation — these are Kafka-consumer concerns ([../../docs/business-rules/README.md NFR5](../../docs/business-rules/README.md#nfr-enforcement-matrix)). The bounded fraud pre-check (FR2.1 / FR2.2 Redis counters + `user.fraud_status` read) is the only fraud step permitted inline (NFR9; see the §3 hybrid-concurrency / pre-check rules).
   - Blocking I/O outside the configured worker / virtual-thread executor.
 
 ## 4. Data models / entities
@@ -82,7 +82,7 @@ public class WalletResource {
 - **PK strategy:** UUID (`uuid` Postgres column). Generated client-side, time-orderable variant preferred where ordering is useful (e.g. `uuidv7`). See [../../docs/database/README.md](../../docs/database/README.md#naming-conventions).
 - **Date/time handling:** Java `Instant` or `OffsetDateTime` mapped to `timestamptz`. All timestamps are UTC ([../../project-info.md §13](../../project-info.md#13-coding-conventions-highest-level-project-wide)). MUST NOT use `Date`, `Calendar`, or `LocalDateTime` for stored timestamps.
 - **Money columns:** `BigDecimal` in Java, `numeric(19,4)` in Postgres ([../../project-info.md §13](../../project-info.md#13-coding-conventions-highest-level-project-wide)). MUST NOT use `double` or `float` for money under any circumstance.
-- **Event time:** `transaction_timestamp` on `transaction` is the event time carried into Kafka (NFR7, [../../docs/business-rules/ai-driven-personal-finance-management-rules.md](../../docs/business-rules/ai-driven-personal-finance-management-rules.md) Cross-cutting). Consumer code MUST use the event time from the Kafka payload, not `Instant.now()`.
+- **Event time:** `event_timestamp` on `transaction` is the event time carried into Kafka (NFR7, [../../docs/business-rules/ai-driven-personal-finance-management-rules.md](../../docs/business-rules/ai-driven-personal-finance-management-rules.md) Cross-cutting). Consumer code MUST use the event time from the Kafka payload, not `Instant.now()`.
 - **Currency code:** ISO 4217, stored as `varchar(3)`. Java side MAY model it as a value object or a typed enum; the wire form is the three-letter string.
 - **Relationships:** `@ManyToOne(fetch = LAZY)` is the default. `EAGER` fetch is forbidden on collection associations. Use explicit `JOIN FETCH` or a projection DTO when you need eager-like loading; this is the primary N+1 mitigation.
 - **N+1 avoidance:** every multi-row read flow that crosses an association MUST be covered by an integration test that asserts the SQL count via Hibernate Statistics (or equivalent) `<!-- not-yet-adopted -->`. The list of indexed columns lives in [../../docs/database/README.md](../../docs/database/README.md#naming-conventions).
@@ -129,9 +129,8 @@ public class WalletResource {
   | `wallet.insufficient_funds`, `transfer.fx_rate_missing`, `transfer.recipient_not_found`, `transfer.same_wallet`, `wallet.currency_mismatch`, `advisor.month_not_ready`, `validation.invalid_amount`, `fraud.velocity_exceeded`, `fraud.volume_exceeded` | 422 | `BusinessRuleException` (subclassed per domain — fraud subclasses for FR2.1 / FR2.2) |
   | `ratelimit.exceeded` | 429 (`Retry-After` header required) | `RateLimitException` |
   | `advisor.circuit_open` | 503 | `CircuitOpenException` |
-  | `audit.write_failed` | 500 | `AuditFailureException` |
 
-  `errorKey` values referenced above come from [../../docs/api/README.md](../../docs/api/README.md) and [../../docs/business-rules/](../../docs/business-rules/) and are part of the public contract — clients branch on them.
+  `errorKey` values referenced above come from [../../docs/api/README.md](../../docs/api/README.md) and [../../docs/business-rules/](../../docs/business-rules/) and are part of the public contract — clients branch on them. *(MVP defers `audit.write_failed` together with the `audit_log` table — see [../../docs/decisions/0009-rbac-roles.md](../../docs/decisions/0009-rbac-roles.md).)*
 - **Hibernate Validator failures** MUST be normalised onto the same envelope by the mapper with `errorKey: "validation.invalid_payload"`.
 - **MUST NOT** swallow exceptions silently or log-and-return — every recoverable failure surfaces a typed exception; every unrecoverable failure logs at `ERROR` with the stack and re-throws.
 
@@ -172,7 +171,7 @@ private Sort resolveSort(String key) {
 - **Levels:**
   - `INFO` — business events (`transfer.commit`, `wallet.open`, consumer offset committed).
   - `WARN` — recoverable degradations (Redis lock missed; LLM call retried; FX rate expired between preview and commit).
-  - `ERROR` — unrecovered failures requiring human attention (audit-log write failed; outbox poller exception; consumer poison message routed to DLQ).
+  - `ERROR` — unrecovered failures requiring human attention (outbox poller exception; consumer poison message routed to DLQ).
   - `DEBUG` — traceable execution detail used in dev mode and turned off in prod by default.
 - **Forbidden content in logs:**
   - Email, full name, password, JWT, account number, wallet balance, transaction amount per row.
@@ -220,21 +219,21 @@ private Sort resolveSort(String key) {
 - **Channel naming:** application channel names mirror the Kafka topic name, hyphenated: `transaction-events`, `fraud-alerts`, `pfm-threshold-alerts`. Advisor topics are TBD per [../../project-info.md §16](../../project-info.md#16-open-questions-to-answer-before-bootstrapping) item 1; once decided they MUST follow the same convention.
 - **Producer pattern:** the request thread MUST NOT call `@Channel("...").send(...)`. The only producer is the outbox poller in `shared/`, driven by `@Scheduled` ([../../docs/decisions/0005-outbox-publisher.md](../../docs/decisions/0005-outbox-publisher.md), [../../docs/business-rules/fraud-detection-engine-rules.md](../../docs/business-rules/fraud-detection-engine-rules.md) FR2.3). All other modules append to the outbox table.
 - **Consumer pattern:** `@Incoming` methods MUST be idempotent (de-duplicate on outbox-event `id` — at-least-once delivery is the contract per NFR2). They MUST run on a consumer-managed executor, not on JAX-RS threads ([../../docs/business-rules/README.md NFR5](../../docs/business-rules/README.md#nfr-enforcement-matrix)).
-- **Event-time correctness:** PFM and any downstream aggregator MUST use `transaction_timestamp` from the payload, not consumer wall-clock (NFR7, [../../docs/business-rules/ai-driven-personal-finance-management-rules.md](../../docs/business-rules/ai-driven-personal-finance-management-rules.md) Cross-cutting).
+- **Event-time correctness:** PFM and any downstream aggregator MUST use `event_timestamp` from the payload, not consumer wall-clock (NFR7, [../../docs/business-rules/ai-driven-personal-finance-management-rules.md](../../docs/business-rules/ai-driven-personal-finance-management-rules.md) Cross-cutting).
 - **Failure handling:** a consumer that throws on a record MUST mark the record as failed (negative ack) and route to the per-topic DLQ (`<topic>.DLQ`) after a bounded retry count. The DLQ MUST be drained by a separate operational tool — Never silently swallowed.
 - **Outbox poller:** drains rows in `created_at ASC` order; on publish success, sets `published_at` (see [../../docs/database/README.md](../../docs/database/README.md) `outbox_event`).
 
 ## 16. WebSockets
 
 - **Endpoint patterns** are defined in [../../docs/api/README.md](../../docs/api/README.md):
-  - `WS /admin/ws/alerts` — fraud alert fan-out, `ADMIN` or `FRAUD_ANALYST` only.
+  - `WS /admin/ws/alerts` — fraud alert fan-out, `ADMIN` only (MVP defers `FRAUD_ANALYST` — see [../../docs/decisions/0009-rbac-roles.md](../../docs/decisions/0009-rbac-roles.md)).
   - `WS /admin/ws/metrics` — live metrics push, `ADMIN` only.
   - `WS /users/ws/notifications` — budget threshold + burn-rate warnings, `USER` only.
   - Advisor reply channel — user-scoped, scoped by `request_id` correlation ([../../docs/business-rules/ai-advisor-rules.md](../../docs/business-rules/ai-advisor-rules.md) FR6.2).
 - **Auth:** the WebSocket upgrade handler MUST validate the JWT before accepting the connection. Rejected upgrades return HTTP 403 with `errorKey: "auth.forbidden"` ([../../docs/business-rules/real-time-admin-dashboard-rules.md](../../docs/business-rules/real-time-admin-dashboard-rules.md) RBAC).
 - **Broadcast model:**
   - Admin channels broadcast to all sockets authenticated with the corresponding role.
-  - User channels (notifications, advisor reply) MUST scope fan-out by `account_id` — server-side filtering, never trust the client filter ([../../docs/business-rules/pfm-notifications-rules.md](../../docs/business-rules/pfm-notifications-rules.md) Cross-cutting).
+  - User channels (notifications, advisor reply) MUST scope fan-out by `user_id` — server-side filtering, never trust the client filter ([../../docs/business-rules/pfm-notifications-rules.md](../../docs/business-rules/pfm-notifications-rules.md) Cross-cutting).
 - **Backpressure:** WebSocket sessions slow to drain are dropped; the client reconnects and backfills via the REST endpoint ([../../docs/business-rules/real-time-admin-dashboard-rules.md](../../docs/business-rules/real-time-admin-dashboard-rules.md) FR3.2).
 
 ## 17. Configuration

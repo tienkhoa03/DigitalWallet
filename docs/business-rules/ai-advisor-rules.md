@@ -18,7 +18,7 @@ This page captures the per-FR rules for Epic 6 (FR6.1–FR6.3) from [../../proje
 - **Rule:** The WebSocket reply is the personalised advice from the LLM, scoped to the user's own anonymised spending data. The reply carries the `request_id` from FR6.1.
 - **Why:** FR6.2 — tailored advice; NFR8 — async delivery.
 - **Enforced in:** `advisor/service/` correlation by `request_id`; `advisor/ws/` user fan-out. `(verify)`
-- **Failure mode:** A reply with no matching `request_id` on the receiving client is dropped; replies are not fanned out to other users (server-side scoped to `account_id`).
+- **Failure mode:** A reply with no matching `request_id` on the receiving client is dropped; replies are not fanned out to other users (server-side scoped to `user_id`).
 - **Frontend shortcut:** Loading state is keyed on `request_id`; stale replies (e.g. user navigated away and back) are reconciled against the stored last-known request.
 
 ## FR6.3 — Auto-adjust plan
@@ -31,7 +31,7 @@ This page captures the per-FR rules for Epic 6 (FR6.1–FR6.3) from [../../proje
 
 ## Cross-cutting
 
-- **Rule (anonymisation):** Prompts sent to the LLM must not contain user identifiers (account id, email, name, account number). Only aggregated amounts and category labels are sent.
+- **Rule (anonymisation):** Prompts sent to the LLM must not contain user identifiers (`user_id`, email, name). Only aggregated amounts and category labels are sent.
 - **Why:** [../../project-info.md §8](../../project-info.md#8-security-baseline) — LLM data retention is provider-dependent and the answer is open ([../../project-info.md §16](../../project-info.md#16-open-questions-to-answer-before-bootstrapping) item 15).
 - **Enforced in:** `advisor/service/` prompt builder; a unit test asserts the produced prompt contains no PII strings `(verify)`.
 - **Failure mode:** Failed assertion is a P0 fix-forward issue.

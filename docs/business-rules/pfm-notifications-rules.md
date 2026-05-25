@@ -24,7 +24,7 @@ This page captures the per-FR rules for Epic 5 (FR5.1, FR5.2) from [../../projec
 
 ## Cross-cutting
 
-- **Rule:** All notifications carry the bucket's owning `account_id` in the WebSocket auth context; the server-side fan-out only delivers to sockets owned by that account. No cross-user leakage.
+- **Rule:** All notifications carry the bucket's owning `user_id` in the WebSocket auth context; the server-side fan-out only delivers to sockets owned by that user. No cross-user leakage.
 - **Why:** PII isolation — even category-level spending data is sensitive ([../../project-info.md §8](../../project-info.md#8-security-baseline)).
 - **Enforced in:** `pfm/ws/` user-scoped channel. `(verify)`
 - **Failure mode:** Mis-routed notification is a P0 incident.

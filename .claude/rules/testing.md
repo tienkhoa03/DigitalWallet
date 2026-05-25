@@ -88,14 +88,14 @@ Some tests are mandatory because the corresponding NFR is the system's contract:
 |---|---|---|
 | Hybrid concurrency (NFR1) | Concurrent requests against the same wallet exercise Redis lock + DB `FOR UPDATE`; one wins, the loser sees `wallet.locked` or retries cleanly. | [../../docs/testing/README.md](../../docs/testing/README.md#test-discipline), [../../docs/business-rules/README.md](../../docs/business-rules/README.md#nfr-enforcement-matrix) NFR1. |
 | Idempotency (NFR3) | Same body + same key → identical response; different body + same key → `idempotency.replay_conflict`. | [../../docs/testing/README.md](../../docs/testing/README.md#test-discipline) Idempotency tests. |
-| Event time (NFR7) | An out-of-order event with an earlier `transaction_timestamp` lands in the correct month bucket. | [../../docs/testing/README.md](../../docs/testing/README.md#test-discipline) Event-time tests. |
+| Event time (NFR7) | An out-of-order event with an earlier `event_timestamp` lands in the correct month bucket. | [../../docs/testing/README.md](../../docs/testing/README.md#test-discipline) Event-time tests. |
 | Outbox (NFR2) | Ledger commit + outbox row are atomic; poller drains and marks `published_at`; consumer is idempotent on replay of the same outbox-event id. | [../../docs/business-rules/README.md](../../docs/business-rules/README.md#nfr-enforcement-matrix) NFR2. |
 | LLM isolation (NFR8) | `POST /advisor/analyze` returns 202 within budget; the reply arrives on the WebSocket; circuit-breaker open returns `advisor.circuit_open`. | [../../docs/business-rules/ai-advisor-rules.md](../../docs/business-rules/ai-advisor-rules.md). |
 | No PFM writes on ledger tables (NFR6) | An integration assertion that `pfm/` writes never target `transaction`, `wallet`, or `outbox_event`. | [../../docs/business-rules/ai-driven-personal-finance-management-rules.md](../../docs/business-rules/ai-driven-personal-finance-management-rules.md) Cross-cutting. |
 
 ### 2.10 Security test context
 
-See [security.md §11](security.md#11-testing-security-sensitive-code) for the required test matrix (unauthenticated / wrong-role / wrong-tenant / replay / boundary / XSS / rate-limit / audit-log).
+See [security.md §11](security.md#11-testing-security-sensitive-code) for the required test matrix (unauthenticated / wrong-role / wrong-tenant / replay / boundary / XSS / rate-limit / outbox-event-on-block). *(MVP defers the audit-log test context — see [../../docs/decisions/0009-rbac-roles.md](../../docs/decisions/0009-rbac-roles.md).)*
 
 ## 3. Frontend testing
 
@@ -155,7 +155,7 @@ Drawn from [../../docs/testing/README.md](../../docs/testing/README.md#test-disc
 - **No `@Disabled` / `xit` / `it.skip` without a linked ticket.** A skipped test without a ticket is a regression in CI quality and MAY be removed.
 - **Self-contained.** Tests pass in any order; do not share state through static fields, ambient containers, or external resources between tests.
 - **One assertion theme.** A test asserts one behaviour. Multiple assertions inside a test are fine when they describe a single outcome (e.g. response status + response body shape); unrelated assertions belong in separate tests.
-- **No PII in fixtures.** Synthetic names and email addresses. The audit-log invariant applies to test logs as well ([../../docs/business-rules/README.md](../../docs/business-rules/README.md) Cross-cutting).
+- **No PII in fixtures.** Synthetic names and email addresses. The no-PII-in-logs invariant applies to test logs as well ([../../docs/business-rules/README.md](../../docs/business-rules/README.md) Cross-cutting). *(MVP defers the `audit_log` table — see [../../docs/decisions/0009-rbac-roles.md](../../docs/decisions/0009-rbac-roles.md).)*
 - **Money is `BigDecimal`.** Tests MUST NOT assert on `double` / `float` for money. Use `compareTo` for value equality — `BigDecimal("1.00").equals(BigDecimal("1.0"))` is `false`.
 - **Coverage cannot be earned by junk assertions.** Reviewers reject tests that exist solely to bump JaCoCo numbers.
 - **Test names describe behaviour.** Prefer `transfer_with_replayed_idempotency_key_returns_original_outcome` over `testTransfer1`.

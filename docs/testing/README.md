@@ -37,11 +37,11 @@ This page documents how the DigitalWallet test suite is structured, what the cov
 - **No `@Disabled` (JUnit) or `xit` / `it.skip` (Vitest) without a linked issue.** A skipped test without a ticket is a regression in CI quality and may be removed without notice.
 - **No test order dependence.** Tests must pass when run in any order; do not share state through static fields, ambient containers, or external resources between tests.
 - **One container set per test class** when using Testcontainers, started via `@QuarkusTestResource` or an equivalent lifecycle. Containers are reused across tests in the same class to keep CI under budget. `(verify pattern when wired)`
-- **No PII in fixtures.** Use synthetic names and email addresses. The audit-log invariant (see [../business-rules/README.md](../business-rules/README.md)) applies to test logs as well.
+- **No PII in fixtures.** Use synthetic names and email addresses. The no-PII-in-logs invariant (see [../business-rules/README.md](../business-rules/README.md)) applies to test logs as well. *(MVP defers the `audit_log` table — see [../../project-info.md §8](../../project-info.md#8-security-baseline).)*
 - **Money is `BigDecimal`.** Tests must never assert on `double` or `float` for money — comparing scale matters (`BigDecimal("1.00").equals(BigDecimal("1.0"))` is `false`). Use `compareTo` for value equality.
 - **Idempotency tests.** Every mutating endpoint has at least one test that posts the same body twice with the same `Idempotency-Key` and asserts identical responses (NFR3).
 - **Concurrency tests.** Critical wallet operations (FR1.2, FR1.3) have at least one test that spawns concurrent requests against the same wallet to exercise the Redis lock + DB `FOR UPDATE` path (NFR1).
-- **Event-time tests.** PFM aggregation tests inject out-of-order events to assert that `transaction_timestamp` (not wall-clock) drives bucket attribution (NFR7).
+- **Event-time tests.** PFM aggregation tests inject out-of-order events to assert that `event_timestamp` (not wall-clock) drives bucket attribution (NFR7).
 - **Coverage cannot be earned by junk assertions.** Reviewers reject tests that exist solely to bump JaCoCo numbers.
 - **Test names describe behaviour.** Prefer `transfer_with_replayed_idempotency_key_returns_original_outcome` over `testTransfer1`.
 

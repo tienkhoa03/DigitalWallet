@@ -62,11 +62,12 @@ Stack (mandated): React 18.x, TypeScript 5.x **strict**, Tailwind CSS 3.x, Redux
 
   | Form | Field | Zod rule | Backend rule source |
   |---|---|---|---|
-  | Open wallet | `currency_code`, `label` | `currency_code` ISO 4217 (3 letters); `label` non-empty, ≤ 64 chars, unique within the account's existing wallet labels. **No uniqueness rule on `currency_code`** — siblings in the same currency are allowed. | [../../docs/business-rules/core-wallet-management-rules.md](../../docs/business-rules/core-wallet-management-rules.md) FR1.1 |
+  | Signup | `email`, `password`, `base_currency` | `email` valid, `password` non-empty (min length per backend); `base_currency` is ISO 4217 (3 letters) — **immutable** once set. | [../../docs/business-rules/core-wallet-management-rules.md](../../docs/business-rules/core-wallet-management-rules.md) FR1.1 |
+  | Open wallet | `currency_code`, `label` | `currency_code` ISO 4217 (3 letters); `label` non-empty, ≤ 64 chars, unique within the user's existing wallet labels. **No uniqueness rule on `currency_code`** — siblings in the same currency are allowed. | [../../docs/business-rules/core-wallet-management-rules.md](../../docs/business-rules/core-wallet-management-rules.md) FR1.1 |
   | Deposit / Withdraw | `amount` | `BigDecimal`-safe string, `> 0` | [../../docs/business-rules/core-wallet-management-rules.md](../../docs/business-rules/core-wallet-management-rules.md) FR1.2 |
-  | Transfer | recipient identity | `account_number` XOR `user_id`, not equal to sender wallet's account | [../../docs/business-rules/core-wallet-management-rules.md](../../docs/business-rules/core-wallet-management-rules.md) FR1.3 |
+  | Transfer | recipient identity | `to_user_id` only (no `account_number` in MVP); not equal to the sender wallet's owning user | [../../docs/business-rules/core-wallet-management-rules.md](../../docs/business-rules/core-wallet-management-rules.md) FR1.3 |
   | Transfer | `amount`, `currency_code` | `amount > 0`; currency is ISO 4217 | [../../docs/business-rules/core-wallet-management-rules.md](../../docs/business-rules/core-wallet-management-rules.md) FR1.3 |
-  | Create budget | `month` | ISO `YYYY-MM-01`; unique per account | [../../docs/business-rules/ai-driven-personal-finance-management-rules.md](../../docs/business-rules/ai-driven-personal-finance-management-rules.md) FR4.1 |
+  | Create budget | `month` | ISO `YYYY-MM-01` (`date`, day = 1); unique per user. No per-bucket `currency_code` — the budget inherits the user's `base_currency`. | [../../docs/business-rules/ai-driven-personal-finance-management-rules.md](../../docs/business-rules/ai-driven-personal-finance-management-rules.md) FR4.1 |
   | Bucket threshold | `threshold_percent` | integer in `[1, 100]` | [../../docs/business-rules/ai-driven-personal-finance-management-rules.md](../../docs/business-rules/ai-driven-personal-finance-management-rules.md) FR4.3 |
   | Statement filter | `from`, `to` | `from <= to`; type ∈ `deposit`/`withdraw`/`transfer_debit`/`transfer_credit` | [../../docs/business-rules/core-wallet-management-rules.md](../../docs/business-rules/core-wallet-management-rules.md) FR1.4 |
   | Advisor request | `month` | ISO `YYYY-MM-01`; month must be closed | [../../docs/business-rules/ai-advisor-rules.md](../../docs/business-rules/ai-advisor-rules.md) FR6.1 |
@@ -84,9 +85,10 @@ Stack (mandated): React 18.x, TypeScript 5.x **strict**, Tailwind CSS 3.x, Redux
   |---|---|---|
   | `/wallets/*`, `/budgets/*`, `/advisor/*` | `USER` | [../../docs/api/README.md](../../docs/api/README.md) Epics 1, 4, 6 |
   | `/admin/dashboard`, `/admin/metrics` | `ADMIN` | [../../docs/business-rules/real-time-admin-dashboard-rules.md](../../docs/business-rules/real-time-admin-dashboard-rules.md) FR3.1 |
-  | `/admin/alerts` | `ADMIN`, `FRAUD_ANALYST` | [../../docs/business-rules/real-time-admin-dashboard-rules.md](../../docs/business-rules/real-time-admin-dashboard-rules.md) RBAC |
-  | `/admin/fraud/*` | `FRAUD_ANALYST` | [../../docs/api/README.md](../../docs/api/README.md) Epic 2 |
+  | `/admin/alerts` | `ADMIN` | [../../docs/business-rules/real-time-admin-dashboard-rules.md](../../docs/business-rules/real-time-admin-dashboard-rules.md) RBAC |
   | `/login`, `/signup` | public | [../../docs/api/README.md](../../docs/api/README.md) Epic 1 |
+
+> *MVP scope cut:* the `FRAUD_ANALYST` role and the dedicated `/admin/fraud/*` analyst workflow are deferred — see [../../docs/decisions/0009-rbac-roles.md](../../docs/decisions/0009-rbac-roles.md).
 
 - The frontend guard is a UX optimisation; server-side RBAC is authoritative ([../../docs/business-rules/real-time-admin-dashboard-rules.md](../../docs/business-rules/real-time-admin-dashboard-rules.md), [security.md §3](security.md#3-authorization)). Hiding a link is not security.
 

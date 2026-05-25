@@ -15,7 +15,7 @@ V<version>__<short_snake_case_description>.sql
 ```
 
 - `<version>` is a monotonically increasing integer (`V1`, `V2`, `V3`, …) or dotted form (`V1.1`, `V1.2`). Use plain integers unless a hotfix needs to land between two existing versions `(verify)`.
-- `<short_snake_case_description>` summarises the change in present-tense, e.g. `V14__add_idempotency_key_table.sql`.
+- `<short_snake_case_description>` summarises the change in present-tense, e.g. `V14__add_idempotency_record_table.sql`.
 - Use `R__<description>.sql` only for genuinely repeatable objects (views, functions) — never for tables.
 - Bundle related DDL changes in a single migration; do not split one logical change across multiple files.
 
@@ -32,7 +32,7 @@ Migrations are **forward-only**.
 
 - **Reference seeds** (currencies, FX rates, default categories) are applied via Flyway versioned migrations so every environment converges to the same baseline.
 - **Demo / fixture data** for local development belongs under `backend/postgres/init/` (SQL fragments invoked by the Postgres container's `docker-entrypoint-initdb.d` hook from `backend/docker-compose.yml`), **not** under Flyway. This keeps test fixtures out of the production migration timeline.
-- The `fx_rates` table is populated by a Flyway seed migration and is otherwise mutated only through an admin-only path ([../../project-info.md §9](../../project-info.md#9-domain-glossary), [../../project-info.md §11](../../project-info.md#11-explicit-non-goals-out-of-scope)).
+- The `fx_rate` table is populated by a Flyway seed migration and is otherwise mutated only through an admin-only path ([../../project-info.md §9](../../project-info.md#9-domain-glossary), [../../project-info.md §11](../../project-info.md#11-explicit-non-goals-out-of-scope)).
 - Test suites that need bespoke data must insert it within the test (or via Testcontainers init scripts) — they must never depend on demo-fixture rows.
 
 ## Conventions for the migration content
