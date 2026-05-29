@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DigitalWallet — Hướng dẫn hoàn thành & học chi tiết</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#161b22; --panel2:#1c232c; --border:#2d333b;
+    --text:#d7dde5; --muted:#9aa4b2; --accent:#4f9cf9; --accent2:#7ee787;
+    --warn:#f0883e; --danger:#f85149; --code:#0d1117; --chip:#21304a; --purple:#bc8cff;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.65; font-size:16px;}
+  .layout{display:flex; max-width:1480px; margin:0 auto;}
+  nav.toc{width:310px; flex-shrink:0; position:sticky; top:0; height:100vh; overflow-y:auto;
+    padding:24px 18px; border-right:1px solid var(--border); background:var(--panel);}
+  nav.toc h2{font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:18px 0 6px}
+  nav.toc a{display:block; color:var(--muted); text-decoration:none; padding:4px 10px; border-radius:6px; font-size:13.5px}
+  nav.toc a:hover{background:var(--panel2); color:var(--text)}
+  nav.toc a.sub{padding-left:22px; font-size:13px}
+  .brand{font-weight:700; font-size:18px; color:var(--text); margin-bottom:4px}
+  .brand small{display:block; color:var(--muted); font-weight:400; font-size:12px; margin-top:2px}
+  main{flex:1; padding:40px 56px; max-width:1000px; min-width:0}
+  h1{font-size:33px; line-height:1.22; margin:0 0 8px}
+  h2{font-size:25px; margin:52px 0 14px; padding-bottom:8px; border-bottom:2px solid var(--border)}
+  h3{font-size:19px; margin:30px 0 10px; color:#fff}
+  h4{font-size:15.5px; margin:20px 0 8px; color:var(--accent); text-transform:uppercase; letter-spacing:.03em}
+  p{margin:10px 0}
+  a{color:var(--accent)}
+  code{background:var(--code); padding:2px 6px; border-radius:4px; font-family:"SF Mono",Consolas,Monaco,monospace; font-size:13px; color:#e6edf3}
+  pre{background:var(--code); border:1px solid var(--border); border-radius:8px; padding:16px; overflow-x:auto; font-size:12.5px; line-height:1.55}
+  pre code{background:none; padding:0; font-size:12.5px}
+  ul,ol{margin:10px 0; padding-left:24px}
+  li{margin:5px 0}
+  blockquote{border-left:4px solid var(--accent); margin:14px 0; padding:8px 16px; background:var(--panel2); border-radius:0 8px 8px 0; color:var(--muted)}
+  table{border-collapse:collapse; width:100%; margin:14px 0; font-size:13.5px}
+  th,td{border:1px solid var(--border); padding:7px 11px; text-align:left; vertical-align:top}
+  th{background:var(--panel2); color:#fff}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02)}
+  .lead{font-size:18px; color:var(--muted)}
+  .chip{display:inline-block; background:var(--chip); color:var(--accent); padding:2px 10px; border-radius:20px; font-size:11.5px; font-weight:600; margin:2px 4px 2px 0; white-space:nowrap}
+  .chip.green{background:#143; color:var(--accent2)} .chip.warn{background:#3a2a14; color:var(--warn)}
+  .chip.gray{background:#2a2f36; color:var(--muted)} .chip.purple{background:#2b1f3a; color:var(--purple)}
+  .chip.red{background:#3a1a18; color:var(--danger)}
+  .callout{border-radius:10px; padding:14px 18px; margin:16px 0; border:1px solid var(--border)}
+  .callout .t{font-weight:700; margin-bottom:4px; display:flex; align-items:center; gap:8px}
+  .callout.tip{background:rgba(126,231,135,.07); border-color:#2d5} .callout.tip .t{color:var(--accent2)}
+  .callout.why{background:rgba(79,156,249,.08); border-color:#3a6} .callout.why .t{color:var(--accent)}
+  .callout.warn{background:rgba(240,136,62,.08); border-color:var(--warn)} .callout.warn .t{color:var(--warn)}
+  .callout.danger{background:rgba(248,81,73,.08); border-color:var(--danger)} .callout.danger .t{color:var(--danger)}
+  .callout.trap{background:rgba(188,140,255,.07); border-color:var(--purple)} .callout.trap .t{color:var(--purple)}
+  .phase{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:8px 24px 20px; margin:22px 0}
+  .phase > summary{cursor:pointer; font-size:18px; font-weight:700; padding:14px 0; list-style:none; display:flex; align-items:center; gap:10px}
+  .phase > summary::-webkit-details-marker{display:none}
+  .phase > summary::before{content:"▸"; color:var(--accent); transition:transform .2s}
+  .phase[open] > summary::before{transform:rotate(90deg)}
+  .phase .body{border-top:1px solid var(--border); padding-top:6px}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  .grid3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px}
+  .card{background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:16px}
+  .card h4{margin-top:0}
+  .step{counter-increment:step; position:relative; padding-left:42px; margin:16px 0}
+  .step::before{content:counter(step); position:absolute; left:0; top:0; width:28px; height:28px; background:var(--accent); color:#03101f; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px}
+  .steps{counter-reset:step}
+  hr{border:none; border-top:1px solid var(--border); margin:40px 0}
+  .footer{color:var(--muted); font-size:13px; margin-top:60px; padding-top:20px; border-top:1px solid var(--border)}
+  .pill-row{margin:10px 0}
+  .api{font-family:monospace; font-size:13px}
+  .m-post{color:#7ee787; font-weight:700} .m-get{color:#4f9cf9; font-weight:700}
+  .anchor-top{position:fixed; bottom:24px; right:24px; background:var(--accent); color:#03101f; width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; text-decoration:none; font-size:20px; font-weight:700; box-shadow:0 4px 12px rgba(0,0,0,.4)}
+  @media(max-width:900px){nav.toc{display:none} main{padding:24px} .grid2,.grid3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <div class="brand">💳 DigitalWallet<small>Hướng dẫn hoàn thành & học chi tiết</small></div>
+  <h2>Khởi động</h2>
+  <a href="#quickstart">⚡ Quickstart 10 phút</a>
+  <a href="#gioi-thieu">0 · Giới thiệu &amp; mục tiêu học</a>
+  <a href="#ban-do">1 · Bản đồ tài liệu</a>
+  <a href="#moi-truong">2 · Môi trường &amp; .env</a>
+  <a href="#kien-truc">3 · Kiến trúc 2 luồng</a>
+  <a href="#nfr">4 · 9 bất biến NFR</a>
+  <a href="#workflow">5 · Quy trình với Claude</a>
+  <h2>Tham chiếu (tra cứu)</h2>
+  <a href="#ref-api" class="sub">📋 Catalog API Epic 1</a>
+  <a href="#ref-errors" class="sub">⚠️ Bảng error_key</a>
+  <a href="#ref-db" class="sub">🗄️ Schema database</a>
+  <a href="#ref-moneypath" class="sub">🔐 Money path chi tiết</a>
+  <h2>Backend (P0→9)</h2>
+  <a href="#p0" class="sub">P0 · Reconcile</a>
+  <a href="#p1" class="sub">P1 · Signup + Login</a>
+  <a href="#p2" class="sub">P2 · Open Wallet</a>
+  <a href="#p3" class="sub">P3 · Deposit + infra ⭐</a>
+  <a href="#p4" class="sub">P4 · Withdraw</a>
+  <a href="#p5" class="sub">P5 · Transfer</a>
+  <a href="#p6" class="sub">P6 · Rate limiting</a>
+  <a href="#p7" class="sub">P7 · Statement</a>
+  <a href="#p8" class="sub">P8 · Observability</a>
+  <a href="#p9" class="sub">P9 · Acceptance</a>
+  <h2>Frontend (F1→5)</h2>
+  <a href="#f1" class="sub">F1 · Bootstrap</a>
+  <a href="#f2" class="sub">F2 · Auth UI</a>
+  <a href="#f3" class="sub">F3 · Wallets + nạp/rút</a>
+  <a href="#f4" class="sub">F4 · Transfer + Statement</a>
+  <a href="#f5" class="sub">F5 · Playwright</a>
+  <h2>Kết</h2>
+  <a href="#glossary">6 · Glossary</a>
+  <a href="#hoc-them">7 · Học sâu thêm</a>
+  <a href="#git">8 · Git &amp; PR workflow</a>
+  <a href="#checklist">9 · Checklist</a>
+</nav>
+
+<main>
+  <h1>DigitalWallet — Hướng dẫn hoàn thành dự án & học từ A→Z</h1>
+  <p class="lead">Tài liệu vận hành: bám sát <code>docs/plans/implementation-plan-mvp-master.md</code>. Mỗi phase có endpoint thật, request/response thật, error key thật, code mẫu, cạm bẫy thường gặp, và phần "💡 Vì sao" để bạn học được kiến thức — không chỉ hoàn thành.</p>
+
+  <div class="callout tip">
+    <div class="t">📌 Cách dùng</div>
+    Đọc <strong>Khởi động</strong> (mục 0–5) một lần để nắm bức tranh. Khi code, mở phase tương ứng + tab <strong>Tham chiếu</strong> (API / error / schema / money path) để tra cứu. Mỗi phase: <strong>Bạn xây gì → Code/đặc tả cụ thể → 💡 Kiến thức → 🟣 Cạm bẫy → Lệnh → DoD</strong>.
+  </div>
+
+  <!-- ===================== QUICKSTART ===================== -->
+  <h2 id="quickstart">⚡ Quickstart — chạy được trong 10 phút</h2>
+  <div class="steps">
+    <div class="step"><strong>Bật Docker</strong> rồi khởi động hạ tầng (Postgres + Redis). <em>Lưu ý: docker-compose có từ Phase 3; nếu chưa có, integration test vẫn tự spin Testcontainers.</em>
+      <pre><code>docker compose -f backend/docker-compose.yml up -d   # khi đã tới Phase 3</code></pre>
+    </div>
+    <div class="step"><strong>Tạo cặp khoá JWT dev</strong> (ES256 / P-256) và set biến môi trường <code>JWT_PRIVATE_KEY</code>:
+      <pre><code>openssl ecparam -name prime256v1 -genkey -noout -out /tmp/dev-private.pem
+openssl ec -in /tmp/dev-private.pem -pubout \
+  -out backend/src/main/resources/META-INF/jwt-public-key-dev.pem
+# Đưa private key (1 dòng, \n escape) vào backend/.env -> JWT_PRIVATE_KEY=...</code></pre>
+    </div>
+    <div class="step"><strong>Chạy backend dev mode</strong> (hot reload, Flyway tự migrate lúc start):
+      <pre><code>cd backend &amp;&amp; ./mvnw quarkus:dev      # http://localhost:8080  ·  Dev UI: /q/dev</code></pre>
+    </div>
+    <div class="step"><strong>Test thử luồng signup → login:</strong>
+      <pre><code>curl -s -X POST localhost:8080/users -H 'Content-Type: application/json' \
+  -d '{"email":"a@test.dev","password":"correct horse battery","base_currency":"USD"}'
+curl -s -X POST localhost:8080/auth/login -H 'Content-Type: application/json' \
+  -d '{"email":"a@test.dev","password":"correct horse battery"}'   # → {access_token,...}</code></pre>
+    </div>
+    <div class="step"><strong>Verify đầy đủ</strong> (compile + test + coverage gate 80%):
+      <pre><code>cd backend &amp;&amp; ./mvnw -B verify       # hoặc chạy skill /backend-verify</code></pre>
+    </div>
+  </div>
+  <div class="callout warn"><div class="t">⚠️ Password tối thiểu 12 ký tự</div>Theo Phase 1 Open Q #8: <code>@Size(min=12, max=128)</code>, chỉ ràng buộc độ dài (NIST SP 800-63B). Mật khẩu ngắn → <code>400 validation.invalid_payload</code>.</div>
+
+  <!-- ============ 0 ============ -->
+  <h2 id="gioi-thieu">0 · Giới thiệu &amp; mục tiêu học</h2>
+  <p><strong>DigitalWallet</strong> là nền tảng ví nội bộ đa tiền tệ. MVP chỉ làm <strong>Epic 1 — Core Wallet Management (FR1.1–FR1.4)</strong>: đăng ký/đăng nhập → mở nhiều ví theo từng loại tiền → nạp / rút / chuyển (idempotency + khoá đồng thời + rate limit) → xem sao kê. Fraud / Dashboard / PFM / AI Advisor <strong>hoãn</strong> (kiến trúc đã chừa chỗ: cột <code>fraud_status</code>, bảng <code>outbox_event</code> vẫn ship).</p>
+  <div class="grid2">
+    <div class="card"><h4>Backend / Kiến trúc</h4><ul>
+      <li>Modular monolith + vertical slice</li>
+      <li>Transactional Outbox (atomic ledger+event)</li>
+      <li>Hybrid concurrency: Redis lock → DB <code>PESSIMISTIC_WRITE</code></li>
+      <li>Idempotency state machine (IN_FLIGHT/COMPLETED)</li>
+      <li>JWT ES256, Argon2id, RBAC 2 tầng</li>
+      <li>Flyway forward-only, Testcontainers, JaCoCo gate</li>
+      <li>BigDecimal/numeric(19,4), FX snapshot</li>
+    </ul></div>
+    <div class="card"><h4>Frontend / Chất lượng</h4><ul>
+      <li>React 18 + TS strict + Redux Toolkit/RTK Query</li>
+      <li>React Hook Form + Zod mirror validation backend</li>
+      <li>Tiền là decimal string — không mất độ chính xác</li>
+      <li>Route guard, error boundary, XSS-safe</li>
+      <li>baseQuery: inject JWT + 401→logout + map error</li>
+      <li>Vitest/RTL + Playwright golden path</li>
+    </ul></div>
+  </div>
+
+  <!-- ============ 1 ============ -->
+  <h2 id="ban-do">1 · Bản đồ tài liệu (đọc trước khi code)</h2>
+  <p>Nguyên tắc: <strong>tài liệu trước, code sau</strong>. Khi code và spec mâu thuẫn → spec là chuẩn cho đến khi có ADR thay thế.</p>
+  <table>
+    <tr><th>File</th><th>Vai trò</th><th>Khi nào đọc</th></tr>
+    <tr><td><code>docs/plans/implementation-plan-mvp-master.md</code></td><td>🗺️ Lộ trình tổng 14 phase</td><td>Đầu tiên</td></tr>
+    <tr><td><code>docs/plans/implementation-plan-phase-N-*.md</code></td><td>Plan chi tiết từng phase (file, DTO, tên test)</td><td>Trước khi implement phase đó</td></tr>
+    <tr><td><code>project-info.md</code></td><td>Toàn bộ FR/NFR, glossary, gaps</td><td>Tra định nghĩa</td></tr>
+    <tr><td><code>CLAUDE.md</code></td><td>Bất biến + kiến trúc</td><td>Đọc kỹ 1 lần</td></tr>
+    <tr><td><code>.claude/rules/{backend,frontend,security,testing,upgrade-policy}.md</code></td><td>Hợp đồng code — <code>code-review</code> soi theo đây</td><td>Tra khi viết từng loại code</td></tr>
+    <tr><td><code>docs/api/README.md</code></td><td>Catalog endpoint + error envelope</td><td>Trước khi viết resource / RTK Query</td></tr>
+    <tr><td><code>docs/database/README.md</code></td><td>Schema, naming, cột PII</td><td>Trước khi viết entity / migration</td></tr>
+    <tr><td><code>docs/business-rules/core-wallet-management-rules.md</code></td><td>Luật nghiệp vụ Epic 1 (FR1.1–1.4)</td><td>Trước mỗi slice wallet</td></tr>
+    <tr><td><code>docs/decisions/*.md</code> (ADR)</td><td>Lý do chọn (JWT, concurrency, multi-currency…)</td><td>Khi muốn hiểu "vì sao"</td></tr>
+  </table>
+  <div class="callout why"><div class="t">💡 Vì sao "tài liệu trước"?</div>Hệ tài chính: một bug logic = mất tiền thật. Spec rõ ràng giúp bạn (và AI) không "đoán" nghiệp vụ. Kỹ năng thực chiến: <em>đọc spec → dịch ra test → viết code cho test pass</em>. Đây là cách làm enterprise.</div>
+
+  <!-- ============ 2 ============ -->
+  <h2 id="moi-truong">2 · Chuẩn bị môi trường &amp; <code>.env</code></h2>
+  <table>
+    <tr><th>Công cụ</th><th>Phiên bản</th><th>Kiểm tra</th></tr>
+    <tr><td>JDK</td><td>Java 21 LTS (bắt buộc — virtual threads)</td><td><code>java -version</code></td></tr>
+    <tr><td>Maven</td><td>wrapper <code>./mvnw</code> có sẵn</td><td><code>cd backend &amp;&amp; ./mvnw -v</code></td></tr>
+    <tr><td>Docker</td><td>Engine/Desktop đang chạy</td><td><code>docker ps</code></td></tr>
+    <tr><td>Node / pnpm</td><td>20.x / 11.x (từ Phase F1)</td><td><code>node -v &amp;&amp; pnpm -v</code></td></tr>
+    <tr><td>openssl</td><td>để tạo khoá ES256</td><td><code>openssl version</code></td></tr>
+  </table>
+  <div class="callout warn"><div class="t">⚠️ Docker bắt buộc cho test backend</div>Dự án <strong>cấm</strong> H2 / embedded Kafka / embedded Redis. Mọi integration test dùng <strong>Testcontainers</strong> spin Postgres 16 / Redis 7 thật. Không có Docker = test integration fail.</div>
+
+  <h4>Biến môi trường backend (.env / shell)</h4>
+  <table>
+    <tr><th>Biến</th><th>Ý nghĩa</th><th>Bí mật?</th></tr>
+    <tr><td><code>DB_USER</code> / <code>DB_PASSWORD</code></td><td>Postgres credentials</td><td><span class="chip red">Có</span></td></tr>
+    <tr><td><code>DB_URL</code></td><td>mặc định <code>jdbc:postgresql://localhost:5432/digitalwallet</code></td><td>—</td></tr>
+    <tr><td><code>REDIS_URL</code></td><td>mặc định <code>redis://localhost:6379</code></td><td>—</td></tr>
+    <tr><td><code>JWT_PRIVATE_KEY</code></td><td>PEM private key 1 dòng (escape <code>\n</code>) — issuer ký token</td><td><span class="chip red">Có (env-only, không commit)</span></td></tr>
+    <tr><td><code>JWT_ISSUER</code> / <code>JWT_AUDIENCE</code></td><td>mặc định <code>digitalwallet</code> / <code>digitalwallet-api</code></td><td>—</td></tr>
+    <tr><td><code>RATELIMIT_TRANSFER_PER_MINUTE</code></td><td>mặc định 10 (Phase 6)</td><td>—</td></tr>
+  </table>
+  <div class="callout danger"><div class="t">🚫 Không bao giờ commit secret</div><code>gitleaks</code> chạy pre-commit + CI. Public key dev (<code>jwt-public-key-dev.pem</code>) được commit (không bí mật). Private key chỉ sống trong env var. Test thì commit cặp khoá riêng dưới <code>src/test/resources/META-INF/</code> (vì test không chạm user thật).</div>
+
+  <!-- ============ 3 ============ -->
+  <h2 id="kien-truc">3 · Kiến trúc 2 luồng</h2>
+  <div class="grid2">
+    <div class="card"><h4>① Luồng đồng bộ (money path)</h4><p>Trên chính HTTP request thread:</p><ol>
+      <li>REST endpoint nhận request</li>
+      <li>(Fraud pre-check — hoãn MVP)</li>
+      <li>Idempotency check (claim row IN_FLIGHT)</li>
+      <li>Redis lock theo <code>wallet_id</code> (fail nhanh)</li>
+      <li>Mở <code>@Transactional</code></li>
+      <li><code>SELECT … FOR UPDATE</code> (PESSIMISTIC_WRITE)</li>
+      <li>Ghi <strong>ledger row + outbox row</strong> trong 1 tx</li>
+      <li>Commit → release lock → trả response</li>
+    </ol></div>
+    <div class="card"><h4>② Luồng bất đồng bộ (Kafka)</h4><p>Thread pool riêng — <strong>hoãn MVP</strong>:</p><ul>
+      <li>Outbox poller → topic <code>transaction-events</code></li>
+      <li>Fraud / PFM / Dashboard / Advisor consume</li>
+      <li>Fan-out realtime qua WebSocket</li>
+    </ul><p>MVP chỉ <strong>ghi</strong> outbox; chưa poller/consumer nào đọc → bảng <code>outbox_event</code> tích lại (chấp nhận được, là điểm audit).</p></div>
+  </div>
+  <div class="callout why"><div class="t">💡 Vì sao tách 2 luồng + Outbox?</div>Nếu HTTP handler tự gọi Kafka → "dual write": DB commit OK nhưng publish fail = lệch dữ liệu. <strong>Transactional Outbox</strong>: ghi event vào <em>cùng transaction DB</em> với ledger; poller riêng mới publish. Request trả nhanh (NFR5) + không mất event (NFR2). Consumer phải <em>idempotent</em> (at-least-once). Pattern kinh điển event-driven.</div>
+
+  <h3>Cấu trúc module (feature-based + layered)</h3>
+  <pre><code>backend/src/main/java/com/digitalwallet/
+├── shared/        # money, idempotency, outbox, lock, ratelimit, security, exception, validation
+├── user/          # FR1.1 — signup, login, role, base_currency
+│   ├── api/       #   JAX-RS resource + dto/ (record)
+│   ├── service/   #   @Transactional + RBAC + business logic
+│   └── persistence/ # @Entity + PanacheRepositoryBase
+└── wallet/        # FR1.2–1.4 — open, deposit, withdraw, transfer, statement
+    └── api/ service/ persistence/ event/</code></pre>
+  <div class="callout warn"><div class="t">⚠️ Luật import cross-module (bị code-review chặn)</div>
+    <ul style="margin:4px 0">
+      <li><code>api/</code> của module A KHÔNG import <code>service/</code>/<code>persistence/</code> module B.</li>
+      <li><code>persistence/</code> của A không bị import từ <code>api/</code>/<code>service/</code> của B.</li>
+      <li><code>pfm/</code> KHÔNG có repository trên <code>transaction</code>/<code>wallet</code>/<code>outbox_event</code> (NFR6).</li>
+      <li>Giao tiếp cross-module: qua Kafka topic hoặc interface trong <code>shared/</code>.</li>
+    </ul>
+  </div>
+
+  <!-- ============ 4 ============ -->
+  <h2 id="nfr">4 · 9 bất biến NFR — học kỹ</h2>
+  <table>
+    <tr><th>NFR</th><th>Nội dung</th><th>Bạn học</th><th>MVP?</th></tr>
+    <tr><td><strong>NFR1</strong></td><td>Hybrid concurrency: Redis lock <em>rồi mới</em> DB row lock</td><td>Distributed vs DB lock, deadlock ordering</td><td><span class="chip green">Có</span></td></tr>
+    <tr><td><strong>NFR2</strong></td><td>ACID + Outbox: ledger & outbox commit chung 1 tx</td><td>Outbox, at-least-once</td><td><span class="chip green">Ghi-only</span></td></tr>
+    <tr><td><strong>NFR3</strong></td><td>Idempotency: replay trả kết quả gốc</td><td>Idempotency-Key, replay-conflict</td><td><span class="chip green">Có</span></td></tr>
+    <tr><td><strong>NFR4</strong></td><td>Coverage ≥ 80% tầng service</td><td>JaCoCo gate</td><td><span class="chip green">Có</span></td></tr>
+    <tr><td><strong>NFR5</strong></td><td>Latency isolation: HTTP không chạy analytics nặng</td><td>Tách compute sync/async</td><td><span class="chip green">Có</span></td></tr>
+    <tr><td><strong>NFR6</strong></td><td>CQRS budget (Redis hot + materialized view)</td><td>CQRS read model</td><td><span class="chip gray">Hoãn</span></td></tr>
+    <tr><td><strong>NFR7</strong></td><td>Event-time qua <code>event_timestamp</code>, không wall-clock</td><td>Event vs processing time</td><td><span class="chip gray">Hoãn</span></td></tr>
+    <tr><td><strong>NFR8</strong></td><td>LLM isolation: circuit breaker + async 202</td><td>Resilience, request-reply</td><td><span class="chip gray">Hoãn</span></td></tr>
+    <tr><td><strong>NFR9</strong></td><td>Synchronous fraud blocking inline</td><td>Pre-check trên request thread</td><td><span class="chip warn">Hoãn (ghi rõ)</span></td></tr>
+  </table>
+  <div class="callout danger"><div class="t">🚫 NFR9 hoãn có chủ đích</div>MVP cắt Epic 2 → money path chạy <strong>không chặn gian lận</strong>. Cột <code>user.fraud_status</code> vẫn ship V1 để sau nối module fraud không cần migration phá vỡ. Chỉ demo với user giả lập.</div>
+
+  <!-- ============ 5 ============ -->
+  <h2 id="workflow">5 · Quy trình làm việc với Claude Code</h2>
+  <p>Mỗi phase = một vertical slice = một PR. Vòng lặp 6 bước:</p>
+  <div class="steps">
+    <div class="step"><strong>Plan</strong> — <code>/make-plan phase-N-&lt;slug&gt;</code> sinh file plan chi tiết (file list, DTO, tên test).</div>
+    <div class="step"><strong>Đọc &amp; duyệt plan</strong> — <em>bạn</em> đọc. Học nhiều nhất ở đây: vì sao chia file thế này, test gì. Sửa nếu cần.</div>
+    <div class="step"><strong>Implement</strong> — <code>/implement-plan docs/plans/implementation-plan-phase-N-*.md</code> (qua <code>@backend-developer</code>/<code>@frontend-developer</code>).</div>
+    <div class="step"><strong>Verify</strong> — <code>/backend-verify</code> (compile + test + JaCoCo) hoặc <code>/frontend-verify</code> (lint + build + Vitest). Phải PASS.</div>
+    <div class="step"><strong>Code review</strong> — <code>/code-review</code> soi diff theo rule (security §12). Sửa hết finding mức block.</div>
+    <div class="step"><strong>PR</strong> — <code>/create-merge-request</code>. Branch riêng từ <code>main</code>, ví dụ <code>feat/phase-2-open-wallet</code>.</div>
+  </div>
+  <div class="callout tip"><div class="t">🎓 Mẹo học tối đa</div>Ở bước 2 &amp; 4, tự đọc code/test rồi hỏi Claude: <em>"vì sao đoạn này dùng PESSIMISTIC_WRITE?"</em>, <em>"test này cover điều gì của NFR3?"</em>. Dùng AI như mentor, không phải máy sinh code. Đừng merge thứ bạn không hiểu.</div>
+
+  <hr>
+  <!-- ============================ REFERENCE ============================ -->
+  <h2 id="ref-api">📋 Tham chiếu · Catalog API Epic 1</h2>
+  <p>Đường dẫn chính tắc theo <code>docs/api/README.md</code> (master plan đôi khi viết tắt <code>/wallets</code>). Auth: mọi endpoint trừ signup/login cần <code>Authorization: Bearer &lt;jwt&gt;</code>.</p>
+  <table>
+    <tr><th>Method · Path</th><th>Mục đích</th><th>Auth</th><th>Request → Response</th></tr>
+    <tr><td class="api"><span class="m-post">POST</span> /users</td><td>Signup (FR1.1). <code>base_currency</code> bất biến.</td><td>public</td><td><code>{email,password,base_currency}</code> → 201 <code>{user_id,created_at}</code></td></tr>
+    <tr><td class="api"><span class="m-post">POST</span> /auth/login</td><td>Cấp JWT</td><td>public</td><td><code>{email,password}</code> → 200 <code>{access_token,token_type:"Bearer",expires_in:3600}</code></td></tr>
+    <tr><td class="api"><span class="m-post">POST</span> /users/{userId}/wallets</td><td>Mở ví (FR1.1)</td><td>USER (self)</td><td><code>{currency_code,label}</code> → <code>{wallet_id,currency_code,label,balance,opened_at}</code></td></tr>
+    <tr><td class="api"><span class="m-get">GET</span> /users/{userId}/wallets</td><td>List ví</td><td>USER(self)/ADMIN</td><td>— → <code>[{wallet_id,currency_code,label,balance}]</code></td></tr>
+    <tr><td class="api"><span class="m-post">POST</span> /wallets/{walletId}/deposits</td><td>Nạp (FR1.2) · cần <code>Idempotency-Key</code></td><td>USER (owner)</td><td><code>{amount,currency_code}</code> → <code>{transaction_id,balance_after,event_timestamp}</code></td></tr>
+    <tr><td class="api"><span class="m-post">POST</span> /wallets/{walletId}/withdrawals</td><td>Rút (FR1.2) · cần <code>Idempotency-Key</code></td><td>USER (owner)</td><td><code>{amount,currency_code}</code> → <code>{transaction_id,balance_after,event_timestamp}</code></td></tr>
+    <tr><td class="api"><span class="m-post">POST</span> /transfers</td><td>Chuyển P2P (FR1.3) · <code>Idempotency-Key</code> · rate-limit 10/min</td><td>USER (sender)</td><td><code>{from_wallet_id,to_user_id,amount,currency_code,category_id?}</code> → <code>{transaction_id,debit_amount,credit_amount,fx_rate?,event_timestamp}</code></td></tr>
+    <tr><td class="api"><span class="m-get">GET</span> /wallets/{walletId}/transactions</td><td>Sao kê (FR1.4)</td><td>USER(owner)/ADMIN</td><td>query <code>from,to,type</code> → <code>[{transaction_id,type,amount,currency_code,counterparty,category_id?,event_timestamp}]</code></td></tr>
+  </table>
+  <div class="callout trap"><div class="t">🟣 Cạm bẫy: recipient của transfer</div>Người nhận định danh bằng <code>to_user_id</code> (không có <code>account_number</code> ở MVP). Ví nhận được <strong>chọn server-side</strong> theo <code>currency_code</code> yêu cầu; nếu nhận có nhiều ví cùng currency → lấy ví updated gần nhất. Người gửi không bao giờ thấy wallet_id của người nhận.</div>
+
+  <h2 id="ref-errors">⚠️ Tham chiếu · Bảng <code>error_key</code> → HTTP</h2>
+  <p>Mọi lỗi đi qua một <code>ExceptionMapper&lt;DomainException&gt;</code> duy nhất, trả envelope: <code>{ "error_key": "...", "message": "..." }</code>. Client branch theo <code>error_key</code> (ổn định), <strong>không</strong> theo <code>message</code>.</p>
+  <table>
+    <tr><th>HTTP</th><th>error_key (Epic 1)</th><th>Exception class</th></tr>
+    <tr><td>400</td><td><code>validation.invalid_payload</code>, <code>validation.invalid_range</code>, <code>idempotency.key_required</code></td><td>ValidationException / IdempotencyKeyRequiredException</td></tr>
+    <tr><td>401</td><td><code>auth.invalid_credentials</code></td><td>AuthInvalidCredentialsException</td></tr>
+    <tr><td>403</td><td><code>auth.forbidden</code>, <code>account.suspended</code></td><td>AuthForbiddenException / AccountSuspendedException</td></tr>
+    <tr><td>409</td><td><code>user.email_taken</code>, <code>wallet.duplicate_label</code>, <code>idempotency.replay_conflict</code>, <code>wallet.locked</code></td><td>ConflictException (subclass)</td></tr>
+    <tr><td>422</td><td><code>wallet.insufficient_funds</code>, <code>wallet.unsupported_currency</code>, <code>wallet.currency_mismatch</code>, <code>transfer.fx_rate_missing</code>, <code>transfer.recipient_not_found</code>, <code>transfer.same_wallet</code>, <code>validation.invalid_amount</code></td><td>BusinessRuleException (subclass)</td></tr>
+    <tr><td>429</td><td><code>ratelimit.exceeded</code> (kèm header <code>Retry-After</code>)</td><td>RateLimitException</td></tr>
+    <tr><td>503</td><td><code>advisor.circuit_open</code> <span class="chip gray">Epic 6 hoãn</span></td><td>CircuitOpenException</td></tr>
+  </table>
+  <div class="callout why"><div class="t">💡 Vì sao sealed hierarchy?</div><code>DomainException</code> là <code>sealed</code> + <code>permits</code> danh sách con cố định → compiler ép bạn xử lý đủ mọi nhánh trong mapper, không sót case. Các class chưa dùng (RateLimit, CircuitOpen…) vẫn ship sẵn để hoàn thiện <code>permits</code> — đây là lý do bạn thấy chúng trong <code>shared/exception/</code> từ Phase 1.</div>
+
+  <h2 id="ref-db">🗄️ Tham chiếu · Schema database (MVP)</h2>
+  <p>Postgres 16. PK <code>uuid</code> (ưu tiên uuidv7 time-orderable). Tiền <code>numeric(19,4)</code>. Thời gian <code>timestamptz</code> UTC. Enum = <code>varchar</code> + CHECK (không dùng Postgres ENUM). Migration Flyway forward-only: V1=user, V2=wallet, V3=transaction+idempotency+outbox…</p>
+  <table>
+    <tr><th>Bảng</th><th>Cột chính</th><th>Ghi chú học</th></tr>
+    <tr><td><code>"user"</code></td><td>id, email(UNIQUE), password_hash, role(USER/ADMIN), base_currency char(3), fraud_status(ACTIVE/SUSPENDED), created_at</td><td>Quote <code>"user"</code> (né reserved). UNIQUE index trên <code>LOWER(email)</code> → case-insensitive.</td></tr>
+    <tr><td><code>wallet</code></td><td>id, user_id FK, currency char(3), label varchar(64), balance numeric(19,4), updated_at · <strong>UNIQUE(user_id,label)</strong></td><td><strong>KHÔNG</strong> unique (user_id,currency) — nhiều ví cùng currency là first-class. <code>id</code> cũng là key Redis lock.</td></tr>
+    <tr><td><code>transaction</code></td><td>id, wallet_id FK, transfer_id NULL, direction(DEBIT/CREDIT), type(DEPOSIT/WITHDRAW/TRANSFER), amount(&gt;0), exchange_rate numeric(19,8) NULL, category_id NULL, event_timestamp, created_at</td><td>1 leg = 1 row. Transfer = 2 row chung <code>transfer_id</code>. Filter 4 giá trị API = type × direction. <code>amount</code> luôn dương, dấu nằm ở <code>direction</code>.</td></tr>
+    <tr><td><code>idempotency_record</code></td><td>id, user_id, endpoint, idempotency_key, request_hash, status(IN_FLIGHT/COMPLETED), response_status, response_snapshot jsonb, expires_at · <strong>UNIQUE(user_id,endpoint,idempotency_key)</strong></td><td><code>INSERT … ON CONFLICT DO NOTHING</code> làm primitive "claim". <code>request_hash</code> bắt replay-conflict.</td></tr>
+    <tr><td><code>outbox_event</code></td><td>id, aggregate_type, aggregate_id, event_type, payload jsonb, created_at, <strong>published_at NULL</strong></td><td><code>published_at IS NULL</code> = hàng đợi poll. Payload tự chứa (kèm event_timestamp).</td></tr>
+    <tr><td><code>fx_rate</code></td><td>(from_currency,to_currency) PK, rate numeric(19,8), updated_at</td><td>Seed cả 2 chiều trong Flyway (tránh tính reciprocal mất độ chính xác).</td></tr>
+    <tr><td><code>category</code></td><td>id int PK, code UNIQUE, label</td><td>Reference table, seed Flyway. <code>id</code> là int cho gọn join.</td></tr>
+  </table>
+
+  <h2 id="ref-moneypath">🔐 Tham chiếu · Money path chi tiết (NFR1+2+3)</h2>
+  <p>Đây là "trái tim" dự án — Phase 3 dựng, Phase 4/5 tái dùng. <strong>Thứ tự cố định</strong> (sai thứ tự = bug đồng thời / deadlock):</p>
+  <pre><code>POST /wallets/{walletId}/deposits   (Idempotency-Key: &lt;uuidv7&gt;)
+ └─ 1. Idempotency: INSERT idempotency_record (user,endpoint,key) ON CONFLICT
+ │       ├─ đã COMPLETED + cùng request_hash → trả response_snapshot (replay)   [NFR3]
+ │       ├─ đã COMPLETED + khác request_hash → 409 idempotency.replay_conflict
+ │       └─ đang IN_FLIGHT → 409 (retry sau)
+ └─ 2. Redis lock key=wallet:{walletId}, TTL ngắn (fail-fast)                   [NFR1 outer]
+ │       └─ không lấy được → 409 wallet.locked
+ └─ 3. @Transactional BEGIN
+ │       4. SELECT … FOR UPDATE wallet  (LockModeType.PESSIMISTIC_WRITE)        [NFR1 inner]
+ │       5. validate (số dư đủ cho withdraw? currency khớp?)
+ │       6. wallet.balance += amount  (BigDecimal)
+ │       7. INSERT transaction (ledger row)
+ │       8. INSERT outbox_event (DepositCompleted)  — cùng tx!                  [NFR2]
+ │       9. UPDATE idempotency_record SET status=COMPLETED, response_snapshot=…
+ │      COMMIT
+ └─ 10. finally { Redis lock RELEASE }
+ └─ 11. return { transaction_id, balance_after, event_timestamp }</code></pre>
+  <div class="callout why"><div class="t">💡 Vì sao 2 lớp khoá?</div>Redis lock (outer) <em>fail nhanh</em> — chặn spam click/retry rẻ tiền, không đụng DB. DB <code>FOR UPDATE</code> (inner) là <em>authoritative</em> — đảm bảo ACID thật sự ngay cả khi Redis lỗi. Redis không phải nguồn sự thật; trạng thái phải dựng lại được từ Postgres. <strong>Transfer (Phase 5)</strong>: khoá 2 ví theo thứ tự <code>wallet_id</code> UUID tăng dần để A→B và B→A đồng thời không deadlock.</div>
+
+  <hr>
+  <!-- ===================== BACKEND ROADMAP ===================== -->
+  <h2>🔧 Lộ trình Backend (Phase 0 → 9)</h2>
+  <p><span class="chip gray">Đã scaffold</span> code khung có rồi · <span class="chip green">Cần làm</span> bạn triển khai tiếp. <strong>Trạng thái repo:</strong> P0 xong (đã <code>backend/</code> + <code>com.digitalwallet</code>); P1 đang scaffold (module <code>user</code>, <code>V1__create_user_table.sql</code>, <code>shared/{security,exception,validation}</code>). Bạn đang ở <strong>cuối Phase 1</strong>.</p>
+
+  <details class="phase" id="p0" open>
+    <summary>Phase 0 · Reconcile layout <span class="chip gray">Đã xong phần lớn</span></summary>
+    <div class="body">
+      <h4>Bạn xây gì</h4>
+      <p>Đổi <code>digital-wallet-api/</code>→<code>backend/</code>, package <code>org.acme</code>→<code>com.digitalwallet</code>, xoá <code>GreetingResource</code>. Thêm <code>pom.xml</code>: JaCoCo (gate 80% trên <code>com/digitalwallet/*/service/**</code>), Testcontainers Postgres, Hibernate Validator, SmallRye JWT, Micrometer+Prometheus. Đặt <code>quarkus.hibernate-orm.database.generation=none</code>.</p>
+      <h4>💡 Kiến thức</h4>
+      <ul>
+        <li><strong>Tắt auto-DDL:</strong> hệ tài chính cấm Hibernate tự sửa schema — mọi thay đổi qua Flyway versioned SQL để audit + reproduce được.</li>
+        <li><strong>JaCoCo chỉ gate tầng service</strong> — nơi chứa logic; DTO/entity/mapper trivial không cần.</li>
+      </ul>
+      <h4>Lệnh xác nhận</h4>
+      <pre><code>cd backend &amp;&amp; ./mvnw -v
+ls src/main/java/com/digitalwallet            # shared/ user/
+grep generation src/main/resources/application.properties   # =none
+grep -i jacoco pom.xml</code></pre>
+      <h4>DoD</h4><ul><li>Repo có <code>backend/</code>; <code>./mvnw clean install</code> xanh; CI xanh trên <code>main</code>.</li></ul>
+    </div>
+  </details>
+
+  <details class="phase" id="p1">
+    <summary>Phase 1 · Signup + Login + JWT (FR1.1) <span class="chip gray">Đang scaffold</span></summary>
+    <div class="body">
+      <h4>Bạn xây gì</h4>
+      <p><code>shared/exception/</code> (sealed <code>DomainException</code> + <code>DomainExceptionMapper</code> + <code>ConstraintViolationExceptionMapper</code> + <code>ErrorResponse</code>), <code>shared/security/</code> (<code>Argon2Hasher</code>, <code>JwtIssuer</code>, <code>JwtSigningKeyProvider</code>, <code>UserRole</code>), <code>shared/validation/</code> (<code>@CurrencyCode</code>), module <code>user/</code> + Flyway V1, endpoint <code>POST /users</code> + <code>POST /auth/login</code>.</p>
+
+      <h4>Đặc tả cụ thể (chốt trong plan)</h4>
+      <ul>
+        <li><strong>Argon2id:</strong> memory 65536 KB (64 MiB), iterations 3, parallelism 1, salt 16B, hash 32B. Lưu chuỗi tự mô tả <code>$argon2id$v=19$m=65536,t=3,p=1$&lt;salt&gt;$&lt;hash&gt;</code>. So sánh constant-time bằng <code>MessageDigest.isEqual</code>.</li>
+        <li><strong>JWT claims:</strong> <code>sub=user_id</code>, <code>groups=["USER"]</code>, <code>iss=digitalwallet</code>, <code>aud=digitalwallet-api</code>, <code>exp=iat+3600</code>. Thuật toán ES256 cứng (<code>smallrye.jwt.verify.algorithm=ES256</code>), skew 30s (<code>smallrye.jwt.expiration.grace=30</code>).</li>
+        <li><strong>Email:</strong> <code>@Email</code>; uniqueness case-insensitive qua index <code>LOWER(email)</code>; lookup <code>findByEmailLower</code>.</li>
+        <li><strong>Enumeration resistance:</strong> login email-không-tồn-tại vẫn hash với sentinel rồi ném <code>auth.invalid_credentials</code> giống hệt nhánh sai mật khẩu (cùng message, cùng wall-clock).</li>
+      </ul>
+
+      <h4>Code mẫu (đã có thật trong repo — UserService.signup)</h4>
+      <pre><code>@Transactional
+public CreateUserResponse signup(CreateUserRequest request) {
+    String emailLower = request.email().toLowerCase(Locale.ROOT);
+    userRepository.findByEmailLower(emailLower).ifPresent(existing -> {
+        throw new ConflictException("user.email_taken", "Email is already registered");
+    });
+    UserEntity user = new UserEntity();
+    user.id = UUID.randomUUID();
+    user.email = request.email();
+    user.passwordHash = hasher.hash(request.password());   // Argon2id
+    user.role = UserRole.USER;
+    user.baseCurrency = request.baseCurrency();
+    user.fraudStatus = "ACTIVE";
+    user.createdAt = clock.instant();                      // Clock injected (test fix thời gian)
+    userRepository.persist(user);
+    return new CreateUserResponse(user.id, user.createdAt);
+}</code></pre>
+
+      <h4>💡 Kiến thức (rất giàu)</h4>
+      <ul>
+        <li><strong>JWT ES256:</strong> vì sao từ chối <code>alg:none</code>/<code>HS256</code> (JWT confusion attack — kẻ tấn công ký HS256 bằng chính public key). Allow-list thuật toán cứng.</li>
+        <li><strong>Argon2id</strong> vs SHA-256/MD5: memory-hard chống brute-force GPU.</li>
+        <li><strong>Constant-time + enumeration resistance:</strong> không để kẻ tấn công đoán email tồn tại qua thời gian phản hồi hoặc thông điệp khác nhau.</li>
+        <li><strong>Constructor injection</strong> (cấm field injection) — dễ test, phụ thuộc rõ ràng.</li>
+        <li><strong>Inject <code>Clock</code></strong> thay vì <code>Instant.now()</code> — test fix được thời gian.</li>
+      </ul>
+
+      <h4>🟣 Cạm bẫy</h4>
+      <div class="callout trap"><div class="t">🟣 Hay sai ở Phase 1</div><ul style="margin:4px 0">
+        <li>Trả <code>password_hash</code> ra DTO response → vi phạm security §7. Response chỉ <code>{user_id,created_at}</code>.</li>
+        <li>Log full email / full JWT / Authorization header → cấm (PII / SOC 2).</li>
+        <li>Quên <code>quarkus.smallrye-jwt.enabled=true</code> → verifier không chạy.</li>
+        <li>Hai nhánh login fail trả message khác nhau → lộ enumeration.</li>
+      </ul></div>
+
+      <h4>Lệnh</h4>
+      <pre><code># Tạo khoá dev (xem Quickstart), set JWT_PRIVATE_KEY trong .env
+/implement-plan docs/plans/implementation-plan-phase-1-signup-login.md
+cd backend &amp;&amp; ./mvnw -B verify
+/code-review</code></pre>
+      <h4>DoD</h4>
+      <ul>
+        <li>Signup 201; password lưu Argon2id; email trùng → 409 <code>user.email_taken</code>; currency sai → 400.</li>
+        <li>Login 200 + JWT hợp lệ; sai → 401 <code>auth.invalid_credentials</code> (2 nhánh giống hệt).</li>
+        <li><code>JwtVerifierIT</code>: token hợp lệ 200; no-token/alg:none/HS256/hết-hạn → 401.</li>
+        <li>JaCoCo ≥ 80%; ADR 0001 → <strong>Accepted</strong>.</li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="phase" id="p2">
+    <summary>Phase 2 · Open Wallet (FR1.1 wallet) <span class="chip green">Cần làm</span></summary>
+    <div class="body">
+      <h4>Bạn xây gì</h4>
+      <p>Module <code>wallet/</code> + Flyway V2 (bảng <code>wallet</code>: UNIQUE <code>(user_id,label)</code>, CHECK currency ISO 4217, <strong>KHÔNG</strong> unique currency). <code>POST /users/{userId}/wallets</code>, <code>GET /users/{userId}/wallets</code>. RBAC controller (<code>@RolesAllowed("USER")</code>) + service (re-check ownership: <code>userId</code> == principal <code>sub</code>).</p>
+      <h4>Đặc tả lỗi</h4>
+      <ul>
+        <li>Currency không hỗ trợ → 422 <code>wallet.unsupported_currency</code></li>
+        <li>Label rỗng → 400 <code>validation.invalid_payload</code></li>
+        <li>Label trùng (cùng user) → 409 <code>wallet.duplicate_label</code></li>
+        <li>Truy cập userId khác mình → 403 <code>auth.forbidden</code></li>
+      </ul>
+      <h4>💡 Kiến thức</h4>
+      <ul>
+        <li><strong>Multi-currency model (ADR 0006):</strong> một user mở nhiều ví cùng loại tiền, phân biệt bằng <code>label</code>. Vì sao không unique theo currency.</li>
+        <li><strong>RBAC 2 tầng:</strong> controller là "gợi ý", service mới là "chốt chặn thật". Ẩn nút ≠ bảo mật.</li>
+        <li><strong>Ownership ≠ role:</strong> role cho <em>khả năng</em>, ownership cho <em>quyền truy cập tài nguyên cụ thể</em>.</li>
+      </ul>
+      <div class="callout trap"><div class="t">🟣 Cạm bẫy</div>Đây là endpoint authenticated <strong>đầu tiên</strong> → "default-deny" bắt đầu áp dụng. Quên ownership check ở service (chỉ check ở controller) là lỗ hổng wrong-tenant phổ biến nhất. Phải có test: USER A gọi <code>/users/{B}/wallets</code> → 403.</div>
+      <h4>Lệnh</h4><pre><code>/make-plan phase-2-open-wallet
+/implement-plan docs/plans/implementation-plan-phase-2-open-wallet.md
+cd backend &amp;&amp; ./mvnw -B verify &amp;&amp; /code-review</code></pre>
+      <h4>DoD</h4><ul><li>Mở 2 ví cùng currency khác label OK; trùng label 409; wrong-tenant test pass; coverage ≥ 80%.</li></ul>
+    </div>
+  </details>
+
+  <details class="phase" id="p3">
+    <summary>Phase 3 · Deposit + shared money infra (FR1.2) <span class="chip green">⭐ Quan trọng nhất</span></summary>
+    <div class="body">
+      <div class="callout warn"><div class="t">⭐ Phase nền tảng</div>Dựng toàn bộ hạ tầng tiền tệ mà Phase 4–7 tái dùng. Làm chậm, kỹ. Đọc kỹ mục <a href="#ref-moneypath">🔐 Money path</a> ở trên.</div>
+      <h4>Bạn xây gì</h4>
+      <ul>
+        <li><code>shared/money/</code> — helper BigDecimal, JPA converter <code>numeric(19,4)</code>, type FX snapshot</li>
+        <li><code>shared/idempotency/</code> — bảng <code>idempotency_record</code> (V3) + state machine IN_FLIGHT/COMPLETED + log key bằng salted-hash (hoặc 8 ký tự đầu)</li>
+        <li><code>shared/outbox/</code> — bảng <code>outbox_event</code> (V3) + writer (chỉ ghi; chưa poller/Kafka)</li>
+        <li><code>shared/lock/</code> — Redis lock helper (Quarkus Redis client) + Testcontainers Redis</li>
+        <li>bảng <code>transaction</code> (V3), endpoint <code>POST /wallets/{walletId}/deposits</code></li>
+        <li><code>docker-compose.yml</code> (Postgres + Redis — KHÔNG Kafka)</li>
+      </ul>
+      <h4>💡 Kiến thức (đỉnh dự án)</h4>
+      <ul>
+        <li><strong>Thứ tự khoá NFR1 — học thuộc</strong> (xem money path). Release Redis lock trong <code>finally</code>.</li>
+        <li><strong>Idempotency replay:</strong> cùng key + cùng <code>request_hash</code> → trả snapshot gốc; khác hash → <code>idempotency.replay_conflict</code>; đang IN_FLIGHT → 409.</li>
+        <li><strong>BigDecimal:</strong> tuyệt đối không double/float. So sánh giá trị bằng <code>compareTo</code> (vì <code>new BigDecimal("1.0").equals("1.00")</code> = false).</li>
+        <li><strong>Outbox atomic:</strong> ledger row + outbox row cùng <strong>một</strong> <code>@Transactional</code>.</li>
+      </ul>
+      <h4>🟣 Cạm bẫy</h4>
+      <div class="callout trap"><div class="t">🟣 Cạm bẫy money path</div><ul style="margin:4px 0">
+        <li>Lấy DB row lock <em>trước</em> Redis lock → sai thứ tự NFR1.</li>
+        <li>Publish Kafka trong handler → cấm (NFR2/NFR5). MVP chỉ ghi outbox.</li>
+        <li>Thiếu header <code>Idempotency-Key</code> phải trả <strong>400 <code>idempotency.key_required</code></strong>, không phải 500.</li>
+        <li>Quên release Redis lock khi exception → ví bị khoá vĩnh viễn (phải <code>finally</code>).</li>
+        <li>Map tiền bằng <code>double</code> trong entity → mất độ chính xác.</li>
+      </ul></div>
+      <h4>Test bắt buộc (NFR contexts)</h4>
+      <ul>
+        <li><strong>NFR1:</strong> 2 request đồng thời cùng ví → 1 thắng, 1 thấy <code>wallet.locked</code> hoặc retry sạch.</li>
+        <li><strong>NFR3:</strong> replay (cùng key+body) trả kết quả gốc; khác body → replay_conflict.</li>
+        <li><strong>NFR2:</strong> sau commit, có đúng 1 transaction row + 1 outbox_event với <code>published_at IS NULL</code>.</li>
+      </ul>
+      <h4>Lệnh</h4>
+      <pre><code>docker compose -f backend/docker-compose.yml up -d
+/make-plan phase-3-deposit
+/implement-plan docs/plans/implementation-plan-phase-3-deposit.md
+cd backend &amp;&amp; ./mvnw -B verify &amp;&amp; /code-review</code></pre>
+      <h4>DoD</h4><ul><li>Deposit cộng tiền đúng; ledger+outbox atomic; NFR1/NFR3 test pass; thiếu key → 400.</li></ul>
+    </div>
+  </details>
+
+  <details class="phase" id="p4">
+    <summary>Phase 4 · Withdraw (FR1.2) <span class="chip green">Cần làm</span></summary>
+    <div class="body">
+      <h4>Bạn xây gì</h4>
+      <p><code>POST /wallets/{walletId}/withdrawals</code> tái dùng hạ tầng Phase 3. Thêm lỗi <code>wallet.insufficient_funds</code> (422). Kiểm tra số dư <em>bên trong</em> tx (sau khi đã giữ <code>PESSIMISTIC_WRITE</code>).</p>
+      <h4>💡 Kiến thức · Boundary testing bắt buộc</h4>
+      <ul>
+        <li>Amount tại <code>0</code> → reject (<code>validation.invalid_amount</code>); <code>0.0001</code> (smallest unit) → OK; số âm → reject; overflow → reject.</li>
+        <li>Rút đúng bằng số dư → OK; rút dư 1 đơn vị nhỏ nhất → <code>wallet.insufficient_funds</code>.</li>
+        <li>Vì sao check số dư phải nằm <em>trong</em> tx sau row lock: tránh race "double spend" (2 request đọc cùng balance cũ).</li>
+      </ul>
+      <div class="callout trap"><div class="t">🟣 Cạm bẫy</div>Check balance <em>trước</em> khi lấy lock = sai (TOCTOU). Phải: lock → đọc balance trong tx → so sánh → trừ.</div>
+      <h4>Lệnh</h4><pre><code>/make-plan phase-4-withdraw &amp;&amp; /implement-plan docs/plans/implementation-plan-phase-4-withdraw.md &amp;&amp; cd backend &amp;&amp; ./mvnw -B verify</code></pre>
+      <h4>DoD</h4><ul><li>Rút quá số dư → 422 <code>wallet.insufficient_funds</code>; test biên đầy đủ; coverage ≥ 80%.</li></ul>
+    </div>
+  </details>
+
+  <details class="phase" id="p5">
+    <summary>Phase 5 · Transfer two-leg (FR1.3) <span class="chip green">Khó nhất</span></summary>
+    <div class="body">
+      <h4>Bạn xây gì</h4>
+      <p><code>POST /transfers</code>: debit + credit trong <strong>1 transaction</strong>, chung <code>transfer_id</code>, snapshot FX trên cả 2 leg. Recipient bằng <code>to_user_id</code>; ví nhận chọn server-side theo <code>currency_code</code> (nhiều ví → ví updated gần nhất).</p>
+      <h4>Đặc tả lỗi</h4>
+      <ul>
+        <li><code>transfer.recipient_not_found</code> (không tìm thấy ví nhận phù hợp currency) · 422</li>
+        <li><code>transfer.same_wallet</code> (chuyển vào chính ví nguồn) · 422</li>
+        <li><code>transfer.fx_rate_missing</code> (thiếu rate cho cặp currency) · 422</li>
+        <li><code>wallet.insufficient_funds</code> · 422 · <code>wallet.currency_mismatch</code> · 422</li>
+        <li><code>ratelimit.exceeded</code> · 429 (Phase 6 mới wire, nhưng endpoint đã đánh dấu rate-limited)</li>
+      </ul>
+      <h4>💡 Kiến thức</h4>
+      <ul>
+        <li><strong>Atomic two-leg:</strong> 2 transaction row (1 DEBIT, 1 CREDIT) phải cùng commit/rollback — bản chất "chuyển khoản". Một leg fail → rollback toàn bộ.</li>
+        <li><strong>Deadlock avoidance:</strong> khoá Redis 2 ví theo thứ tự <code>wallet_id</code> UUID tăng dần. Nếu A→B và B→A đồng thời mà khoá tuỳ tiện → deadlock kinh điển. Kỹ thuật "lock ordering".</li>
+        <li><strong>FX snapshot tại thời điểm giao dịch:</strong> chốt rate <code>(from→to)</code>, lưu <code>exchange_rate</code> trên <strong>cả 2 leg</strong> với cùng giá trị (Convention A). Rate <em>không bao giờ</em> dùng để định giá lại balance đã lưu.</li>
+      </ul>
+      <div class="callout trap"><div class="t">🟣 Cạm bẫy</div><ul style="margin:4px 0">
+        <li>Khoá ví theo thứ tự request thay vì thứ tự UUID → deadlock dưới tải.</li>
+        <li>Quên snapshot FX trên leg credit (chỉ ghi leg debit) → audit lệch.</li>
+        <li>Để lộ <code>to_wallet_id</code> ra payload request — sai, người gửi chỉ biết <code>to_user_id</code>.</li>
+      </ul></div>
+      <h4>Test bắt buộc</h4>
+      <ul><li>Concurrent A→B và B→A đồng thời → không deadlock, cả hai hoàn tất hoặc retry sạch.</li>
+      <li>Cross-currency: <code>exchange_rate</code> trên 2 leg bằng nhau; tổng tiền bảo toàn theo rate.</li></ul>
+      <h4>Lệnh</h4><pre><code>/make-plan phase-5-transfer
+/implement-plan docs/plans/implementation-plan-phase-5-transfer.md
+cd backend &amp;&amp; ./mvnw -B verify &amp;&amp; /code-review</code></pre>
+      <h4>DoD</h4><ul><li>Transfer same + cross-currency đúng; concurrent A↔B không deadlock; same_wallet → 422.</li></ul>
+    </div>
+  </details>
+
+  <details class="phase" id="p6">
+    <summary>Phase 6 · Rate limiting (POST /transfers) <span class="chip green">Cần làm</span></summary>
+    <div class="body">
+      <h4>Bạn xây gì</h4>
+      <p><code>shared/ratelimit/</code> — Redis token bucket 10/phút/user keyed <code>(user_id, endpoint)</code>. Vượt → HTTP 429 + header <code>Retry-After</code> + <code>ratelimit.exceeded</code>. Env <code>RATELIMIT_TRANSFER_PER_MINUTE</code> (default 10).</p>
+      <h4>💡 Kiến thức</h4>
+      <ul>
+        <li><strong>Token bucket</strong> trên Redis — thuật toán rate-limit phổ biến nhất (refill đều, cho phép burst tới capacity).</li>
+        <li><strong>Phân biệt rate-limit vs fraud:</strong> rate-limit = lạm dụng endpoint → 429 <code>ratelimit.exceeded</code>; fraud = rủi ro user → 422/403. Hai hệ riêng, counter riêng, đừng trộn.</li>
+      </ul>
+      <div class="callout trap"><div class="t">🟣 Cạm bẫy</div>Quên header <code>Retry-After</code> → frontend không biết chờ bao lâu. Key theo IP thay vì <code>user_id</code> → user sau NAT bị chặn oan.</div>
+      <h4>DoD</h4><ul><li>Transfer thứ 11/phút → 429 kèm <code>Retry-After</code>; có test rate-limit.</li></ul>
+    </div>
+  </details>
+
+  <details class="phase" id="p7">
+    <summary>Phase 7 · Statement read (FR1.4) <span class="chip green">Cần làm</span></summary>
+    <div class="body">
+      <h4>Bạn xây gì</h4>
+      <p><code>GET /wallets/{walletId}/transactions</code> phân trang (<code>page</code>/<code>pageSize</code> cap 100), <strong>whitelist sort key</strong>, filter <code>from</code>/<code>to</code>/<code>type</code> (∈ deposit/withdraw/transfer_debit/transfer_credit, suy từ type×direction). <strong>KHÔNG</strong> dùng write lock. Ownership check.</p>
+      <h4>💡 Kiến thức</h4>
+      <ul>
+        <li><strong>Sort whitelist chống JPQL injection:</strong> tham số <code>sort</code> là lỗ hổng injection phổ biến nhất. Map qua <code>Map&lt;String,Sort&gt;</code>; key lạ → <code>validation.invalid_payload</code>. <strong>Không</strong> nội suy chuỗi vào <code>ORDER BY</code>.</li>
+        <li><strong>Read flow ≠ lock flow:</strong> đọc sao kê không giữ <code>PESSIMISTIC_WRITE</code> (NFR1 dành write-lock cho mutation).</li>
+        <li><strong>pageSize cap 100</strong>: vượt thì <em>clamp im lặng</em>, không error.</li>
+      </ul>
+      <div class="callout trap"><div class="t">🟣 Cạm bẫy</div><code>from &gt; to</code> → 400 <code>validation.invalid_range</code>. Index gợi ý <code>(wallet_id, event_timestamp DESC)</code> cho hiệu năng.</div>
+      <h4>DoD</h4><ul><li>Phân trang + filter date/type chạy; sort key lạ → <code>validation.invalid_payload</code>; không write lock.</li></ul>
+    </div>
+  </details>
+
+  <details class="phase" id="p8">
+    <summary>Phase 8 · Observability + perf budget <span class="chip green">Cần làm</span></summary>
+    <div class="body">
+      <h4>Bạn xây gì</h4>
+      <p>Micrometer + Prometheus (<code>/q/metrics</code>), structured JSON log (tuân forbidden-content: KHÔNG log email/balance/JWT/full Idempotency-Key), tracing key <code>X-Request-Id</code> truyền qua service vào log. Đo P95 thực <code>/transfers</code>, so dev-target ≤ 200ms.</p>
+      <h4>💡 Kiến thức</h4>
+      <ul><li><strong>Observability 3 trụ:</strong> metrics (số đo), logs (sự kiện), tracing (theo dấu request).</li>
+      <li><strong>Log scrubbing:</strong> PII trong log = vi phạm SOC 2. Idempotency-Key log salted-hash hoặc 8 ký tự đầu.</li></ul>
+      <h4>DoD</h4><ul><li>Có <code>/q/metrics</code>; log JSON không lộ PII; báo cáo P95; ADR 0011 → Accepted.</li></ul>
+    </div>
+  </details>
+
+  <details class="phase" id="p9">
+    <summary>Phase 9 · Backend MVP acceptance <span class="chip green">Cần làm</span></summary>
+    <div class="body">
+      <h4>Bạn xây gì</h4>
+      <p>Smoke <code>@QuarkusTest</code> + RestAssured end-to-end: signup → login → mở ví USD+EUR → deposit → withdraw → transfer USD→USD → transfer USD→EUR (FX) → chạm rate-limit transfer thứ 11 → đọc statement filter. Cập nhật "Project Status" trong <code>CLAUDE.md</code> (Epic 1 backend xong + NFR9 hoãn).</p>
+      <h4>💡 Kiến thức</h4>
+      <ul><li><strong>Acceptance test:</strong> chứng minh cả hệ thống chạy đúng spec, không chỉ unit lẻ.</li></ul>
+      <h4>DoD</h4><ul><li>Smoke suite xanh; toàn bộ checklist master plan §10 backend tích xanh.</li></ul>
+    </div>
+  </details>
+
+  <hr>
+  <!-- ===================== FRONTEND ROADMAP ===================== -->
+  <h2>🎨 Lộ trình Frontend (Phase F1 → F5)</h2>
+  <div class="callout warn"><div class="t">Điều kiện</div>Bắt đầu sau khi Phase 9 (backend acceptance) xong — frontend cần API thật để gọi.</div>
+
+  <details class="phase" id="f1">
+    <summary>Phase F1 · Bootstrap + shared <span class="chip green">Cần làm</span></summary>
+    <div class="body">
+      <h4>Bạn xây gì</h4>
+      <p>Tạo <code>frontend/</code>: Vite 5 + React 18 + TS strict + Tailwind 3 + Redux Toolkit/RTK Query + RHF + Zod + Vitest + RTL + Playwright + pnpm. Dockerfile, docker-compose (join <code>dw-net</code>), nginx (<code>/api</code> proxy + WS upgrade). Provider stack <code>app/</code>; <code>routes/</code> với <code>&lt;RequireAuth&gt;</code>/<code>&lt;RequireRole&gt;</code>; <code>&lt;ErrorBoundary&gt;</code>; error reporter; <code>shared/money/format.ts</code>; <code>shared/idempotency/uuidv7.ts</code>; <code>shared/config.ts</code>; RTK Query <code>baseQuery</code> (inject JWT + 401→logout+redirect + map <code>{error_key,message}</code>→<code>ApiError</code>).</p>
+      <h4>💡 Kiến thức</h4>
+      <ul>
+        <li><strong>baseQuery tập trung:</strong> chỗ <em>duy nhất</em> gắn token, xử lý 401, chuẩn hoá lỗi — không lặp ở từng call.</li>
+        <li><strong>JWT in-memory (Redux):</strong> localStorage chỉ giữ cờ "remembered" (opaque), KHÔNG giữ token — chống XSS đọc token.</li>
+        <li><strong>Money là decimal string:</strong> <code>Intl.NumberFormat</code> trên chuỗi; KHÔNG parse sang JS <code>number</code> (mất độ chính xác numeric(19,4)).</li>
+        <li><strong>TS strict + noUncheckedIndexedAccess:</strong> cấm tắt flag; sửa type chứ không né.</li>
+      </ul>
+      <div class="callout trap"><div class="t">🟣 Cạm bẫy</div>Hand-roll <code>fetch</code> trong component (bỏ qua cache/retry/error của RTK Query). Đọc <code>import.meta.env</code> trực tiếp trong component (phải qua <code>shared/config.ts</code>). Prefix secret bằng <code>VITE_</code> (mọi <code>VITE_*</code> là public!).</div>
+      <h4>Lệnh</h4><pre><code>/make-plan phase-f1-frontend-bootstrap
+/implement-plan docs/plans/implementation-plan-phase-f1-*.md
+cd frontend &amp;&amp; pnpm install &amp;&amp; pnpm dev
+/frontend-verify   # lint + build + vitest</code></pre>
+      <h4>DoD</h4><ul><li>App chạy, shell có guard + error boundary; CI job <code>frontend</code> quay lại xanh.</li></ul>
+    </div>
+  </details>
+
+  <details class="phase" id="f2">
+    <summary>Phase F2 · Auth UI (signup + login) <span class="chip green">Cần làm</span></summary>
+    <div class="body">
+      <h4>Bạn xây gì</h4>
+      <p><code>features/auth/auth.api.ts</code> (RTK Query: POST /users, /auth/login), <code>auth.slice.ts</code> (JWT in-memory), <code>&lt;LoginPage&gt;</code>, <code>&lt;SignupPage&gt;</code> với Zod schema mirror backend: email valid, password min 12, <code>base_currency</code> ISO 4217 (3 chữ, immutable). Route public <code>/login</code>, <code>/signup</code>.</p>
+      <h4>💡 Kiến thức</h4>
+      <ul><li><strong>Zod đồng bộ validation:</strong> schema FE phản chiếu rule BE — nhưng BE vẫn là lớp xác thực thật (FE chỉ là UX courtesy).</li>
+      <li><strong>RTK Query mutation</strong> tự cấp <code>isLoading</code>/<code>error</code>; component phải render loading rõ ràng.</li></ul>
+      <div class="callout trap"><div class="t">🟣 Cạm bẫy</div>Lưu form field vào Redux (re-render storm, mất focus) — dùng React Hook Form, chỉ promote lên Redux khi submit. Bắt mọi lỗi thành 1 toast generic — phải branch theo <code>error_key</code>.</div>
+      <h4>DoD</h4><ul><li>Đăng ký → đăng nhập → JWT in-memory; lỗi hiển thị theo <code>error_key</code>.</li></ul>
+    </div>
+  </details>
+
+  <details class="phase" id="f3">
+    <summary>Phase F3 · Wallets + Deposit + Withdraw <span class="chip green">Cần làm</span></summary>
+    <div class="body">
+      <h4>Bạn xây gì</h4>
+      <p><code>features/wallet/wallet.api.ts</code>, <code>&lt;WalletsPage&gt;</code> (list hiển thị CẢ <code>label</code> VÀ <code>currency_code</code>), <code>&lt;OpenWalletForm&gt;</code> (picker currency toàn ISO 4217, label unique client-hint), <code>&lt;DepositPage&gt;</code>/<code>&lt;WithdrawPage&gt;</code>: amount decimal string, UUIDv7 <code>Idempotency-Key</code> tạo lúc mount form &amp; tái dùng khi resubmit, hiển thị qua <code>MoneyDisplay</code>. Routes sau <code>&lt;RequireAuth&gt;</code>.</p>
+      <h4>💡 Kiến thức</h4>
+      <ul>
+        <li><strong>Idempotency-Key đúng vòng đời form:</strong> tạo 1 lần / submission, KHÔNG tạo mới mỗi retry (nếu không → giao dịch mới, phá NFR3). Navigation mới = key mới.</li>
+        <li><strong>Không định danh ví bằng currency đơn lẻ</strong> (có nhiều ví cùng currency) — picker luôn hiện label + currency.</li>
+        <li><strong>MoneyDisplay:</strong> dùng formatter chung, cấm <code>Number.toFixed(2)</code>.</li>
+      </ul>
+      <div class="callout trap"><div class="t">🟣 Cạm bẫy</div>Tạo key mới trong handler submit (mỗi click = key mới) → mất idempotency. Phải tạo ở <code>useState(() =&gt; uuidv7())</code> lúc mount.</div>
+      <h4>DoD</h4><ul><li>Mở ví/nạp/rút chạy; key tái dùng khi resubmit; tiền không dùng <code>Number.toFixed</code>.</li></ul>
+    </div>
+  </details>
+
+  <details class="phase" id="f4">
+    <summary>Phase F4 · Transfer + Statement <span class="chip green">Cần làm</span></summary>
+    <div class="body">
+      <h4>Bạn xây gì</h4>
+      <p><code>&lt;TransferPage&gt;</code>: chọn ví nguồn (label+currency), recipient <code>to_user_id</code>, FX preview khi khác currency (informational), countdown <code>Retry-After</code> khi 429, UUIDv7 key. <code>&lt;StatementPage&gt;</code>: bảng virtualized (&gt;200 dòng), filter from/to/type, key bằng <code>transaction.id</code>.</p>
+      <h4>💡 Kiến thức</h4>
+      <ul><li><strong>List virtualization</strong> (&gt;200 dòng) — hiệu năng render (<code>@tanstack/react-virtual</code>).</li>
+      <li><strong>Xử lý 429:</strong> đọc header <code>Retry-After</code>, disable submit đúng khoảng đó.</li>
+      <li><strong>FX preview có thể lệch</strong> rate commit nếu TTL hết giữa preview và submit — phải nói rõ "ước tính".</li></ul>
+      <div class="callout trap"><div class="t">🟣 Cạm bẫy</div>Dùng array index làm <code>key</code> trong list có thể đổi thứ tự — phải dùng <code>transaction.id</code>.</div>
+      <h4>DoD</h4><ul><li>Transfer same+cross chạy; statement filter+phân trang chạy; 429 disable nút theo Retry-After.</li></ul>
+    </div>
+  </details>
+
+  <details class="phase" id="f5">
+    <summary>Phase F5 · Smoke + Playwright golden path <span class="chip green">Cần làm</span></summary>
+    <div class="body">
+      <h4>Bạn xây gì</h4>
+      <p>Vitest specs từng page (AAA layout, mock ở tầng <code>baseQuery</code> bằng msw, query ưu tiên <code>data-test</code>→<code>getByRole</code>→<code>getByText</code>, assert tiền trên decimal string, <strong>XSS regression</strong>: chuỗi chứa <code>&lt;script&gt;</code> render thành text). 1 Playwright <code>golden-path.spec.ts</code>: signup → login → mở 2 ví → deposit → withdraw → transfer → transfer FX → statement filter.</p>
+      <h4>💡 Kiến thức</h4>
+      <ul><li><strong>XSS regression test:</strong> chứng minh React render user input là text, không execute (default React an toàn; test để chống regression do <code>dangerouslySetInnerHTML</code>).</li>
+      <li><strong>E2E golden path:</strong> 1 kịch bản phủ cả epic — bắt lỗi tích hợp mà unit không thấy.</li></ul>
+      <div class="callout trap"><div class="t">🟣 Cạm bẫy</div>Stub global <code>fetch</code> (phải mock ở RTK Query / msw). Dùng <code>setTimeout</code> chờ cứng (phải <code>findBy*</code>/<code>waitFor</code>) → test flaky.</div>
+      <h4>DoD</h4><ul><li>Playwright golden path pass; XSS test pass; cập nhật "Project Status" → frontend MVP xong.</li></ul>
+    </div>
+  </details>
+
+  <hr>
+  <!-- ============ 6 GLOSSARY ============ -->
+  <h2 id="glossary">6 · Glossary (thuật ngữ hay gặp)</h2>
+  <table>
+    <tr><th>Thuật ngữ</th><th>Nghĩa trong dự án</th></tr>
+    <tr><td><strong>User</strong></td><td>Identity trong bảng <code>"user"</code>; sở hữu ví/budget/alert. Có <code>base_currency</code> bất biến. (Spec cũ gọi "Account"; error key <code>account.suspended</code> giữ lại cho back-compat.)</td></tr>
+    <tr><td><strong>Wallet</strong></td><td>Bản ghi mang số dư, 1 currency. Một user có thể nhiều ví cùng currency (phân biệt bằng <code>label</code>).</td></tr>
+    <tr><td><strong>Transaction (leg)</strong></td><td>1 row = 1 chiều chuyển động. Deposit/withdraw = 1 row; transfer = 2 row chung <code>transfer_id</code>.</td></tr>
+    <tr><td><strong>Outbox</strong></td><td>Bảng ghi cùng tx với mutation tiền; poller (hoãn MVP) đẩy lên Kafka. <code>published_at IS NULL</code> = hàng đợi.</td></tr>
+    <tr><td><strong>Idempotency Key</strong></td><td>UUID client cấp đảm bảo at-most-once side-effect. Track trong <code>idempotency_record</code>.</td></tr>
+    <tr><td><strong>Event time</strong></td><td><code>event_timestamp</code> trong payload Kafka (NFR7), khác processing time và <code>created_at</code>.</td></tr>
+    <tr><td><strong>Hybrid concurrency</strong></td><td>Redis lock (outer, fail-fast) + DB <code>PESSIMISTIC_WRITE</code> (inner, authoritative).</td></tr>
+    <tr><td><strong>FX snapshot</strong></td><td>Tỷ giá chốt tại thời điểm transfer, lưu <code>exchange_rate</code> trên cả 2 leg; không định giá lại balance.</td></tr>
+    <tr><td><strong>CQRS</strong></td><td>Tách read model (Redis hot + materialized view) khỏi write model (ledger) — NFR6, hoãn MVP.</td></tr>
+  </table>
+
+  <!-- ============ 7 HỌC SÂU ============ -->
+  <h2 id="hoc-them">7 · Học sâu thêm theo chủ đề</h2>
+  <p>Sau mỗi phase, dành 30 phút đào sâu khái niệm vừa gặp:</p>
+  <table>
+    <tr><th>Chủ đề</th><th>Học gì</th><th>Nguồn trong repo / hỏi Claude</th></tr>
+    <tr><td>Transactional Outbox</td><td>Dual-write problem, at-least-once, idempotent consumer</td><td>ADR 0005 + <code>shared/outbox/</code> · "giải thích outbox với ví dụ trong repo"</td></tr>
+    <tr><td>Concurrency</td><td>Optimistic vs pessimistic, distributed lock, lock ordering</td><td>ADR 0003 + <code>shared/lock/</code></td></tr>
+    <tr><td>Idempotency</td><td>State machine IN_FLIGHT/COMPLETED, ON CONFLICT, replay-conflict</td><td><code>shared/idempotency/</code> + DB README <code>idempotency_record</code></td></tr>
+    <tr><td>JWT / Auth</td><td>ES256, claims, clock skew, algorithm confusion</td><td>ADR 0001 + <code>shared/security/JwtIssuer</code></td></tr>
+    <tr><td>BigDecimal / money</td><td>Vì sao không float, scale, RoundingMode, compareTo vs equals</td><td><code>shared/money/</code></td></tr>
+    <tr><td>Multi-currency / FX</td><td>Snapshot per-event, không revalue balance, seed 2 chiều</td><td>ADR 0006 + bảng <code>fx_rate</code></td></tr>
+    <tr><td>Testcontainers</td><td>Container thật trong test, <code>@QuarkusTestResource</code> lifecycle</td><td><code>testsupport/PostgresTestResource</code></td></tr>
+    <tr><td>RTK Query</td><td>Cache, tag invalidation, baseQuery, transformResponse</td><td><code>features/*/*.api.ts</code></td></tr>
+  </table>
+
+  <!-- ============ 8 GIT ============ -->
+  <h2 id="git">8 · Git &amp; PR workflow</h2>
+  <div class="steps">
+    <div class="step"><strong>Branch riêng mỗi phase</strong> từ <code>main</code>: <code>git switch -c feat/phase-2-open-wallet</code>.</div>
+    <div class="step"><strong>Commit nhỏ, message Conventional Commits:</strong> <code>feat:</code>, <code>fix:</code>, <code>test:</code>, <code>docs:</code>, <code>refactor:</code>.</div>
+    <div class="step"><strong>Trước push:</strong> <code>./mvnw -B verify</code> xanh + <code>/code-review</code> sạch finding block + gitleaks pass.</div>
+    <div class="step"><strong>Mở PR</strong> qua <code>/create-merge-request</code> (hoặc <code>gh pr create</code>). Body: Summary / Changes / Test Plan / Risk.</div>
+    <div class="step"><strong>CI phải xanh</strong> trên head commit trước merge (backend job + JaCoCo gate + frontend job từ F1).</div>
+    <div class="step"><strong>Tick checkbox</strong> phase tương ứng trong master plan §9 sau khi merge.</div>
+  </div>
+  <div class="callout warn"><div class="t">⚠️ Mỗi phase = 1 PR end-to-end xanh</div>Không gộp nhiều phase vào 1 PR. Mỗi phase phải tự đứng vững: build xanh, coverage ≥ 80%, test NFR liên quan có mặt. Đây là kỷ luật "each phase ends green".</div>
+
+  <!-- ============ 9 CHECKLIST ============ -->
+  <h2 id="checklist">9 · Checklist hằng ngày</h2>
+  <div class="grid2">
+    <div class="card"><h4>Trước khi code</h4><ul>
+      <li>☐ Docker đang chạy?</li>
+      <li>☐ <code>git pull</code> main, tạo branch <code>feat/phase-N-*</code>?</li>
+      <li>☐ Đọc plan phase + rule + business-rules liên quan?</li>
+      <li>☐ <code>JWT_PRIVATE_KEY</code> đã set trong .env?</li>
+    </ul></div>
+    <div class="card"><h4>Trước khi mở PR</h4><ul>
+      <li>☐ <code>/backend-verify</code> / <code>/frontend-verify</code> PASS?</li>
+      <li>☐ JaCoCo ≥ 80% tầng service?</li>
+      <li>☐ <code>/code-review</code> sạch finding block?</li>
+      <li>☐ Không log PII / secret / full Idempotency-Key?</li>
+      <li>☐ Endpoint mutating: <code>Idempotency-Key</code> + RBAC 2 tầng + ownership?</li>
+      <li>☐ Mọi body có <code>@Valid</code>; sort param có whitelist?</li>
+      <li>☐ Test auth (unauth / wrong-role / wrong-tenant) cho endpoint mới?</li>
+    </ul></div>
+  </div>
+
+  <div class="callout tip"><div class="t">🏁 Khi nào "xong MVP"?</div>Khi mọi checkbox trong <code>docs/plans/implementation-plan-mvp-master.md §10</code> (backend + frontend) tích xanh, và Playwright golden-path pass. Lúc đó bạn có nền tảng ví đa tiền tệ chạy thật trên docker-compose — và quan trọng hơn, đã nắm một bộ kỹ năng backend/frontend/kiến trúc dùng được cho mọi dự án enterprise.</div>
+
+  <div class="footer">
+    <p>Tài liệu hướng dẫn nội bộ DigitalWallet · bám theo <code>docs/plans/implementation-plan-mvp-master.md</code> &amp; <code>docs/plans/implementation-plan-phase-1-signup-login.md</code> (2026-05-25). Endpoint/error/schema trích từ <code>docs/api/README.md</code> + <code>docs/database/README.md</code>. Khi code và spec mâu thuẫn, spec là chuẩn tới khi có ADR thay thế.</p>
+    <p>File này tên <code>guide.html</code> (chính tả đúng của "guild" bạn yêu cầu). Đổi tên tự do nếu muốn.</p>
+  </div>
+</main>
+</div>
+<a href="#" class="anchor-top" title="Lên đầu trang">↑</a>
+</body>
+</html>
