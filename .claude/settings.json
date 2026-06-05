@@ -1,4 +1,7 @@
 {
+  "enabledMcpjsonServers": [
+    "trello"
+  ],
   "permissions": {
     "deny": [
       "Read(**/.env)",
@@ -53,6 +56,20 @@
       "Bash(echo $*_KEY)",
       "Bash(echo $*_SECRET)",
       "Bash(echo $*_PASSWORD)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/scripts/trello-board-context.sh\"",
+            "timeout": 10,
+            "statusMessage": "Binding Trello board id"
+          }
+        ]
+      }
     ]
   }
 }

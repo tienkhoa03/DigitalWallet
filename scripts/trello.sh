@@ -30,8 +30,12 @@ set -euo pipefail
 API="https://api.trello.com/1"
 
 require_env() {
+  # Accept the MCP-server convention (TRELLO_API_KEY) as a fallback for TRELLO_KEY,
+  # so a single .env (TRELLO_API_KEY + TRELLO_TOKEN) drives both this script and
+  # the Trello MCP server wired in ../.mcp.json.
+  : "${TRELLO_KEY:=${TRELLO_API_KEY:-}}"
   if [[ -z "${TRELLO_KEY:-}" || -z "${TRELLO_TOKEN:-}" ]]; then
-    echo "ERROR: TRELLO_KEY and TRELLO_TOKEN must be set. Run: source ./trello.env" >&2
+    echo "ERROR: TRELLO_KEY (or TRELLO_API_KEY) and TRELLO_TOKEN must be set. Run: source ./trello.env (or ./.env)" >&2
     exit 2
   fi
 }
