@@ -1,9 +1,12 @@
 package com.digitalwallet.shared.security;
 
-import io.smallrye.jwt.auth.principal.DefaultJWTParser;
-import io.smallrye.jwt.auth.principal.JWTAuthContextInfo;
-
-import org.eclipse.microprofile.jwt.JsonWebToken;
+import org.jose4j.jwa.AlgorithmConstraints;
+import org.jose4j.jwa.AlgorithmConstraints.ConstraintType;
+import org.jose4j.jws.AlgorithmIdentifiers;
+import org.jose4j.jwt.JwtClaims;
+import org.jose4j.jwt.NumericDate;
+import org.jose4j.jwt.consumer.JwtConsumer;
+import org.jose4j.jwt.consumer.JwtConsumerBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -62,13 +65,14 @@ class JwtIssuerTest {
 
         String token = issuer.issue(userId, UserRole.USER);
 
-        JsonWebToken jwt = parse(token);
-        assertThat(jwt.getSubject()).isEqualTo(userId.toString());
-        assertThat(jwt.getIssuer()).isEqualTo(ISSUER);
-        assertThat(jwt.getAudience()).containsExactly(AUDIENCE);
-        assertThat(jwt.getGroups()).containsExactly("USER");
-        assertThat(jwt.getIssuedAtTime()).isEqualTo(fixedClock.instant().getEpochSecond());
-        assertThat(jwt.getExpirationTime())
+        JwtClaims claims = parse(token);
+        assertThat(claims.getSubject()).isEqualTo(userId.toString());
+        assertThat(claims.getIssuer()).isEqualTo(ISSUER);
+        assertThat(claims.getAudience()).containsExactly(AUDIENCE);
+        assertThat(claims.getStringListClaimValue("groups")).containsExactly("USER");
+        assertThat(claims.getIssuedAt().getValue())
+                .isEqualTo(fixedClock.instant().getEpochSecond());
+        assertThat(claims.getExpirationTime().getValue())
                 .isEqualTo(fixedClock.instant().getEpochSecond() + TTL);
     }
 
@@ -76,8 +80,8 @@ class JwtIssuerTest {
     void issue_withAdminRole_putsAdminInGroupsClaim() throws Exception {
         String token = issuer.issue(UUID.randomUUID(), UserRole.ADMIN);
 
-        JsonWebToken jwt = parse(token);
-        assertThat(jwt.getGroups()).containsExactly("ADMIN");
+        JwtClaims claims = parse(token);
+        assertThat(claims.getStringListClaimValue("groups")).containsExactly("ADMIN");
     }
 
     @Test
@@ -117,13 +121,26 @@ class JwtIssuerTest {
         return (ECPublicKey) KeyFactory.getInstance("EC").generatePublic(new X509EncodedKeySpec(der));
     }
 
-    private JsonWebToken parse(String token) throws Exception {
-        JWTAuthContextInfo info = new JWTAuthContextInfo();
-        info.setPublicVerificationKey(publicKey);
-        info.setIssuedBy(ISSUER);
-        info.setExpectedAudience(java.util.Set.of(AUDIENCE));
-        info.setClockSkew(30);
-        info.setSignatureAlgorithm(java.util.Set.of(io.smallrye.jwt.algorithm.SignatureAlgorithm.ES256));
-        return new DefaultJWTParser(info).parse(token);
+    /**
+     * Verifies the ES256 signature plus the canonical {@code iss}/{@code aud} constraints, evaluating
+     * token expiry at the injected fixed clock's instant rather than wall-clock time. Anchoring the
+     * evaluation time keeps the round-trip deterministic no matter which calendar date the suite runs
+     * on — the original wall-clock parse turned this into a time bomb that expired after the fixed
+     * issue date (testing.md §2.2 Clock injection, §6 "flaky tests are defects").
+     */
+    private JwtClaims parse(String token) throws Exception {
+        JwtConsumer consumer = new JwtConsumerBuilder()
+                .setVerificationKey(publicKey)
+                .setExpectedIssuer(ISSUER)
+                .setExpectedAudience(AUDIENCE)
+                .setRequireSubject()
+                .setRequireIssuedAt()
+                .setRequireExpirationTime()
+                .setEvaluationTime(NumericDate.fromSeconds(fixedClock.instant().getEpochSecond()))
+                .setAllowedClockSkewInSeconds(30)
+                .setJwsAlgorithmConstraints(new AlgorithmConstraints(
+                        ConstraintType.PERMIT, AlgorithmIdentifiers.ECDSA_USING_P256_CURVE_AND_SHA256))
+                .build();
+        return consumer.processToClaims(token);
     }
 }
