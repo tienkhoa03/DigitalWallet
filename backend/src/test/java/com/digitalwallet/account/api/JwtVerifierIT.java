@@ -1,7 +1,7 @@
-package com.digitalwallet.user.api;
+package com.digitalwallet.account.api;
 
 import com.digitalwallet.shared.security.JwtIssuer;
-import com.digitalwallet.shared.security.UserRole;
+import com.digitalwallet.shared.security.AccountRole;
 import com.digitalwallet.testsupport.PostgresTestResource;
 
 import io.quarkus.test.common.QuarkusTestResource;
@@ -38,7 +38,7 @@ class JwtVerifierIT {
 
     @Test
     void protectedEndpoint_withFreshlyIssuedToken_returns200() {
-        String token = issuer.issue(UUID.randomUUID(), UserRole.USER);
+        String token = issuer.issue(UUID.randomUUID(), AccountRole.USER);
 
         given()
                 .header("Authorization", "Bearer " + token)

@@ -1,13 +1,13 @@
-package com.digitalwallet.user.service;
+package com.digitalwallet.account.service;
 
 import com.digitalwallet.shared.exception.AuthInvalidCredentialsException;
 import com.digitalwallet.shared.security.Argon2Hasher;
 import com.digitalwallet.shared.security.JwtIssuer;
-import com.digitalwallet.shared.security.UserRole;
-import com.digitalwallet.user.api.dto.LoginRequest;
-import com.digitalwallet.user.api.dto.LoginResponse;
-import com.digitalwallet.user.persistence.UserEntity;
-import com.digitalwallet.user.persistence.UserRepository;
+import com.digitalwallet.shared.security.AccountRole;
+import com.digitalwallet.account.api.dto.LoginRequest;
+import com.digitalwallet.account.api.dto.LoginResponse;
+import com.digitalwallet.account.persistence.AccountEntity;
+import com.digitalwallet.account.persistence.AccountRepository;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,7 +35,7 @@ class AuthServiceTest {
             "$argon2id$v=19$m=4096,t=2,p=1$AAAAAAAAAAAAAAAAAAAAAA$BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBQ";
 
     @Mock
-    private UserRepository userRepository;
+    private AccountRepository accountRepository;
 
     @Mock
     private Argon2Hasher hasher;
@@ -50,17 +50,17 @@ class AuthServiceTest {
         // Stub sentinel hash production used by @PostConstruct.
         when(hasher.hash(anyString())).thenReturn(SENTINEL_HASH_VALUE);
 
-        authService = new AuthService(userRepository, hasher, jwtIssuer);
+        authService = new AuthService(accountRepository, hasher, jwtIssuer);
         authService.initSentinel();
     }
 
     @Test
     void login_happyPath_returnsBearerTokenWithTtl() {
-        UUID userId = UUID.randomUUID();
-        UserEntity user = userBuilder(userId, UserRole.USER);
-        when(userRepository.findByEmailLower("alice@example.com")).thenReturn(Optional.of(user));
-        when(hasher.verify("correct-pass", user.passwordHash)).thenReturn(true);
-        when(jwtIssuer.issue(userId, UserRole.USER)).thenReturn("signed.jwt.value");
+        UUID accountId = UUID.randomUUID();
+        AccountEntity account = accountBuilder(accountId, AccountRole.USER);
+        when(accountRepository.findByEmailLower("alice@example.com")).thenReturn(Optional.of(account));
+        when(hasher.verify("correct-pass", account.passwordHash)).thenReturn(true);
+        when(jwtIssuer.issue(accountId, AccountRole.USER)).thenReturn("signed.jwt.value");
         when(jwtIssuer.ttlSeconds()).thenReturn(3600L);
 
         LoginResponse response = authService.login(
@@ -73,9 +73,9 @@ class AuthServiceTest {
 
     @Test
     void login_wrongPassword_throwsAuthInvalidCredentials_withFixedMessage() {
-        UserEntity user = userBuilder(UUID.randomUUID(), UserRole.USER);
-        when(userRepository.findByEmailLower("alice@example.com")).thenReturn(Optional.of(user));
-        when(hasher.verify("wrong-pass", user.passwordHash)).thenReturn(false);
+        AccountEntity account = accountBuilder(UUID.randomUUID(), AccountRole.USER);
+        when(accountRepository.findByEmailLower("alice@example.com")).thenReturn(Optional.of(account));
+        when(hasher.verify("wrong-pass", account.passwordHash)).thenReturn(false);
 
         assertThatThrownBy(() -> authService.login(new LoginRequest("alice@example.com", "wrong-pass")))
                 .isInstanceOf(AuthInvalidCredentialsException.class)
@@ -88,9 +88,9 @@ class AuthServiceTest {
 
     @Test
     void login_unknownEmail_throwsAuthInvalidCredentials_withSameMessage() {
-        when(userRepository.findByEmailLower("ghost@example.com")).thenReturn(Optional.empty());
+        when(accountRepository.findByEmailLower("ghost@example.com")).thenReturn(Optional.empty());
         // Sentinel verify returns false (no match) — but we never reach the wrong-password
-        // branch because the user is missing.
+        // branch because the account is missing.
         when(hasher.verify(eq("anything"), eq(SENTINEL_HASH_VALUE))).thenReturn(false);
 
         assertThatThrownBy(() -> authService.login(new LoginRequest("ghost@example.com", "anything")))
@@ -104,7 +104,7 @@ class AuthServiceTest {
 
     @Test
     void login_unknownEmail_stillCallsHasherVerifyAgainstSentinel() {
-        when(userRepository.findByEmailLower(any())).thenReturn(Optional.empty());
+        when(accountRepository.findByEmailLower(any())).thenReturn(Optional.empty());
         when(hasher.verify(anyString(), eq(SENTINEL_HASH_VALUE))).thenReturn(false);
 
         assertThatThrownBy(() -> authService.login(new LoginRequest("ghost@example.com", "anything")))
@@ -116,9 +116,9 @@ class AuthServiceTest {
 
     @Test
     void login_negativeBranches_returnIdenticalExceptionEnvelope() {
-        UserEntity user = userBuilder(UUID.randomUUID(), UserRole.USER);
-        when(userRepository.findByEmailLower("alice@example.com")).thenReturn(Optional.of(user));
-        when(userRepository.findByEmailLower("ghost@example.com")).thenReturn(Optional.empty());
+        AccountEntity account = accountBuilder(UUID.randomUUID(), AccountRole.USER);
+        when(accountRepository.findByEmailLower("alice@example.com")).thenReturn(Optional.of(account));
+        when(accountRepository.findByEmailLower("ghost@example.com")).thenReturn(Optional.empty());
         when(hasher.verify(anyString(), anyString())).thenReturn(false);
 
         AuthInvalidCredentialsException wrongPassword = (AuthInvalidCredentialsException)
@@ -132,19 +132,19 @@ class AuthServiceTest {
 
     @Test
     void login_lowercasesEmail_forRepositoryLookup() {
-        UserEntity user = userBuilder(UUID.randomUUID(), UserRole.USER);
-        when(userRepository.findByEmailLower("alice@example.com")).thenReturn(Optional.of(user));
+        AccountEntity account = accountBuilder(UUID.randomUUID(), AccountRole.USER);
+        when(accountRepository.findByEmailLower("alice@example.com")).thenReturn(Optional.of(account));
         when(hasher.verify(any(), any())).thenReturn(true);
         when(jwtIssuer.issue(any(), any())).thenReturn("token");
         when(jwtIssuer.ttlSeconds()).thenReturn(3600L);
 
         authService.login(new LoginRequest("ALICE@example.COM", "anything-12-chars"));
 
-        verify(userRepository, times(1)).findByEmailLower("alice@example.com");
+        verify(accountRepository, times(1)).findByEmailLower("alice@example.com");
     }
 
-    private static UserEntity userBuilder(UUID id, UserRole role) {
-        UserEntity u = new UserEntity();
+    private static AccountEntity accountBuilder(UUID id, AccountRole role) {
+        AccountEntity u = new AccountEntity();
         u.id = id;
         u.email = "alice@example.com";
         u.passwordHash = "$argon2id$v=19$m=4096,t=2,p=1$existing-salt$existing-hash";

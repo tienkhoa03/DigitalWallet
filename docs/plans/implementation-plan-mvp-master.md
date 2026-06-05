@@ -5,7 +5,7 @@
 - **Story points:** M — backend Epic 1 + frontend Epic 1; each phase will be sized as its own follow-up `/make-plan`.
 - **Milestone:** Epic 1 — Core Wallet Management (FR1.1 – FR1.4) end-to-end on backend AND frontend. Epics 2, 3, 4, 5, 6 are all deferred post-MVP.
 - **Assignees:** unassigned
-- **Affected modules (backend):** `shared`, `user`, `wallet`. NOT shipped in MVP: `fraud`, `pfm`, `advisor`, `dashboard`.
+- **Affected modules (backend):** `shared`, `account`, `wallet`. NOT shipped in MVP: `fraud`, `pfm`, `advisor`, `dashboard`.
 - **Affected modules (frontend):** `app/`, `routes/`, `features/{auth,wallet,transfer,statement}/`, `shared/{ui,money,idempotency,config}`.
 - **Suggested branch name:** none — each follow-up plan branches independently from `main`.
 
@@ -28,7 +28,7 @@ DigitalWallet's full product contract is in [../../project-info.md](../../projec
 - **Kept (frontend):** every Epic-1 user-facing flow — signup, login, wallet list, open wallet, deposit, withdraw, transfer, statement.
 - **Kept (security floor — not part of any epic):** rate limiting on `POST /transfers`, JWT auth, RBAC at controller AND service, idempotency, hybrid concurrency, outbox WRITE atomicity, CORS allow-list, security headers, sort whitelist. These are cross-cutting rules from [../../.claude/rules/security.md](../../.claude/rules/security.md) and are not optional even with no fraud / PFM / advisor.
 
-**Consequence — NFR9 is explicitly deferred.** [../../CLAUDE.md](../../CLAUDE.md) names NFR9 a "non-negotiable invariant": every wallet mutation MUST evaluate fraud velocity (FR2.1), volume (FR2.2), and `user.fraud_status` (FR2.4) on the request thread before opening the DB transaction. With Epic 2 cut, the slimmed MVP **does NOT honour NFR9**. This is a documented MVP limitation — the money path runs without fraud blocking. The omission MUST be closed by a Phase-X plan before any production-shaped milestone; the `user.fraud_status` column still ships in V1 of the `user` table so a post-MVP fraud module can be wired without a destructive migration.
+**Consequence — NFR9 is explicitly deferred.** [../../CLAUDE.md](../../CLAUDE.md) names NFR9 a "non-negotiable invariant": every wallet mutation MUST evaluate fraud velocity (FR2.1), volume (FR2.2), and `account.fraud_status` (FR2.4) on the request thread before opening the DB transaction. With Epic 2 cut, the slimmed MVP **does NOT honour NFR9**. This is a documented MVP limitation — the money path runs without fraud blocking. The omission MUST be closed by a Phase-X plan before any production-shaped milestone; the `account.fraud_status` column still ships in V1 of the `account` table so a post-MVP fraud module can be wired without a destructive migration.
 
 **Other shared-infra consequences:**
 
@@ -73,7 +73,7 @@ Status legend: **Unanswered (open)** | **Answered (closed)** | **Deferred (track
 | 1 | Repo layout: `digital-wallet-api/` vs `backend/`? | Answered | Phase 0 renames `digital-wallet-api/` → `backend/` and re-roots the package at `com.digitalwallet`. |
 | 2 | Big-bang bootstrap vs incremental? | Answered | Incremental. Each phase brings only the infra its slice needs. (User direction 2026-05-25.) |
 | 3 | Frontend in scope? | Answered | Yes, full Epic 1 frontend (every FR1.x user flow). (User direction 2026-05-25.) |
-| 4 | Epic 2 fraud in scope? | Answered | No — Epic 2 cut entirely. NFR9 is a documented deferred invariant. `user.fraud_status` column still ships in V1 so a post-MVP fraud module can wire without migration. |
+| 4 | Epic 2 fraud in scope? | Answered | No — Epic 2 cut entirely. NFR9 is a documented deferred invariant. `account.fraud_status` column still ships in V1 so a post-MVP fraud module can wire without migration. |
 | 5 | LLM provider ([ADR 0002](../../docs/decisions/0002-llm-provider.md))? | Deferred | Epic 6 cut. ADR stays Open. |
 | 6 | Advisor topic names + LLM data-retention policy? | Deferred | Epic 6 cut. |
 | 7 | Observability stack? | Answered (proposed) | [ADR 0011](0011-observability-stack.md) drafted Proposed: Quarkus Micrometer + Prometheus endpoint + structured JSON stdout logs. Flips Accepted in Phase 8. |
@@ -152,7 +152,7 @@ backend/
 │   │   ├── outbox/                        # Phase 3 (write-only)
 │   │   ├── lock/                          # Phase 3
 │   │   └── ratelimit/                     # Phase 6
-│   ├── user/                              # Phase 1 + Phase 2 (FK target)
+│   ├── account/                              # Phase 1 + Phase 2 (FK target)
 │   └── wallet/                            # Phase 2, 3, 4, 5, 7
 └── src/main/resources/
     ├── application.properties
@@ -210,11 +210,11 @@ Phases are dependency-ordered. Each "Plan" item is the follow-up `/make-plan` ca
 
 ### Epic 1 backend (FR1.1 – FR1.4)
 
-- [ ] **Phase 1 — Signup + Login (FR1.1 user identity).** Bring `shared/exception/` (DomainException + JAX-RS mapper + canonical error envelope), `shared/security/` (JWT issuance + verification, ES256), `shared/validation/` (`@CurrencyCode`), `user/` module with Flyway V1 (`user` table — `id`, `email`, `password_hash`, `base_currency`, `role`, `fraud_status` *(column ships now for post-MVP fraud; not read by any MVP code)*, `created_at`), Argon2id hashing, `POST /users` (signup), `POST /auth/login`, enumeration-resistant `auth.invalid_credentials`. ADR 0001 → Accepted. — `@backend-developer`, `Skill("backend-create-rest-api")`, `Skill("backend-create-unit-test")`
+- [ ] **Phase 1 — Signup + Login (FR1.1 account identity).** Bring `shared/exception/` (DomainException + JAX-RS mapper + canonical error envelope), `shared/security/` (JWT issuance + verification, ES256), `shared/validation/` (`@CurrencyCode`), `account/` module with Flyway V1 (`account` table — `id`, `email`, `password_hash`, `base_currency`, `role`, `fraud_status` *(column ships now for post-MVP fraud; not read by any MVP code)*, `created_at`), Argon2id hashing, `POST /accounts` (signup), `POST /auth/login`, enumeration-resistant `auth.invalid_credentials`. ADR 0001 → Accepted. — `@backend-developer`, `Skill("backend-create-rest-api")`, `Skill("backend-create-unit-test")`
   - [ ] Plan
   - [ ] Build
 
-- [ ] **Phase 2 — Open wallet (FR1.1 wallet).** Add `wallet/` module with Flyway V2 (`wallet` table — UNIQUE `(user_id, label)`, NO UNIQUE on `currency_code` per [ADR 0006](../../docs/decisions/0006-multi-currency-model.md)). `POST /wallets`, `GET /wallets`. Controller + service RBAC (`USER` role, owner-scope check). — `@backend-developer`, `Skill("backend-create-rest-api")`
+- [ ] **Phase 2 — Open wallet (FR1.1 wallet).** Add `wallet/` module with Flyway V2 (`wallet` table — UNIQUE `(account_id, label)`, NO UNIQUE on `currency_code` per [ADR 0006](../../docs/decisions/0006-multi-currency-model.md)). `POST /wallets`, `GET /wallets`. Controller + service RBAC (`USER` role, owner-scope check). — `@backend-developer`, `Skill("backend-create-rest-api")`
   - [ ] Plan
   - [ ] Build
 
@@ -226,11 +226,11 @@ Phases are dependency-ordered. Each "Plan" item is the follow-up `/make-plan` ca
   - [ ] Plan
   - [ ] Build
 
-- [ ] **Phase 5 — Transfer (FR1.3, two-leg atomic).** `POST /transfers` debit + credit in a single tx, shared `transfer_id`, FX snapshot on both legs ([ADR 0006](../../docs/decisions/0006-multi-currency-model.md)), recipient identity via `to_user_id` only, error keys `transfer.fx_rate_missing`, `transfer.recipient_not_found`, `transfer.same_wallet`, `wallet.currency_mismatch`. Concurrent-mutation test against both wallets uses deterministic lock ordering (Redis lock acquired in `wallet_id` UUID order) to prevent deadlocks. — `@backend-developer`, `Skill("backend-create-rest-api")`, `Skill("backend-create-unit-test")`
+- [ ] **Phase 5 — Transfer (FR1.3, two-leg atomic).** `POST /transfers` debit + credit in a single tx, shared `transfer_id`, FX snapshot on both legs ([ADR 0006](../../docs/decisions/0006-multi-currency-model.md)), recipient identity via `to_account_id` only, error keys `transfer.fx_rate_missing`, `transfer.recipient_not_found`, `transfer.same_wallet`, `wallet.currency_mismatch`. Concurrent-mutation test against both wallets uses deterministic lock ordering (Redis lock acquired in `wallet_id` UUID order) to prevent deadlocks. — `@backend-developer`, `Skill("backend-create-rest-api")`, `Skill("backend-create-unit-test")`
   - [ ] Plan
   - [ ] Build
 
-- [ ] **Phase 6 — Rate limiting on `POST /transfers`.** Bring `shared/ratelimit/` (Redis token bucket, 10/min/user keyed on `(user_id, endpoint)`), return HTTP 429 + `Retry-After` + `ratelimit.exceeded`. Env var `RATELIMIT_TRANSFER_PER_MINUTE` (default 10). — `@backend-developer`
+- [ ] **Phase 6 — Rate limiting on `POST /transfers`.** Bring `shared/ratelimit/` (Redis token bucket, 10/min/user keyed on `(account_id, endpoint)`), return HTTP 429 + `Retry-After` + `ratelimit.exceeded`. Env var `RATELIMIT_TRANSFER_PER_MINUTE` (default 10). — `@backend-developer`
   - [ ] Plan
   - [ ] Build
 
@@ -254,7 +254,7 @@ Phases are dependency-ordered. Each "Plan" item is the follow-up `/make-plan` ca
   - [ ] Plan
   - [ ] Build
 
-- [ ] **Phase F2 — Auth (signup + login).** `features/auth/auth.api.ts` (RTK Query — `POST /users`, `POST /auth/login`), `features/auth/auth.slice.ts` (JWT in-memory + opaque "remembered" flag in localStorage per [security.md §6](../../.claude/rules/security.md#6-sessions--token-handling-frontend)), `<LoginPage>`, `<SignupPage>` with React Hook Form + Zod schemas mirroring backend validation per [frontend_coding.md §4](../../.claude/rules/frontend_coding.md#4-forms--validation) (email, password, `base_currency` ISO 4217 immutable). Public routes `/login` + `/signup`. — `@frontend-developer`, `Skill("frontend-implement-ui-component")`
+- [ ] **Phase F2 — Auth (signup + login).** `features/auth/auth.api.ts` (RTK Query — `POST /accounts`, `POST /auth/login`), `features/auth/auth.slice.ts` (JWT in-memory + opaque "remembered" flag in localStorage per [security.md §6](../../.claude/rules/security.md#6-sessions--token-handling-frontend)), `<LoginPage>`, `<SignupPage>` with React Hook Form + Zod schemas mirroring backend validation per [frontend_coding.md §4](../../.claude/rules/frontend_coding.md#4-forms--validation) (email, password, `base_currency` ISO 4217 immutable). Public routes `/login` + `/signup`. — `@frontend-developer`, `Skill("frontend-implement-ui-component")`
   - [ ] Plan
   - [ ] Build
 
@@ -262,7 +262,7 @@ Phases are dependency-ordered. Each "Plan" item is the follow-up `/make-plan` ca
   - [ ] Plan
   - [ ] Build
 
-- [ ] **Phase F4 — Transfer + statement.** `features/transfer/transfer.api.ts` (RTK Query — `POST /transfers`), `<TransferPage>` (source-wallet picker rendering label+currency; recipient by `to_user_id`; amount + currency; FX preview note when source and destination currency differ; UUIDv7 `Idempotency-Key`; `Retry-After` countdown on 429 per [frontend_coding.md §13](../../.claude/rules/frontend_coding.md#13-domain-specific-conventions)). `features/statement/statement.api.ts` (RTK Query — `GET /wallets/{id}/statement` with paginated cache + filter args), `<StatementPage>` (virtualized table per [frontend_coding.md §16](../../.claude/rules/frontend_coding.md#16-list-rendering) — wallet statements pass the 200-row threshold quickly; `from`/`to` date filters; type filter; stable `transaction.id` keys). Routes `/transfers/new` and `/wallets/:id/statement`. — `@frontend-developer`, `Skill("frontend-implement-ui-component")`
+- [ ] **Phase F4 — Transfer + statement.** `features/transfer/transfer.api.ts` (RTK Query — `POST /transfers`), `<TransferPage>` (source-wallet picker rendering label+currency; recipient by `to_account_id`; amount + currency; FX preview note when source and destination currency differ; UUIDv7 `Idempotency-Key`; `Retry-After` countdown on 429 per [frontend_coding.md §13](../../.claude/rules/frontend_coding.md#13-domain-specific-conventions)). `features/statement/statement.api.ts` (RTK Query — `GET /wallets/{id}/statement` with paginated cache + filter args), `<StatementPage>` (virtualized table per [frontend_coding.md §16](../../.claude/rules/frontend_coding.md#16-list-rendering) — wallet statements pass the 200-row threshold quickly; `from`/`to` date filters; type filter; stable `transaction.id` keys). Routes `/transfers/new` and `/wallets/:id/statement`. — `@frontend-developer`, `Skill("frontend-implement-ui-component")`
   - [ ] Plan
   - [ ] Build
 
@@ -277,7 +277,7 @@ The Epic-1-only MVP is **complete** when every checkbox below is green.
 ### Backend
 
 - [ ] Repo root has `backend/` (not `digital-wallet-api/`); CI green on `main` after Phase 0.
-- [ ] Seven REST surfaces ship and respond with the canonical envelope: `POST /users`, `POST /auth/login`, `POST /wallets`, `GET /wallets`, `POST /wallets/{id}/deposits`, `POST /wallets/{id}/withdrawals`, `POST /transfers`, `GET /wallets/{id}/statement`. *(Eight if you count signup + login separately.)*
+- [ ] Seven REST surfaces ship and respond with the canonical envelope: `POST /accounts`, `POST /auth/login`, `POST /wallets`, `GET /wallets`, `POST /wallets/{id}/deposits`, `POST /wallets/{id}/withdrawals`, `POST /transfers`, `GET /wallets/{id}/statement`. *(Eight if you count signup + login separately.)*
 - [ ] Every mutating money endpoint requires `Idempotency-Key`; replay returns the original outcome; conflicting body + same key returns `idempotency.replay_conflict`.
 - [ ] **NFR1** — a concurrent-mutation test on the same wallet exercises Redis lock + DB `PESSIMISTIC_WRITE`; one wins, the loser returns `wallet.locked` or retries cleanly.
 - [ ] **NFR2** — ledger + outbox commit atomically; a manual SQL check confirms `published_at IS NULL` rows accumulate as expected (poller deferred).
@@ -305,15 +305,15 @@ The Epic-1-only MVP is **complete** when every checkbox below is green.
 - **NFR6 (CQRS for budgets)** — PFM cut; vacuously satisfied (no `pfm/`).
 - **NFR7 (event-time correctness)** — no consumers; revisits when async epics ship.
 - **NFR8 (LLM isolation)** — Epic 6 cut.
-- **NFR9 (synchronous fraud blocking)** — **explicitly deferred MVP invariant violation.** The money path runs without fraud blocking. `user.fraud_status` column ships in V1 but is unread; a post-MVP Phase X owns the wiring. Documented in §2 and §14.
+- **NFR9 (synchronous fraud blocking)** — **explicitly deferred MVP invariant violation.** The money path runs without fraud blocking. `account.fraud_status` column ships in V1 but is unread; a post-MVP Phase X owns the wiring. Documented in §2 and §14.
 
 ## 11. Security Considerations (MANDATORY)
 
 Per [../../.claude/rules/security.md](../../.claude/rules/security.md):
 
 - **§1 secrets & configuration** — Phase 1 introduces `JWT_PRIVATE_KEY` env var; no committed defaults for secrets. *(No `LLM_API_KEY`, no `KAFKA_BOOTSTRAP_SERVERS` in MVP.)*
-- **§2 authentication** — every endpoint except `POST /users` and `POST /auth/login` requires a JWT (Phases 1 onwards). ES256 only; `alg: none` rejected. 30-second clock skew tolerated. Password hashing Argon2id. *(WS upgrade JWT validation deferred — no WS endpoints in MVP.)*
-- **§3 authorization** — `@RolesAllowed` at the controller AND re-check in the service in every phase that exposes a path parameter. Ownership check on `{walletId}`, `{userId}` (Phases 2, 3, 4, 5, 7). `FRAUD_ANALYST` deferred per [ADR 0009](../../docs/decisions/0009-rbac-roles.md).
+- **§2 authentication** — every endpoint except `POST /accounts` and `POST /auth/login` requires a JWT (Phases 1 onwards). ES256 only; `alg: none` rejected. 30-second clock skew tolerated. Password hashing Argon2id. *(WS upgrade JWT validation deferred — no WS endpoints in MVP.)*
+- **§3 authorization** — `@RolesAllowed` at the controller AND re-check in the service in every phase that exposes a path parameter. Ownership check on `{walletId}`, `{accountId}` (Phases 2, 3, 4, 5, 7). `FRAUD_ANALYST` deferred per [ADR 0009](../../docs/decisions/0009-rbac-roles.md).
 - **§4 input validation & injection** — `@Valid` on every body, `@CurrencyCode` custom validator (Phase 1), sort-key whitelist (Phase 7), no `dangerouslySetInnerHTML` (frontend). *(LLM prompt anonymisation N/A — Epic 6 cut.)*
 - **§5 transport & CORS** — CORS allow-list non-`*` from Phase 1 onwards; HTTPS in prod; security headers (HSTS, CSP, X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy, Permissions-Policy) shipped in Phase 1. *(WebSocket origin check N/A — no WS.)*
 - **§6 frontend session handling** — JWT in-memory; `localStorage` holds only an opaque "remembered" flag (Phase F2).
@@ -354,7 +354,7 @@ Implementers MUST read these before opening any per-phase plan:
 
 ### Risks
 
-- **NFR9 deferred — money path runs without fraud blocking.** Mitigation: documented in §2, §10, §11. `user.fraud_status` column still ships in V1, so a post-MVP fraud module can wire without a destructive migration. The risk is real for any production-shaped use; ship the demo MVP only against synthetic users.
+- **NFR9 deferred — money path runs without fraud blocking.** Mitigation: documented in §2, §10, §11. `account.fraud_status` column still ships in V1, so a post-MVP fraud module can wire without a destructive migration. The risk is real for any production-shaped use; ship the demo MVP only against synthetic users.
 - **Outbox table grows unboundedly without a poller.** Mitigation: documented in Phase 3. The audit trail is the point; a first post-MVP consumer drains it.
 - **Phase 0 reconcile breaks CI for one PR.** Mitigation: do the rename, `pom.xml`, `application.properties`, and CI-path update in a single PR; verify locally with `Skill("backend-verify")` before pushing.
 - **NFR1 deadlock on two-leg transfer (Phase 5).** Mitigation: deterministic Redis-lock acquisition order by `wallet_id` UUID comparison; integration test exercises both directions concurrently.
@@ -367,7 +367,7 @@ Implementers MUST read these before opening any per-phase plan:
 - **External:** Docker Desktop / Docker Engine for Postgres + Redis containers; Node 20 + pnpm 11 for frontend phases; GitHub Actions runners for CI. **No Kafka, no LLM API key required.**
 - **Internal cross-plan:** Phase 3 gates Phases 4–7 (all reuse the shared money / lock / outbox stack). Phase 9 (backend acceptance) gates the frontend epic (Phase F1).
 - **ADRs:** ADR 0001 flips Accepted in Phase 1; ADR 0011 flips Accepted in Phase 8. No others move in MVP.
-- **Post-MVP successor plan** depends on this plan closing cleanly. The successor's first phase MUST address NFR9 — wiring `fraud/` sync pre-check against the existing `user.fraud_status` column and Redis counters.
+- **Post-MVP successor plan** depends on this plan closing cleanly. The successor's first phase MUST address NFR9 — wiring `fraud/` sync pre-check against the existing `account.fraud_status` column and Redis counters.
 
 ---
 

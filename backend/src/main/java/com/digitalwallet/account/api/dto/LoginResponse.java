@@ -1,4 +1,4 @@
-package com.digitalwallet.user.api.dto;
+package com.digitalwallet.account.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 

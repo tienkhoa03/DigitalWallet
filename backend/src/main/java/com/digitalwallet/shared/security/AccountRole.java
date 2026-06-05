@@ -8,7 +8,7 @@ package com.digitalwallet.shared.security;
  * entry MUST match the string carried in the JWT {@code groups} claim and the
  * {@code @RolesAllowed(...)} annotation.
  */
-public enum UserRole {
+public enum AccountRole {
     USER,
     ADMIN
 }

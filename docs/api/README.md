@@ -21,29 +21,29 @@ All rows below are `(spec — not yet implemented)`. The "shape" columns describ
 
 | Method | Path | Purpose | Auth | Request body | Response body | Error keys |
 |---|---|---|---|---|---|---|
-| `POST` | `/users` | Create a user (FR1.1). The chosen `base_currency` is immutable for the lifetime of the user and scopes every budget. | public (sign-up) | `{ email, password, base_currency }` | `{ user_id, created_at }` | `user.email_taken`, `validation.invalid_payload` |
-| `POST` | `/auth/login` | Issue a JWT for a user. | public | `{ email, password }` | `{ access_token, token_type: "Bearer", expires_in }` | `auth.invalid_credentials`, `auth.rate_limited` |
-| `POST` | `/users/{userId}/wallets` | Open a wallet in a given currency with a user-supplied label (FR1.1; a user MAY own multiple wallets in the same currency). | `USER` (self) | `{ currency_code, label }` | `{ wallet_id, currency_code, label, balance, opened_at }` | `wallet.duplicate_label`, `wallet.unsupported_currency`, `validation.invalid_payload` |
-| `GET` | `/users/{userId}/wallets` | List wallets owned by a user. | `USER` (self) / `ADMIN` | — | `[ { wallet_id, currency_code, label, balance } ]` | `auth.forbidden` |
+| `POST` | `/accounts` | Create an account (FR1.1). The chosen `base_currency` is immutable for the lifetime of the account and scopes every budget. | public (sign-up) | `{ email, password, base_currency }` | `{ account_id, created_at }` | `account.email_taken`, `validation.invalid_payload` |
+| `POST` | `/auth/login` | Issue a JWT for an account. | public | `{ email, password }` | `{ access_token, token_type: "Bearer", expires_in }` | `auth.invalid_credentials`, `auth.rate_limited` |
+| `POST` | `/accounts/{accountId}/wallets` | Open a wallet in a given currency with a user-supplied label (FR1.1; an account MAY own multiple wallets in the same currency). | `USER` (self) | `{ currency_code, label }` | `{ wallet_id, currency_code, label, balance, opened_at }` | `wallet.duplicate_label`, `wallet.unsupported_currency`, `validation.invalid_payload` |
+| `GET` | `/accounts/{accountId}/wallets` | List wallets owned by an account. | `USER` (self) / `ADMIN` | — | `[ { wallet_id, currency_code, label, balance } ]` | `auth.forbidden` |
 | `POST` | `/wallets/{walletId}/deposits` | Simulated top-up (FR1.2). Requires `Idempotency-Key`. | `USER` (owner) | `{ amount, currency_code }` | `{ transaction_id, balance_after, event_timestamp }` | `wallet.currency_mismatch`, `idempotency.replay_conflict`, `validation.invalid_amount`, `fraud.velocity_exceeded`, `fraud.volume_exceeded`, `account.suspended` |
 | `POST` | `/wallets/{walletId}/withdrawals` | Simulated cash-out (FR1.2). Requires `Idempotency-Key`. | `USER` (owner) | `{ amount, currency_code }` | `{ transaction_id, balance_after, event_timestamp }` | `wallet.insufficient_funds`, `wallet.currency_mismatch`, `idempotency.replay_conflict`, `fraud.velocity_exceeded`, `fraud.volume_exceeded`, `account.suspended` |
-| `POST` | `/transfers` | P2P internal transfer addressed by recipient `user_id` (no `account_number` in MVP); optional `category_id`; cross-currency FX uses a cached rate (FR1.3). Requires `Idempotency-Key`. Rate-limited 10/min/user. | `USER` (sender) | `{ from_wallet_id, to_user_id, amount, currency_code, category_id? }` | `{ transaction_id, debit_amount, credit_amount, fx_rate?, event_timestamp }` | `transfer.recipient_not_found`, `wallet.insufficient_funds`, `transfer.same_wallet`, `transfer.fx_rate_missing`, `idempotency.replay_conflict`, `ratelimit.exceeded`, `fraud.velocity_exceeded`, `fraud.volume_exceeded`, `account.suspended` |
+| `POST` | `/transfers` | P2P internal transfer addressed by recipient `account_id` (no `account_number` in MVP); optional `category_id`; cross-currency FX uses a cached rate (FR1.3). Requires `Idempotency-Key`. Rate-limited 10/min/user. | `USER` (sender) | `{ from_wallet_id, to_account_id, amount, currency_code, category_id? }` | `{ transaction_id, debit_amount, credit_amount, fx_rate?, event_timestamp }` | `transfer.recipient_not_found`, `wallet.insufficient_funds`, `transfer.same_wallet`, `transfer.fx_rate_missing`, `idempotency.replay_conflict`, `ratelimit.exceeded`, `fraud.velocity_exceeded`, `fraud.volume_exceeded`, `account.suspended` |
 | `GET` | `/wallets/{walletId}/transactions` | Statement endpoint with filters (FR1.4). The `type` filter (`deposit` / `withdraw` / `transfer_debit` / `transfer_credit`) is derived from the row's `type` × `direction` columns (see [../database/README.md](../database/README.md) `transaction`). | `USER` (owner) / `ADMIN` | query: `from`, `to`, `type` (`deposit`/`withdraw`/`transfer_debit`/`transfer_credit`) | `[ { transaction_id, type, amount, currency_code, counterparty, category_id?, event_timestamp } ]` | `validation.invalid_range`, `auth.forbidden` |
 
 ### Epic 2 — Fraud Detection Engine ([rules](../business-rules/fraud-detection-engine-rules.md))
 
-FR2.1 (velocity) and FR2.2 (volume) run **synchronously** on the money path before the wallet lock (NFR9) and reject offending requests inline with HTTP 422 `fraud.velocity_exceeded` / `fraud.volume_exceeded`; FR2.4 (user suspension) rejects suspended users with HTTP 403 `account.suspended` (error key preserved for API back-compat). Cross-event analysis, the suspension-policy decision (FR2.4), and admin alerting (FR2.5) run in Kafka-consumer threads. FR2.3 (event publishing) is satisfied by the outbox poller for both successful and blocked attempts. Tunable thresholds are environment-driven ([../architecture/README.md#7-config--profiles](../architecture/README.md#7-config--profiles)); a runtime fraud-rule-tuning endpoint is deferred. *(MVP defers manual unsuspend and the analyst-resolution flow — see ADR #9 / ADR #10.)*
+FR2.1 (velocity) and FR2.2 (volume) run **synchronously** on the money path before the wallet lock (NFR9) and reject offending requests inline with HTTP 422 `fraud.velocity_exceeded` / `fraud.volume_exceeded`; FR2.4 (user suspension) rejects suspended accounts with HTTP 403 `account.suspended` (error key preserved for API back-compat). Cross-event analysis, the suspension-policy decision (FR2.4), and admin alerting (FR2.5) run in Kafka-consumer threads. FR2.3 (event publishing) is satisfied by the outbox poller for both successful and blocked attempts. Tunable thresholds are environment-driven ([../architecture/README.md#7-config--profiles](../architecture/README.md#7-config--profiles)); a runtime fraud-rule-tuning endpoint is deferred. *(MVP defers manual unsuspend and the analyst-resolution flow — see ADR #9 / ADR #10.)*
 
 | Method | Path | Purpose | Auth | Request body | Response body | Error keys |
 |---|---|---|---|---|---|---|
-| `GET` | `/fraud/alerts` | List recent fraud alerts (audit/inspection). | `ADMIN` | query: `from`, `to`, `user_id?` | `[ { alert_id, user_id, rule, evidence, raised_at } ]` | `auth.forbidden` |
+| `GET` | `/fraud/alerts` | List recent fraud alerts (audit/inspection). | `ADMIN` | query: `from`, `to`, `account_id?` | `[ { alert_id, account_id, rule, evidence, raised_at } ]` | `auth.forbidden` |
 
 ### Epic 3 — Real-time Admin Dashboard ([rules](../business-rules/real-time-admin-dashboard-rules.md))
 
 | Method | Path | Purpose | Auth | Request body | Response body | Error keys |
 |---|---|---|---|---|---|---|
 | `GET` | `/admin/metrics/live` | Snapshot of live daily transaction count and volume (FR3.1) — companion to the WebSocket push for first-paint. | `ADMIN` | — | `{ as_of, daily_transaction_count, daily_volume, breakdown_by_currency? }` | `auth.forbidden` |
-| `WS` | `/admin/ws/alerts` | Subscribe to fraud-alert toasts (FR3.2). | `ADMIN` | — | `{ alert_id, user_id, rule, evidence, raised_at }` | `auth.forbidden` |
+| `WS` | `/admin/ws/alerts` | Subscribe to fraud-alert toasts (FR3.2). | `ADMIN` | — | `{ alert_id, account_id, rule, evidence, raised_at }` | `auth.forbidden` |
 | `WS` | `/admin/ws/metrics` | Subscribe to live aggregated metrics (FR3.1). | `ADMIN` | — | `{ as_of, daily_transaction_count, daily_volume }` | `auth.forbidden` |
 
 ### Epic 4 — AI-Driven Personal Finance Management ([rules](../business-rules/ai-driven-personal-finance-management-rules.md))
@@ -60,7 +60,7 @@ FR2.1 (velocity) and FR2.2 (volume) run **synchronously** on the money path befo
 
 | Method | Path | Purpose | Auth | Request body | Response body | Error keys |
 |---|---|---|---|---|---|---|
-| `WS` | `/users/ws/notifications` | Subscribe to budget-threshold breaches (FR5.1) and predictive burn-rate warnings (FR5.2). | `USER` | — | `{ kind: "threshold_breach" | "burn_rate_warning", bucket_id, message, raised_at }` | `auth.forbidden` |
+| `WS` | `/accounts/ws/notifications` | Subscribe to budget-threshold breaches (FR5.1) and predictive burn-rate warnings (FR5.2). | `USER` | — | `{ kind: "threshold_breach" | "burn_rate_warning", bucket_id, message, raised_at }` | `auth.forbidden` |
 
 ### Epic 6 — AI Advisor ([rules](../business-rules/ai-advisor-rules.md))
 

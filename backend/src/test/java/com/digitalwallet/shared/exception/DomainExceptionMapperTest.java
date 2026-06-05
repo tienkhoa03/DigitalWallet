@@ -54,11 +54,11 @@ class DomainExceptionMapperTest {
     @Test
     void toResponse_conflictException_returns409() {
         Response response = mapper.toResponse(
-                new ConflictException("user.email_taken", "Email is already registered"));
+                new ConflictException("account.email_taken", "Email is already registered"));
 
         assertThat(response.getStatus()).isEqualTo(409);
         assertThat(response.getEntity()).isInstanceOfSatisfying(ErrorResponse.class, body ->
-                assertThat(body.errorKey()).isEqualTo("user.email_taken"));
+                assertThat(body.errorKey()).isEqualTo("account.email_taken"));
     }
 
     @Test
@@ -92,7 +92,7 @@ class DomainExceptionMapperTest {
 
     @Test
     void errorResponse_omitsDetailsField_whenNotSet() {
-        ErrorResponse body = new ErrorResponse("user.email_taken", "Email is already registered");
+        ErrorResponse body = new ErrorResponse("account.email_taken", "Email is already registered");
 
         assertThat(body.details()).isNull();
     }

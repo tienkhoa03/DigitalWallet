@@ -3,7 +3,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-DigitalWallet is a multi-currency internal wallet platform with real-time fraud detection and an AI-driven personal finance manager. The Claude-ready baseline (Phase A–E of the bootstrap) is scaffolded: `backend/` (Quarkus 3.33.2 LTS, Java 21, 7 modules with `shared/` infrastructure and Flyway V1; ships its own `Dockerfile` + `docker-compose.yml` that owns Postgres 16 + Kafka KRaft + Redis 7 + the optional Quarkus container), `frontend/` (Vite 5 + React 18 + TS 5 strict + Tailwind 3 + Redux Toolkit + RTK Query; ships its own `Dockerfile` + `docker-compose.yml` that serves the build via nginx and reverse-proxies `/api` to the backend), and `.github/workflows/ci.yml` (parallel backend/frontend jobs with JaCoCo 80% gate). Phase 1 (FR1.1 user identity) is complete: signup (`POST /users`) and login (`POST /auth/login`) ship on top of `shared/exception`, `shared/security` (ES256 JWT issuance + verification, with the SmallRye JWT verifier enabled), and `shared/validation`, backed by Flyway V1's `user` table — and [ADR 0001 (JWT signing algorithm)](docs/decisions/0001-jwt-signing-algorithm.md) is **Accepted**. The remaining feature modules (`wallet`, `fraud`, `pfm`, `advisor`, `dashboard`) are not yet written. The design contract lives in [project-info.md](project-info.md) and supporting documents (see [§15](project-info.md#15-reference-materials)). The PRD source is the FR/NFR summary captured directly into `project-info.md` on 2026-05-12. When the code and `project-info.md` conflict, `project-info.md` is authoritative until an ADR under [docs/decisions/](docs/decisions/) supersedes it.
+DigitalWallet is a multi-currency internal wallet platform with real-time fraud detection and an AI-driven personal finance manager. The Claude-ready baseline (Phase A–E of the bootstrap) is scaffolded: `backend/` (Quarkus 3.33.2 LTS, Java 21, 7 modules with `shared/` infrastructure and Flyway V1; ships its own `Dockerfile` + `docker-compose.yml` that owns Postgres 16 + Kafka KRaft + Redis 7 + the optional Quarkus container), `frontend/` (Vite 5 + React 18 + TS 5 strict + Tailwind 3 + Redux Toolkit + RTK Query; ships its own `Dockerfile` + `docker-compose.yml` that serves the build via nginx and reverse-proxies `/api` to the backend), and `.github/workflows/ci.yml` (parallel backend/frontend jobs with JaCoCo 80% gate). Phase 1 (FR1.1 account identity) is complete: signup (`POST /accounts`) and login (`POST /auth/login`) ship on top of `shared/exception`, `shared/security` (ES256 JWT issuance + verification, with the SmallRye JWT verifier enabled), and `shared/validation`, backed by Flyway V1's `account` table — and [ADR 0001 (JWT signing algorithm)](docs/decisions/0001-jwt-signing-algorithm.md) is **Accepted**. The remaining feature modules (`wallet`, `fraud`, `pfm`, `advisor`, `dashboard`) are not yet written. The design contract lives in [project-info.md](project-info.md) and supporting documents (see [§15](project-info.md#15-reference-materials)). The PRD source is the FR/NFR summary captured directly into `project-info.md` on 2026-05-12. When the code and `project-info.md` conflict, `project-info.md` is authoritative until an ADR under [docs/decisions/](docs/decisions/) supersedes it.
 
 ## Tech Stack (Mandated by Spec)
 
@@ -27,22 +27,22 @@ DigitalWallet is a multi-currency internal wallet platform with real-time fraud 
 
 ## Architecture
 
-Modular monolith organised under `backend/` as feature modules (`user`, `wallet`, `fraud`, `pfm`, `advisor`, `dashboard`, `shared`), with two parallel execution streams decoupled by Kafka: the synchronous money path commits the ledger on the request thread (after a bounded fraud pre-check at the edge, NFR9), and one or more asynchronous Kafka consumers (Fraud, PFM, Dashboard, AI Advisor) run on separate thread pools. Cross-system consistency between the two streams is achieved with the Transactional Outbox Pattern, not by writing to Kafka inside the request handler (NFR2, NFR5). The frontend is a single React app serving both end users and the admin dashboard, with realtime updates over WebSocket.
+Modular monolith organised under `backend/` as feature modules (`account`, `wallet`, `fraud`, `pfm`, `advisor`, `dashboard`, `shared`), with two parallel execution streams decoupled by Kafka: the synchronous money path commits the ledger on the request thread (after a bounded fraud pre-check at the edge, NFR9), and one or more asynchronous Kafka consumers (Fraud, PFM, Dashboard, AI Advisor) run on separate thread pools. Cross-system consistency between the two streams is achieved with the Transactional Outbox Pattern, not by writing to Kafka inside the request handler (NFR2, NFR5). The frontend is a single React app serving both end users and the admin dashboard, with realtime updates over WebSocket.
 
 ### Synchronous stream (money path)
 
 - Entry: REST endpoints for signup, wallet, deposit, withdraw, transfer, statement.
-- Fraud pre-check: bounded Redis sliding-window counter lookups (velocity FR2.1, volume FR2.2) plus a `user.fraud_status` read (FR2.4) before opening the DB transaction; a breach rejects the request inline with `fraud.velocity_exceeded` / `fraud.volume_exceeded` / `account.suspended` (NFR9; the `account.suspended` error key is preserved for API back-compat). Blocked attempts write a `transaction.blocked` outbox event in a short `@Transactional` boundary. *(MVP: the `audit_log` row originally specified for block paths is deferred — see project-info.md §8.)*
+- Fraud pre-check: bounded Redis sliding-window counter lookups (velocity FR2.1, volume FR2.2) plus a `account.fraud_status` read (FR2.4) before opening the DB transaction; a breach rejects the request inline with `fraud.velocity_exceeded` / `fraud.volume_exceeded` / `account.suspended` (NFR9; the `account.suspended` error key is preserved for API back-compat). Blocked attempts write a `transaction.blocked` outbox event in a short `@Transactional` boundary. *(MVP: the `audit_log` row originally specified for block paths is deferred — see project-info.md §8.)*
 - Concurrency: outer Redis distributed lock keyed on `wallet_id` (fast-fail), inner DB `SELECT … FOR UPDATE` via JPA `PESSIMISTIC_WRITE` (NFR1).
 - Persistence: `@Transactional` boundary on the service layer; ledger row + outbox row committed atomically.
-- Idempotency: mutating endpoints require an `Idempotency-Key` header; replays return the original outcome (NFR3). Implemented via the `idempotency_record` table with UNIQUE`(user_id, endpoint, idempotency_key)` and an `IN_FLIGHT`/`COMPLETED` status column.
+- Idempotency: mutating endpoints require an `Idempotency-Key` header; replays return the original outcome (NFR3). Implemented via the `idempotency_record` table with UNIQUE`(account_id, endpoint, idempotency_key)` and an `IN_FLIGHT`/`COMPLETED` status column.
 - Output: writes to the outbox table only. The HTTP thread never publishes to Kafka directly (NFR5).
 - Rate limiting: Redis token bucket on `POST /transfers` (10/min/user) and `POST /advisor/*` (5/hour/user).
 
 ### Asynchronous stream (Kafka consumers)
 
 - Outbox poller: Quarkus `@Scheduled` drains the outbox into `transaction-events` with at-least-once semantics (NFR2). Consumers must be idempotent.
-- Fraud path: `transaction-events` → asynchronous fraud engine (cross-event analysis, repeat-breach detection, suspension policy — flipping `user.fraud_status` to `SUSPENDED` per FR2.4) → `fraud-alerts` (FR2.5) → WebSocket fan-out to admin (FR3.2). Inline blocking lives in the sync pre-check; the async path owns alerting and (auto) suspension state changes. **Manual unsuspend is deferred for MVP** — see project-info.md §8.
+- Fraud path: `transaction-events` → asynchronous fraud engine (cross-event analysis, repeat-breach detection, suspension policy — flipping `account.fraud_status` to `SUSPENDED` per FR2.4) → `fraud-alerts` (FR2.5) → WebSocket fan-out to admin (FR3.2). Inline blocking lives in the sync pre-check; the async path owns alerting and (auto) suspension state changes. **Manual unsuspend is deferred for MVP** — see project-info.md §8.
 - PFM path: `transaction-events` → budget updater (event-time via `event_timestamp`, NFR7) → Redis hot read-model + Postgres materialized view backup (NFR6) → threshold checker → `pfm-threshold-alerts` → WebSocket / push (FR5.x).
 - Dashboard path: `transaction-events` aggregator → live daily count/volume metrics → WebSocket push (FR3.1).
 - AI advisor path: month-end aggregator → anonymised LLM prompt (NFR8 circuit-breaker wrapped) → response topic → WebSocket reply to user (HTTP 202 on request).
@@ -55,11 +55,11 @@ Treat any change that weakens these as a regression.
 - **ACID + Outbox (NFR2):** ledger writes and outbox writes commit in a single DB transaction; Kafka publishing is performed only by the scheduled outbox poller. Consumers must be idempotent.
 - **Idempotency (NFR3):** all mutating transfer/deposit/withdraw endpoints require an `Idempotency-Key` header and MUST return the original outcome on replay.
 - **Coverage floor (NFR4):** ≥80% line coverage on the service layer; CI fails below this threshold.
-- **Latency isolation (NFR5):** the HTTP path MAY perform fast, bounded Redis-counter pre-checks (fraud velocity / volume per FR2.1–FR2.2, plus `user.fraud_status` lookup per FR2.4), but MUST NOT run heavy fraud / PFM / dashboard analytics inline. Cross-event fraud analysis, alert fan-out, suspension policy, PFM aggregation, and dashboard aggregation MUST run in Kafka-consumer threads.
+- **Latency isolation (NFR5):** the HTTP path MAY perform fast, bounded Redis-counter pre-checks (fraud velocity / volume per FR2.1–FR2.2, plus `account.fraud_status` lookup per FR2.4), but MUST NOT run heavy fraud / PFM / dashboard analytics inline. Cross-event fraud analysis, alert fan-out, suspension policy, PFM aggregation, and dashboard aggregation MUST run in Kafka-consumer threads.
 - **CQRS for budgets (NFR6):** budget state is NEVER maintained by direct `UPDATE`s against ledger tables. Redis is the hot read-model; a Postgres materialized view is the durable backup and rebuild source for Redis.
 - **Event-time correctness (NFR7):** PFM uses `event_timestamp` from the Kafka payload, not consumer wall-clock; late events must not corrupt accounting.
 - **LLM isolation (NFR8):** outbound LLM calls are wrapped in a SmallRye circuit breaker; the advisor endpoint follows async request-reply (HTTP 202 + WebSocket result) and never blocks HTTP threads.
-- **Synchronous fraud blocking (NFR9):** every wallet mutation MUST evaluate velocity (FR2.1), volume (FR2.2), and `user.fraud_status` (FR2.4) on the request thread before opening the DB transaction. Counters live in Redis (sliding window); suspension state lives in Postgres. Async fraud analytics, alert fan-out (FR2.5), and the suspension-policy decision (when to flip a user to `SUSPENDED`) remain on the Kafka consumer.
+- **Synchronous fraud blocking (NFR9):** every wallet mutation MUST evaluate velocity (FR2.1), volume (FR2.2), and `account.fraud_status` (FR2.4) on the request thread before opening the DB transaction. Counters live in Redis (sliding window); suspension state lives in Postgres. Async fraud analytics, alert fan-out (FR2.5), and the suspension-policy decision (when to flip a user to `SUSPENDED`) remain on the Kafka consumer.
 
 ## Commands
 
@@ -83,14 +83,14 @@ Detailed coding rules will land under [.claude/rules/backend_coding.md](.claude/
 
 Full glossary will live under [docs/domain-knowledge/](docs/domain-knowledge/) in step 2.
 
-- **User:** a signed-up identity stored in the `user` table; owns wallets, budgets, and fraud alerts. Has an immutable `base_currency` chosen at signup. (Spec earlier called this "Account"; renamed in the schema. The API error key `account.suspended` is preserved for back-compat.)
-- **Wallet:** a balance-bearing record owned by a user, scoped to a single currency. A user MAY own multiple wallets in the same currency (disambiguated by `label`).
+- **Account:** a signed-up identity stored in the `account` table; owns wallets, budgets, and fraud alerts. Has an immutable `base_currency` chosen at signup. (Earlier iterations called this entity "User" / the `user` table; renamed to `account` in the schema. The API error key `account.suspended` is preserved for back-compat.)
+- **Wallet:** a balance-bearing record owned by an account, scoped to a single currency. An account MAY own multiple wallets in the same currency (disambiguated by `label`).
 - **Transfer:** two-leg atomic operation (debit sender, credit receiver). Produces 2 `transaction` rows sharing a `transfer_id`. Cross-currency snapshots the FX rate on both legs.
 - **Transaction:** one leg of a wallet movement — one row in the `transaction` table. Deposit/withdraw = 1 row; transfer = 2 rows.
 - **Outbox:** DB table written in the same transaction as a money mutation; drained to Kafka by a scheduled poller. `published_at IS NULL` marks the poll queue.
 - **Idempotency Key:** client-supplied UUID guaranteeing at-most-once side effects on a mutating endpoint. Tracked in the `idempotency_record` table.
 - **Event time:** `event_timestamp` carried in the Kafka payload (NFR7), distinct from the consumer's processing time and the `created_at` DB insert column.
-- **Fraud counter / Fraud status / Fraud block:** Redis sliding-window counter and `user.fraud_status` enum used by the sync pre-check (NFR9) to reject suspicious transactions inline; full definitions in [project-info.md §9](project-info.md#9-domain-glossary).
+- **Fraud counter / Fraud status / Fraud block:** Redis sliding-window counter and `account.fraud_status` enum used by the sync pre-check (NFR9) to reject suspicious transactions inline; full definitions in [project-info.md §9](project-info.md#9-domain-glossary).
 
 ## Module layout
 
@@ -103,7 +103,7 @@ DigitalWallet/
 │   ├── docker-compose.yml         # Postgres 16 + Kafka KRaft + Redis 7 + (--profile app) backend
 │   ├── env.template               # backend + infra env (DB / Kafka / Redis / JWT / LLM / fraud)
 │   ├── postgres/init/             # Postgres init scripts (bootstraps test DB)
-│   ├── user/                      # FR1.1 (signup, role, base_currency, fraud_status)
+│   ├── account/                      # FR1.1 (signup, role, base_currency, fraud_status)
 │   │   ├── api/  service/  persistence/
 │   ├── wallet/                    # FR1.2, FR1.3, FR1.4
 │   │   ├── api/  service/  persistence/  event/

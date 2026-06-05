@@ -1,4 +1,4 @@
-package com.digitalwallet.user.api;
+package com.digitalwallet.account.api;
 
 import com.digitalwallet.testsupport.PostgresTestResource;
 
@@ -26,7 +26,7 @@ class AuthResourceIT {
     private String registeredEmail;
 
     @BeforeEach
-    void registerUser() {
+    void registerAccount() {
         registeredEmail = "alice+" + UUID.randomUUID() + "@example.com";
         given()
                 .contentType(ContentType.JSON)
@@ -38,7 +38,7 @@ class AuthResourceIT {
                       }
                       """.formatted(registeredEmail))
                 .when()
-                .post("/users")
+                .post("/accounts")
                 .then()
                 .statusCode(201);
     }

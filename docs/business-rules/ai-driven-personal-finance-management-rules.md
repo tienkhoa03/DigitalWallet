@@ -4,22 +4,22 @@ This page captures the per-FR rules for Epic 4 (FR4.1–FR4.3) from [../../proje
 
 ## FR4.1 — Multi-bucket budgeting
 
-- **Rule:** A user holds at most one budget per calendar month. The budget is implicitly scoped to the user's immutable `base_currency` (no per-budget currency column). Each budget owns a set of buckets, one per category, each with a `planned_amount` and an optional `threshold_percent` (see FR4.3). `month` is a `date` of the form `YYYY-MM-01` (CHECK constraint enforces day = 1).
+- **Rule:** An account holds at most one budget per calendar month. The budget is implicitly scoped to the account's immutable `base_currency` (no per-budget currency column). Each budget owns a set of buckets, one per category, each with a `planned_amount` and an optional `threshold_percent` (see FR4.3). `month` is a `date` of the form `YYYY-MM-01` (CHECK constraint enforces day = 1).
 - **Why:** Models the user-facing "monthly plan" mental model in [../../project-info.md §9](../../project-info.md#9-domain-glossary); enforced by the schema in [../database/README.md](../database/README.md).
-- **Enforced in:** `pfm/service/` budget service; DB `UNIQUE(user_id, month)` on `budget` and `UNIQUE(budget_id, category_id)` on `budget_bucket`. `(verify)`
+- **Enforced in:** `pfm/service/` budget service; DB `UNIQUE(account_id, month)` on `budget` and `UNIQUE(budget_id, category_id)` on `budget_bucket`. `(verify)`
 - **Failure mode:** HTTP 409 `error_key: "budget.duplicate_month"` or `error_key: "budget.duplicate_category"`.
 - **Frontend shortcut:** The budget editor groups buckets visually by category and disables already-used categories on the picker.
 
 ## FR4.2 — Real-time bucket updates
 
-- **Rule:** The PFM Kafka consumer drains `transaction-events` and updates the spent amount on the matching bucket — keyed by `(user_id, month_of(event_timestamp), category_id)`. Cross-currency spending is converted to the user's `base_currency` using the snapshotted `transaction.exchange_rate` on the event payload (never a live lookup). Updates go to the **Redis hot read-model**; the Postgres materialized view is refreshed on a schedule as the durable backup and rebuild source. Direct `UPDATE`s against ledger tables are forbidden (NFR6).
+- **Rule:** The PFM Kafka consumer drains `transaction-events` and updates the spent amount on the matching bucket — keyed by `(account_id, month_of(event_timestamp), category_id)`. Cross-currency spending is converted to the account's `base_currency` using the snapshotted `transaction.exchange_rate` on the event payload (never a live lookup). Updates go to the **Redis hot read-model**; the Postgres materialized view is refreshed on a schedule as the durable backup and rebuild source. Direct `UPDATE`s against ledger tables are forbidden (NFR6).
 - **Why:** NFR5 (off the request thread) + NFR6 (CQRS dual read-model) + NFR7 (event time, not wall-clock).
 - **Enforced in:** `pfm/consumer/` updater; Redis hash schema in `pfm/persistence/`; scheduled MV refresh + Redis rebuild job. `(verify)`
 - **Failure mode:**
   - Missing `category_id` on the transaction → no bucket update; the transaction is recorded in the ledger normally.
   - Late event arriving after a month boundary → routed to the previous month's bucket based on `event_timestamp`, not wall-clock (NFR7).
   - Redis loss → the consumer pauses while the Redis rebuild job replays from the MV; consumer offsets are not advanced past the rebuild point `(verify)`.
-- **Frontend shortcut:** The budget view subscribes to `WS /users/ws/notifications` for threshold breaches; for the headline spent-amount delta it polls `GET /budgets/{month}` lazily.
+- **Frontend shortcut:** The budget view subscribes to `WS /accounts/ws/notifications` for threshold breaches; for the headline spent-amount delta it polls `GET /budgets/{month}` lazily.
 
 ## FR4.3 — Threshold setup
 

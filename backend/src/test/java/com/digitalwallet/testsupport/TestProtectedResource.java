@@ -7,7 +7,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 
 /**
- * Throwaway probe used by {@link com.digitalwallet.user.api.JwtVerifierIT} to confirm
+ * Throwaway probe used by {@link com.digitalwallet.account.api.JwtVerifierIT} to confirm
  * that {@code @RolesAllowed} is wired against the {@code groups} claim. Only on the test
  * classpath ({@code src/test/java/}); never compiled into the production jar.
  */

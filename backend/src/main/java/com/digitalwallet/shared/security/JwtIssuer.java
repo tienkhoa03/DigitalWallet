@@ -14,7 +14,7 @@ import java.util.UUID;
  * Issues ES256 JWTs carrying the claim shape committed in the Phase 1 plan (Open Q #4):
  *
  * <ul>
- *   <li>{@code sub} = user UUID as string</li>
+ *   <li>{@code sub} = account UUID as string</li>
  *   <li>{@code iss} = {@code app.jwt.issuer}</li>
  *   <li>{@code aud} = single element {@code [app.jwt.audience]}</li>
  *   <li>{@code groups} = single role name, the SmallRye-JWT convention for
@@ -39,12 +39,12 @@ public class JwtIssuer {
         this.clock = clock;
     }
 
-    public String issue(UUID userId, UserRole role) {
+    public String issue(UUID accountId, AccountRole role) {
         Instant now = clock.instant();
         Instant exp = now.plusSeconds(config.ttlSeconds());
 
         return Jwt.claims()
-                .subject(userId.toString())
+                .subject(accountId.toString())
                 .issuer(config.issuer())
                 .audience(config.audience())
                 .groups(Set.of(role.name()))

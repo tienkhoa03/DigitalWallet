@@ -60,8 +60,8 @@ No feature code is written in this phase. This is a pure reconcile-and-bootstrap
 
 ### Out of Scope
 
-- Any `com.digitalwallet.*` feature module (`shared/`, `user/`, `wallet/`) — Phase 1+.
-- Flyway migrations or any `db/migration/` SQL — first migration lands in Phase 1 (V1 user table).
+- Any `com.digitalwallet.*` feature module (`shared/`, `account/`, `wallet/`) — Phase 1+.
+- Flyway migrations or any `db/migration/` SQL — first migration lands in Phase 1 (V1 account table).
 - `backend/Dockerfile`, `backend/docker-compose.yml`, `backend/postgres/init/` — Phase 3.
 - Quarkus dev-services for Postgres / Redis / Kafka — explicitly disabled in `application.properties` from Phase 1 onwards via Testcontainers config; not needed in Phase 0.
 - ADR 0001 (JWT) status flip — happens in Phase 1 when ES256 keypair generation + verifier configuration lands.

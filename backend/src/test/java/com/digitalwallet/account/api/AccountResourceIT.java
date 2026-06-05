@@ -1,4 +1,4 @@
-package com.digitalwallet.user.api;
+package com.digitalwallet.account.api;
 
 import com.digitalwallet.testsupport.PostgresTestResource;
 
@@ -23,11 +23,11 @@ import static org.hamcrest.Matchers.notNullValue;
 @QuarkusTest
 @QuarkusTestResource(PostgresTestResource.class)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class UserResourceIT {
+class AccountResourceIT {
 
     @Test
     @Order(1)
-    void postUsers_withValidPayload_returns201_andUserIdPlusCreatedAt() {
+    void postAccounts_withValidPayload_returns201_andAccountIdPlusCreatedAt() {
         String email = "alice+" + UUID.randomUUID() + "@example.com";
 
         given()
@@ -40,17 +40,17 @@ class UserResourceIT {
                       }
                       """.formatted(email))
                 .when()
-                .post("/users")
+                .post("/accounts")
                 .then()
                 .statusCode(201)
-                .body("user_id", notNullValue())
-                .body("user_id", matchesPattern("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"))
+                .body("account_id", notNullValue())
+                .body("account_id", matchesPattern("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"))
                 .body("created_at", notNullValue());
     }
 
     @Test
     @Order(2)
-    void postUsers_withDuplicateEmail_returns409_userEmailTaken() {
+    void postAccounts_withDuplicateEmail_returns409_accountEmailTaken() {
         String email = "duplicate+" + UUID.randomUUID() + "@example.com";
         String body = """
                 {
@@ -61,7 +61,7 @@ class UserResourceIT {
                 """.formatted(email);
 
         // First signup succeeds
-        given().contentType(ContentType.JSON).body(body).post("/users").then().statusCode(201);
+        given().contentType(ContentType.JSON).body(body).post("/accounts").then().statusCode(201);
 
         // Second signup with the same email — even with different casing — must conflict.
         String upperBody = body.replace(email, email.toUpperCase());
@@ -69,14 +69,14 @@ class UserResourceIT {
                 .contentType(ContentType.JSON)
                 .body(upperBody)
                 .when()
-                .post("/users")
+                .post("/accounts")
                 .then()
                 .statusCode(409)
-                .body("error_key", equalTo("user.email_taken"));
+                .body("error_key", equalTo("account.email_taken"));
     }
 
     @Test
-    void postUsers_withInvalidBaseCurrency_returns400_validationInvalidPayload() {
+    void postAccounts_withInvalidBaseCurrency_returns400_validationInvalidPayload() {
         given()
                 .contentType(ContentType.JSON)
                 .body("""
@@ -87,14 +87,14 @@ class UserResourceIT {
                       }
                       """)
                 .when()
-                .post("/users")
+                .post("/accounts")
                 .then()
                 .statusCode(400)
                 .body("error_key", equalTo("validation.invalid_payload"));
     }
 
     @Test
-    void postUsers_withLowerCaseBaseCurrency_returns400_validationInvalidPayload() {
+    void postAccounts_withLowerCaseBaseCurrency_returns400_validationInvalidPayload() {
         given()
                 .contentType(ContentType.JSON)
                 .body("""
@@ -105,14 +105,14 @@ class UserResourceIT {
                       }
                       """)
                 .when()
-                .post("/users")
+                .post("/accounts")
                 .then()
                 .statusCode(400)
                 .body("error_key", equalTo("validation.invalid_payload"));
     }
 
     @Test
-    void postUsers_withShortPassword_returns400_validationInvalidPayload() {
+    void postAccounts_withShortPassword_returns400_validationInvalidPayload() {
         given()
                 .contentType(ContentType.JSON)
                 .body("""
@@ -123,14 +123,14 @@ class UserResourceIT {
                       }
                       """)
                 .when()
-                .post("/users")
+                .post("/accounts")
                 .then()
                 .statusCode(400)
                 .body("error_key", equalTo("validation.invalid_payload"));
     }
 
     @Test
-    void postUsers_withMissingFields_returns400_validationInvalidPayload() {
+    void postAccounts_withMissingFields_returns400_validationInvalidPayload() {
         given()
                 .contentType(ContentType.JSON)
                 .body("""
@@ -139,14 +139,14 @@ class UserResourceIT {
                       }
                       """)
                 .when()
-                .post("/users")
+                .post("/accounts")
                 .then()
                 .statusCode(400)
                 .body("error_key", equalTo("validation.invalid_payload"));
     }
 
     @Test
-    void postUsers_withMalformedEmail_returns400_validationInvalidPayload() {
+    void postAccounts_withMalformedEmail_returns400_validationInvalidPayload() {
         given()
                 .contentType(ContentType.JSON)
                 .body("""
@@ -157,14 +157,14 @@ class UserResourceIT {
                       }
                       """)
                 .when()
-                .post("/users")
+                .post("/accounts")
                 .then()
                 .statusCode(400)
                 .body("error_key", equalTo("validation.invalid_payload"));
     }
 
     @Test
-    void postUsers_responseDoesNotLeakSensitiveFields() {
+    void postAccounts_responseDoesNotLeakSensitiveFields() {
         String email = "leak+" + UUID.randomUUID() + "@example.com";
 
         given()
@@ -177,7 +177,7 @@ class UserResourceIT {
                       }
                       """.formatted(email))
                 .when()
-                .post("/users")
+                .post("/accounts")
                 .then()
                 .statusCode(201)
                 .body("password_hash", is(nullValueOrAbsent()))

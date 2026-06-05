@@ -1,12 +1,12 @@
-package com.digitalwallet.user.service;
+package com.digitalwallet.account.service;
 
 import com.digitalwallet.shared.exception.AuthInvalidCredentialsException;
 import com.digitalwallet.shared.security.Argon2Hasher;
 import com.digitalwallet.shared.security.JwtIssuer;
-import com.digitalwallet.user.api.dto.LoginRequest;
-import com.digitalwallet.user.api.dto.LoginResponse;
-import com.digitalwallet.user.persistence.UserEntity;
-import com.digitalwallet.user.persistence.UserRepository;
+import com.digitalwallet.account.api.dto.LoginRequest;
+import com.digitalwallet.account.api.dto.LoginResponse;
+import com.digitalwallet.account.persistence.AccountEntity;
+import com.digitalwallet.account.persistence.AccountRepository;
 
 import io.quarkus.runtime.Startup;
 
@@ -25,7 +25,7 @@ import java.util.Optional;
  *
  * <p>Enumeration-resistance pattern ({@code .claude/rules/security.md §2}): when the email
  * does not exist we still execute one Argon2id verify against a static sentinel hash,
- * so the wall-clock time of the "no such user" branch matches the "wrong password" branch.
+ * so the wall-clock time of the "no such account" branch matches the "wrong password" branch.
  * Both branches throw {@link AuthInvalidCredentialsException} with the identical fixed
  * message {@value #INVALID_CREDENTIALS_MESSAGE} — the wire envelope is byte-identical.
  */
@@ -42,14 +42,14 @@ public class AuthService {
     private static final String SENTINEL_PASSWORD =
             "sentinel-auth-check-placeholder-never-a-real-user-password";
 
-    private final UserRepository userRepository;
+    private final AccountRepository accountRepository;
     private final Argon2Hasher hasher;
     private final JwtIssuer jwtIssuer;
 
     private volatile String sentinelHash;
 
-    public AuthService(UserRepository userRepository, Argon2Hasher hasher, JwtIssuer jwtIssuer) {
-        this.userRepository = userRepository;
+    public AuthService(AccountRepository accountRepository, Argon2Hasher hasher, JwtIssuer jwtIssuer) {
+        this.accountRepository = accountRepository;
         this.hasher = hasher;
         this.jwtIssuer = jwtIssuer;
     }
@@ -64,21 +64,21 @@ public class AuthService {
     @Transactional
     public LoginResponse login(LoginRequest request) {
         String emailLower = request.email().toLowerCase(Locale.ROOT);
-        Optional<UserEntity> userOpt = userRepository.findByEmailLower(emailLower);
+        Optional<AccountEntity> accountOpt = accountRepository.findByEmailLower(emailLower);
 
-        if (userOpt.isEmpty()) {
+        if (accountOpt.isEmpty()) {
             // Constant-time path: run one Argon2id verify against the sentinel so the
             // wall-clock budget matches the "wrong password" branch.
             hasher.verify(request.password(), sentinelHash);
             throw new AuthInvalidCredentialsException(INVALID_CREDENTIALS_MESSAGE);
         }
 
-        UserEntity user = userOpt.get();
-        if (!hasher.verify(request.password(), user.passwordHash)) {
+        AccountEntity account = accountOpt.get();
+        if (!hasher.verify(request.password(), account.passwordHash)) {
             throw new AuthInvalidCredentialsException(INVALID_CREDENTIALS_MESSAGE);
         }
 
-        String token = jwtIssuer.issue(user.id, user.role);
+        String token = jwtIssuer.issue(account.id, account.role);
         return new LoginResponse(token, "Bearer", jwtIssuer.ttlSeconds());
     }
 }

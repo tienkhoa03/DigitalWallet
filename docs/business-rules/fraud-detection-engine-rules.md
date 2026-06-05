@@ -8,7 +8,7 @@ This page captures the per-FR rules for Epic 2 (FR2.1–FR2.5) from [../../proje
 
 ## FR2.1 — Velocity check
 
-- **Rule:** The sync money path MUST reject any deposit / withdraw / transfer that would push the user past `FRAUD_VELOCITY_THRESHOLD` (default `5`) committed transactions in a sliding window of `FRAUD_VELOCITY_WINDOW_SECONDS` (default `60` s). The check runs **before** the wallet lock is acquired and uses Redis sliding-window counters (per user, per rule).
+- **Rule:** The sync money path MUST reject any deposit / withdraw / transfer that would push the account past `FRAUD_VELOCITY_THRESHOLD` (default `5`) committed transactions in a sliding window of `FRAUD_VELOCITY_WINDOW_SECONDS` (default `60` s). The check runs **before** the wallet lock is acquired and uses Redis sliding-window counters (per account, per rule).
 - **Why:** NFR9 — block visibly fraudulent activity at the edge without coupling the request thread to heavy analytics.
 - **Enforced in:** `wallet/service/` fraud pre-check (sync, on the request thread); `fraud/consumer/` for cross-event analysis and counter reconciliation. `(verify)`
 - **Failure mode:** Rejection returns HTTP 422 with `errorKey: "fraud.velocity_exceeded"`. The block path opens its own short `@Transactional` boundary that writes one `transaction.blocked` outbox event (no ledger row, no wallet lock). The async consumer (FR2.5) also publishes a `fraud-alerts` event with `rule = "velocity"`. *(MVP: the `audit_log` row originally specified is deferred — see ADR #9.)*
@@ -16,7 +16,7 @@ This page captures the per-FR rules for Epic 2 (FR2.1–FR2.5) from [../../proje
 
 ## FR2.2 — Volume check
 
-- **Rule:** The sync money path MUST reject any transaction whose cumulative committed transaction amount (USD-equivalent) would push the user past `FRAUD_VOLUME_THRESHOLD` (default `50000`) within a sliding window of `FRAUD_VOLUME_WINDOW_SECONDS` (default `3600` s). Same Redis-counter model as FR2.1.
+- **Rule:** The sync money path MUST reject any transaction whose cumulative committed transaction amount (USD-equivalent) would push the account past `FRAUD_VOLUME_THRESHOLD` (default `50000`) within a sliding window of `FRAUD_VOLUME_WINDOW_SECONDS` (default `3600` s). Same Redis-counter model as FR2.1.
 - **Why:** FR2.2 — detect bulk movement that velocity alone would miss; NFR9 — preventive enforcement at the edge.
 - **Enforced in:** `wallet/service/` fraud pre-check (sync); `fraud/consumer/` for cross-event analysis. `(verify)`
 - **Failure mode:** Rejection returns HTTP 422 with `errorKey: "fraud.volume_exceeded"`. Same `transaction.blocked` outbox semantics as FR2.1. The async consumer (FR2.5) publishes a `fraud-alerts` event with `rule = "volume"` and an `evidence` payload that includes the window and the cumulative sum. *(MVP: the `audit_log` row is deferred — see ADR #9.)*
@@ -32,18 +32,18 @@ This page captures the per-FR rules for Epic 2 (FR2.1–FR2.5) from [../../proje
 
 ## FR2.4 — User suspension (auto only in MVP)
 
-- **Rule:** When a user accumulates `FRAUD_SUSPENSION_BREACH_COUNT` (default `3`) FR2.1 / FR2.2 breaches within `FRAUD_SUSPENSION_WINDOW_SECONDS` (default `3600` s), the async fraud consumer MUST flip `user.fraud_status` from `ACTIVE` to `SUSPENDED`. Subsequent money mutations from a suspended user are rejected by the sync pre-check with HTTP 403 `errorKey: "account.suspended"` (error key preserved for API back-compat).
+- **Rule:** When an account accumulates `FRAUD_SUSPENSION_BREACH_COUNT` (default `3`) FR2.1 / FR2.2 breaches within `FRAUD_SUSPENSION_WINDOW_SECONDS` (default `3600` s), the async fraud consumer MUST flip `account.fraud_status` from `ACTIVE` to `SUSPENDED`. Subsequent money mutations from a suspended account are rejected by the sync pre-check with HTTP 403 `errorKey: "account.suspended"` (error key preserved for API back-compat).
 - **Why:** FR2.4 — repeat-breach detection cannot live on the request thread; suspension policy is a cross-event decision owned by the async consumer (NFR5).
-- **Enforced in:** `fraud/consumer/` suspension policy; `wallet/service/` pre-check reads `user.fraud_status`. `(verify)`
+- **Enforced in:** `fraud/consumer/` suspension policy; `wallet/service/` pre-check reads `account.fraud_status`. `(verify)`
 - **Failure mode:** Flipping to `SUSPENDED` emits an `AccountSuspended` outbox event citing the contributing breach ids in the payload. The state change propagates to the sync path within the §17.1 budget (≤ 1 s).
-- **Frontend shortcut:** Admin dashboard surfaces suspended users as part of the alert stream (FR3.2).
+- **Frontend shortcut:** Admin dashboard surfaces suspended accounts as part of the alert stream (FR3.2).
 
 > *MVP scope cut:* manual unsuspend is deferred. There is no `FRAUD_ANALYST` role and no `audit_log` entry to record justification in MVP. When manual unsuspend ships, both come back together via an ADR superseding [../decisions/0009-rbac-roles.md](../decisions/0009-rbac-roles.md) / [../decisions/0010-fraud-enforcement-model.md](../decisions/0010-fraud-enforcement-model.md).
 
 ## FR2.5 — Alert stream
 
-- **Rule:** Every rule breach (block under FR2.1 / FR2.2, and every suspension transition under FR2.4) MUST publish a record to Kafka `fraud-alerts` for the admin dashboard (FR3.2). Blocking the user does not replace admin notification — both happen.
-- **Why:** FR2.5 — admins need a unified stream of all detected breaches, regardless of whether the user was already blocked synchronously.
+- **Rule:** Every rule breach (block under FR2.1 / FR2.2, and every suspension transition under FR2.4) MUST publish a record to Kafka `fraud-alerts` for the admin dashboard (FR3.2). Blocking the account does not replace admin notification — both happen.
+- **Why:** FR2.5 — admins need a unified stream of all detected breaches, regardless of whether the account was already blocked synchronously.
 - **Enforced in:** `fraud/consumer/` after the cross-event analysis decides whether to alert / suspend; emission of `fraud-alerts` records is its only output topic. `(verify)`
 - **Failure mode:** Publishes a `fraud-alerts` event with `rule ∈ {"velocity","volume","suspension"}` and an `evidence` payload (window, counts, sums, transition state). WebSocket fan-out (FR3.2) is the admin-visible signal.
 - **Frontend shortcut:** Toast badge in the admin dashboard.

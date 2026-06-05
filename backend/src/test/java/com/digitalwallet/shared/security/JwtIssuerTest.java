@@ -61,12 +61,12 @@ class JwtIssuerTest {
 
     @Test
     void issue_producesTokenWithCanonicalClaims() throws Exception {
-        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID accountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-        String token = issuer.issue(userId, UserRole.USER);
+        String token = issuer.issue(accountId, AccountRole.USER);
 
         JwtClaims claims = parse(token);
-        assertThat(claims.getSubject()).isEqualTo(userId.toString());
+        assertThat(claims.getSubject()).isEqualTo(accountId.toString());
         assertThat(claims.getIssuer()).isEqualTo(ISSUER);
         assertThat(claims.getAudience()).containsExactly(AUDIENCE);
         assertThat(claims.getStringListClaimValue("groups")).containsExactly("USER");
@@ -78,7 +78,7 @@ class JwtIssuerTest {
 
     @Test
     void issue_withAdminRole_putsAdminInGroupsClaim() throws Exception {
-        String token = issuer.issue(UUID.randomUUID(), UserRole.ADMIN);
+        String token = issuer.issue(UUID.randomUUID(), AccountRole.ADMIN);
 
         JwtClaims claims = parse(token);
         assertThat(claims.getStringListClaimValue("groups")).containsExactly("ADMIN");
@@ -86,10 +86,10 @@ class JwtIssuerTest {
 
     @Test
     void issue_isStableAcrossCalls_whenClockIsFixed() {
-        UUID userId = UUID.randomUUID();
+        UUID accountId = UUID.randomUUID();
 
-        String first = issuer.issue(userId, UserRole.USER);
-        String second = issuer.issue(userId, UserRole.USER);
+        String first = issuer.issue(accountId, AccountRole.USER);
+        String second = issuer.issue(accountId, AccountRole.USER);
 
         // Tokens differ because the signature embeds a random k value, but both verify
         // and carry identical claim payloads.

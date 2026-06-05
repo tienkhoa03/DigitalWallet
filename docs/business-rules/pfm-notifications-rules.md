@@ -4,7 +4,7 @@ This page captures the per-FR rules for Epic 5 (FR5.1, FR5.2) from [../../projec
 
 ## FR5.1 — Threshold breach alerts
 
-- **Rule:** When the spent amount on a bucket crosses its configured `threshold_percent` of `planned_amount`, a `pfm-threshold-alerts` Kafka event is emitted and fanned out to the owning user over `WS /users/ws/notifications`. Each breach fires at most one notification per (bucket, month) — a re-crossing after a threshold change is permitted `(verify policy)`.
+- **Rule:** When the spent amount on a bucket crosses its configured `threshold_percent` of `planned_amount`, a `pfm-threshold-alerts` Kafka event is emitted and fanned out to the owning account over `WS /accounts/ws/notifications`. Each breach fires at most one notification per (bucket, month) — a re-crossing after a threshold change is permitted `(verify policy)`.
 - **Why:** FR5.1 — soft, single-fire user notifications; consistent with NFR5 (off the request thread) and NFR7 (event-time correct).
 - **Enforced in:** `pfm/consumer/` threshold checker; `pfm/service/` notification publisher; `pfm/ws/` user fan-out. `(verify)`
 - **Failure mode:**
@@ -24,7 +24,7 @@ This page captures the per-FR rules for Epic 5 (FR5.1, FR5.2) from [../../projec
 
 ## Cross-cutting
 
-- **Rule:** All notifications carry the bucket's owning `user_id` in the WebSocket auth context; the server-side fan-out only delivers to sockets owned by that user. No cross-user leakage.
+- **Rule:** All notifications carry the bucket's owning `account_id` in the WebSocket auth context; the server-side fan-out only delivers to sockets owned by that user. No cross-user leakage.
 - **Why:** PII isolation — even category-level spending data is sensitive ([../../project-info.md §8](../../project-info.md#8-security-baseline)).
 - **Enforced in:** `pfm/ws/` user-scoped channel. `(verify)`
 - **Failure mode:** Mis-routed notification is a P0 incident.

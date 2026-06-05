@@ -4,9 +4,9 @@ This page captures the per-FR rules for Epic 1 (FR1.1–FR1.4) from [../../proje
 
 ## FR1.1 — User signup and wallet opening
 
-- **Rule:** Signup creates a `user` row with an **immutable** `base_currency` chosen at sign-up time; every budget owned by the user is implicitly scoped to that currency. A user MAY open multiple wallets, including more than one wallet in the same ISO 4217 currency (e.g. a "Savings USD" wallet alongside a "Travel USD" wallet). Each wallet has its own `wallet_id`, its own balance, and a user-supplied `label` used to disambiguate sibling wallets in the same currency.
-- **Why:** Required by the multi-currency model in [../decisions/0006-multi-currency-model.md](../decisions/0006-multi-currency-model.md) — each wallet remains scoped to a single currency, but users routinely want to segregate funds (saving vs. spending, per-trip budgets, etc.) without opening a second user. PFM accounting aggregates across all wallets a user owns; it does not assume one wallet per (user, currency).
-- **Enforced in:** `user/service/` signup flow validates `base_currency` against ISO 4217 and persists it as immutable. `wallet/service/` opening flow — there is **no** `UNIQUE (user_id, currency)` constraint. The service validates `currency_code` against ISO 4217, validates `label` is non-empty and unique among that user's wallets (so the label can disambiguate siblings in the UI), and persists with the user-supplied label.
+- **Rule:** Signup creates an `account` row with an **immutable** `base_currency` chosen at sign-up time; every budget owned by the account is implicitly scoped to that currency. An account MAY open multiple wallets, including more than one wallet in the same ISO 4217 currency (e.g. a "Savings USD" wallet alongside a "Travel USD" wallet). Each wallet has its own `wallet_id`, its own balance, and a user-supplied `label` used to disambiguate sibling wallets in the same currency.
+- **Why:** Required by the multi-currency model in [../decisions/0006-multi-currency-model.md](../decisions/0006-multi-currency-model.md) — each wallet remains scoped to a single currency, but users routinely want to segregate funds (saving vs. spending, per-trip budgets, etc.) without opening a second account. PFM accounting aggregates across all wallets an account owns; it does not assume one wallet per (account, currency).
+- **Enforced in:** `account/service/` signup flow validates `base_currency` against ISO 4217 and persists it as immutable. `wallet/service/` opening flow — there is **no** `UNIQUE (account_id, currency)` constraint. The service validates `currency_code` against ISO 4217, validates `label` is non-empty and unique among that user's wallets (so the label can disambiguate siblings in the UI), and persists with the user-supplied label.
 - **Failure mode:**
   - Unsupported currency → HTTP 422 `error_key: "wallet.unsupported_currency"`.
   - Missing or empty `label` → HTTP 400 `error_key: "validation.invalid_payload"`.
@@ -34,22 +34,22 @@ This page captures the per-FR rules for Epic 1 (FR1.1–FR1.4) from [../../proje
 - **Frontend shortcut:** None — server invariant.
 
 - **Rule (FX at transfer time only):** Cross-currency transfers convert the sender debit using the cached FX rate for `(from_currency, to_currency)`; the same rate is **never** used to revalue stored balances. The chosen rate is snapshotted onto both legs of the resulting `transaction` rows in the `exchange_rate` column (see [../database/README.md](../database/README.md) `transaction`).
-- **Why:** [../decisions/0006-multi-currency-model.md](../decisions/0006-multi-currency-model.md) — every wallet is scoped to a single currency (even when a user owns several wallets in that currency); FX is a per-event calculation on the cross-currency leg, not a balance-revaluation policy. PFM uses the snapshotted `exchange_rate` to convert cross-currency spending back to the user's `base_currency` for budgeting.
+- **Why:** [../decisions/0006-multi-currency-model.md](../decisions/0006-multi-currency-model.md) — every wallet is scoped to a single currency (even when an account owns several wallets in that currency); FX is a per-event calculation on the cross-currency leg, not a balance-revaluation policy. PFM uses the snapshotted `exchange_rate` to convert cross-currency spending back to the account's `base_currency` for budgeting.
 - **Enforced in:** `wallet/service/` FX leg; FX cache in `shared/`. `(verify)`
 - **Failure mode:** Missing rate → HTTP 422 `error_key: "transfer.fx_rate_missing"`.
 - **Frontend shortcut:** The transfer form previews the converted amount using the same cached rate; the preview is informational and may diverge from the committed rate if the TTL expires between preview and submit.
 
-- **Rule (rate limit):** `POST /transfers` is limited to 10 requests per minute per user via the Redis token bucket.
+- **Rule (rate limit):** `POST /transfers` is limited to 10 requests per minute per account via the Redis token bucket.
 - **Why:** [../../project-info.md §8](../../project-info.md#8-security-baseline) — cost control plus a defence-in-depth layer against credential stuffing or spam-click DoS.
 - **Enforced in:** Rate-limit middleware in `shared/`. `(verify)`
 - **Failure mode:** HTTP 429 `error_key: "ratelimit.exceeded"` with `Retry-After`.
 - **Frontend shortcut:** Submit buttons disable for ~6 s after a successful transfer (cosmetic).
 
-- **Rule (transfer recipient):** The recipient is addressed by `to_user_id` (no `account_number` in MVP — single identifier per user). The receiving wallet is chosen server-side from the recipient's wallets in the requested `currency_code`; ambiguity (recipient owns multiple wallets in that currency) is resolved by the receiver's most-recently-updated matching wallet `(verify)`.
+- **Rule (transfer recipient):** The recipient is addressed by `to_account_id` (no `account_number` in MVP — single identifier per account). The receiving wallet is chosen server-side from the recipient's wallets in the requested `currency_code`; ambiguity (recipient owns multiple wallets in that currency) is resolved by the receiver's most-recently-updated matching wallet `(verify)`.
 - **Why:** Minimises the external surface area of the transfer payload; preserves the multi-wallet-per-currency model on the receive side without exposing internal wallet ids to senders.
 - **Enforced in:** `wallet/service/` transfer service — recipient lookup. `(verify)`
 - **Failure mode:** Recipient not found → HTTP 422 `error_key: "transfer.recipient_not_found"`.
-- **Frontend shortcut:** Transfer form takes a recipient `user_id`; the wallet picker is presented on the sender side only.
+- **Frontend shortcut:** Transfer form takes a recipient `account_id`; the wallet picker is presented on the sender side only.
 
 > *MVP scope cut:* the original FR1.3 audit-log rule (`audit_log` row with `action = "transfer.commit"`) is **deferred** along with the `audit_log` table — see [../../project-info.md §8](../../project-info.md#8-security-baseline) and ADR #9. SOC 2 audit obligations return when the table ships.
 
