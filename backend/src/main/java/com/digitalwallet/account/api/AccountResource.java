@@ -1,7 +1,7 @@
 package com.digitalwallet.account.api;
 
-import com.digitalwallet.account.api.dto.CreateAccountRequest;
-import com.digitalwallet.account.api.dto.CreateAccountResponse;
+import com.digitalwallet.account.dto.CreateAccountRequest;
+import com.digitalwallet.account.dto.CreateAccountResponse;
 import com.digitalwallet.account.service.AccountService;
 
 import jakarta.annotation.security.PermitAll;

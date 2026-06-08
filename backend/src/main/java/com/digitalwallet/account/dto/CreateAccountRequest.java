@@ -1,4 +1,4 @@
-package com.digitalwallet.account.api.dto;
+package com.digitalwallet.account.dto;
 
 import com.digitalwallet.shared.validation.CurrencyCode;
 import com.fasterxml.jackson.annotation.JsonProperty;

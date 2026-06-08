@@ -3,8 +3,8 @@ package com.digitalwallet.account.service;
 import com.digitalwallet.shared.exception.ConflictException;
 import com.digitalwallet.shared.security.Argon2Hasher;
 import com.digitalwallet.shared.security.AccountRole;
-import com.digitalwallet.account.api.dto.CreateAccountRequest;
-import com.digitalwallet.account.api.dto.CreateAccountResponse;
+import com.digitalwallet.account.dto.CreateAccountRequest;
+import com.digitalwallet.account.dto.CreateAccountResponse;
 import com.digitalwallet.account.persistence.AccountEntity;
 import com.digitalwallet.account.persistence.AccountRepository;
 

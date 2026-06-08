@@ -1,7 +1,7 @@
 package com.digitalwallet.account.api;
 
-import com.digitalwallet.account.api.dto.LoginRequest;
-import com.digitalwallet.account.api.dto.LoginResponse;
+import com.digitalwallet.account.dto.LoginRequest;
+import com.digitalwallet.account.dto.LoginResponse;
 import com.digitalwallet.account.service.AuthService;
 
 import jakarta.annotation.security.PermitAll;

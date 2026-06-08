@@ -1,4 +1,4 @@
-package com.digitalwallet.account.api.dto;
+package com.digitalwallet.account.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;

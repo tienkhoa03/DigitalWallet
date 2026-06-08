@@ -3,8 +3,8 @@ package com.digitalwallet.account.service;
 import com.digitalwallet.shared.exception.AuthInvalidCredentialsException;
 import com.digitalwallet.shared.security.Argon2Hasher;
 import com.digitalwallet.shared.security.JwtIssuer;
-import com.digitalwallet.account.api.dto.LoginRequest;
-import com.digitalwallet.account.api.dto.LoginResponse;
+import com.digitalwallet.account.dto.LoginRequest;
+import com.digitalwallet.account.dto.LoginResponse;
 import com.digitalwallet.account.persistence.AccountEntity;
 import com.digitalwallet.account.persistence.AccountRepository;
 

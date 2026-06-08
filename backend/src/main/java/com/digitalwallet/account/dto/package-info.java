@@ -3,4 +3,4 @@
  * {@code POST /auth/login}. Every type is a {@code record}; entities are never returned
  * directly ({@code .claude/rules/backend_coding.md §6}).
  */
-package com.digitalwallet.account.api.dto;
+package com.digitalwallet.account.dto;
