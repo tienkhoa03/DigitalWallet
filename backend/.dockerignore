@@ -1,5 +1,21 @@
-*
-!target/*-runner
-!target/*-runner.jar
-!target/lib/*
-!target/quarkus-app/*
+# Multi-stage build compiles from source (see Dockerfile). Ship src + the
+# Maven wrapper; keep build output, secrets, VCS, and IDE noise out of context.
+target/
+.git/
+.gitignore
+.dockerignore
+Dockerfile
+docker-compose.yml
+README.md
+*.md
+
+# Secrets and local env — NEVER bake into an image layer (security.md §1).
+.env
+.env.*
+!.env.example
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store

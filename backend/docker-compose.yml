@@ -1,0 +1,129 @@
+# =============================================================================
+# DigitalWallet — backend + infra tier.
+# Owns the `dw-net` bridge; the frontend compose joins it as external.
+# Defaults are local-dev only. Secrets (DB_PASSWORD, JWT_PRIVATE_KEY, LLM_*)
+# resolve from backend/.env — never committed (security.md §1).
+#
+#   Infra only (for `./mvnw quarkus:dev`):  docker compose up -d
+#   Full stack incl. containerised backend: docker compose --profile app up -d
+#
+# Config env-var names: docs/architecture/README.md §7.
+# =============================================================================
+
+name: digitalwallet-backend
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: dw-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-digitalwallet}
+      POSTGRES_USER: ${DB_USER:-digitalwallet}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in backend/.env}
+    ports:
+      - "${DB_HOST_PORT:-5432}:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      # Bootstraps the parallel test DB (backend_coding.md §13). Reference seeds
+      # live in Flyway migrations, not here.
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-digitalwallet} -d ${DB_NAME:-digitalwallet}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - dw-net
+
+  redis:
+    image: redis:7
+    container_name: dw-redis
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dw-net
+
+  kafka:
+    # KRaft single-node (no ZooKeeper). Dual listeners: INTERNAL for containers
+    # on dw-net (kafka:29092), EXTERNAL for host-run `quarkus:dev` (localhost:9092).
+    image: apache/kafka:3.7.1
+    container_name: dw-kafka
+    ports:
+      - "${KAFKA_HOST_PORT:-9092}:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID:-dw-kraft-cluster-000001}
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    networks:
+      - dw-net
+
+  # Containerised Quarkus backend — production-like smoke runs only.
+  # Local dev uses `./mvnw quarkus:dev` against the infra services above.
+  backend:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: digitalwallet-backend:local
+    container_name: dw-backend
+    # .env supplies secrets (JWT_PRIVATE_KEY, LLM_*) + fraud/ratelimit tuning;
+    # the explicit `environment:` block below overrides any infra hostnames.
+    env_file:
+      - .env
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-digitalwallet}
+      DB_USER: ${DB_USER:-digitalwallet}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in backend/.env}
+      REDIS_URL: redis://redis:6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    ports:
+      - "${BACKEND_HOST_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      - dw-net
+
+volumes:
+  pg_data:
+  kafka_data:
+
+networks:
+  dw-net:
+    name: dw-net
+    driver: bridge
