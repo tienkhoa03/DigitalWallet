@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ngày 1 — Java 21 core + Quarkus cơ bản · Hướng dẫn chi tiết</title>
+<link rel="stylesheet" href="assets/guide.css">
+</head>
+<body>
+
+<header class="gh">
+  <div class="wrap">
+    <div class="breadcrumb"><a href="5-day-tech-stack-plan.html">← Kế hoạch 5 ngày</a> &nbsp;/&nbsp; Ngày 1</div>
+    <h1><span class="badge b1">1</span>Java 21 core + Quarkus cơ bản</h1>
+    <p class="lead">Hôm nay là ngày “làm quen”: hiểu Quarkus chạy thế nào, nắm các viên gạch Java 21 mà repo dùng khắp nơi (record, sealed, BigDecimal…), đọc thông toàn bộ module <code>account</code> đã có sẵn, rồi tự tay viết 1 endpoint mới có test. Kết thúc ngày bạn phải <b>tự tin đọc &amp; sửa code backend</b>.</p>
+    <div class="meta">
+      <span class="chip">⏱ ~8 giờ</span>
+      <span class="chip">🎯 Đọc thông slice <b>account</b></span>
+      <span class="chip">🛠 Viết <b>GET /accounts/me</b> + unit test</span>
+      <span class="chip">🌿 nhánh <b>learning/tech-stack-spike</b></span>
+    </div>
+  </div>
+</header>
+
+<nav class="toc-mini"><div class="wrap">
+  <a href="#outcome">Mục tiêu</a>
+  <a href="#prep">Chuẩn bị</a>
+  <a href="#t1">Quarkus là gì</a>
+  <a href="#t2">CDI</a>
+  <a href="#t3">REST</a>
+  <a href="#t4">Panache</a>
+  <a href="#t5">Flyway+Config</a>
+  <a href="#t6">Java 21</a>
+  <a href="#t7">Virtual threads</a>
+  <a href="#p1">TH: chạy stack</a>
+  <a href="#p2">TH: đọc slice</a>
+  <a href="#p3">TH: viết endpoint</a>
+  <a href="#p4">TH: test</a>
+  <a href="#trouble">Lỗi thường gặp</a>
+  <a href="#dod">Hoàn thành</a>
+</div></nav>
+
+<div class="wrap">
+
+<!-- OUTCOMES -->
+<section id="outcome">
+  <h2><span class="lbl">Kết quả mong đợi</span>Hết ngày 1 bạn sẽ…</h2>
+  <div class="panel">
+    <ul>
+      <li>Giải thích được Quarkus khác Spring Boot ở đâu (build-time augmentation) và vì sao khởi động nhanh.</li>
+      <li>Biết một request đi qua những lớp nào: <b>Resource → Service → Repository → DB</b>, và <code>@Transactional</code> đặt ở đâu, vì sao.</li>
+      <li>Đọc hiểu record DTO, sealed exception, Panache repository, Bean Validation trong code repo thật.</li>
+      <li>Tự viết endpoint <code>GET /accounts/me</code> lấy danh tính từ JWT, kèm 1 unit test xanh có assert <code>errorKey</code>.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- PREP -->
+<section id="prep">
+  <h2><span class="lbl">Bước 0</span>Chuẩn bị môi trường (≈ 20 phút)</h2>
+  <p>Kiểm tra công cụ trước khi học. Mở terminal (PowerShell hoặc Git Bash) tại thư mục dự án.</p>
+  <div class="ex-label">Kiểm tra phiên bản</div>
+<pre><code>java -version        <span class="cmt"># cần 21.x</span>
+docker --version     <span class="cmt"># Docker Desktop đang chạy</span>
+cd backend
+./mvnw -v            <span class="cmt"># Maven wrapper — KHÔNG cần cài Maven riêng</span></code></pre>
+  <div class="callout info"><span class="tag">Tạo nhánh học trước tiên</span>
+    <p style="margin:4px 0 0">Mọi thứ hôm nay (và 4 ngày sau) làm trên nhánh riêng, không đụng <code>main</code>:</p>
+<pre><code>git checkout -b learning/tech-stack-spike</code></pre>
+  </div>
+  <div class="pitfall"><b>Nếu <code>java -version</code> không phải 21:</b> tải Temurin 21 (adoptium.net) và đặt biến <code>JAVA_HOME</code> trỏ vào nó. Quarkus 3.33 cần Java 17+ nhưng repo này khoá Java 21 (virtual threads).</div>
+</section>
+
+<!-- ===================== THEORY ===================== -->
+<h2 id="t1"><span class="lbl">Lý thuyết · Phần 1/7</span>Quarkus là gì &amp; vì sao nó nhanh</h2>
+<p class="lead2">Quarkus là một framework Java “container-first”: thay vì làm phần lớn công việc lúc <i>chạy</i> (như Spring Boot truyền thống), nó dồn việc sang lúc <i>build</i>.</p>
+<p>Một app Spring Boot khi khởi động phải: quét classpath, đọc annotation bằng reflection, dựng cây dependency injection, cấu hình ORM… Tất cả diễn ra <b>lúc khởi động</b> → chậm, tốn RAM. Quarkus làm hầu hết những việc đó <b>lúc build (build-time augmentation)</b> và “đóng băng” kết quả vào bytecode. Khi chạy, app gần như chỉ việc bật lên.</p>
+<div class="grid g2">
+  <div class="panel"><h4 style="color:var(--brand)">Hệ quả tích cực</h4>
+    <ul class="small">
+      <li>Khởi động mili-giây, RAM thấp → hợp container/serverless.</li>
+      <li>Biên dịch được sang <b>native image</b> (GraalVM) — repo có profile <code>native</code> trong <span class="tag-file">pom.xml</span>.</li>
+      <li>Lỗi cấu hình lộ ra <b>lúc build</b> chứ không phải lúc deploy.</li>
+    </ul>
+  </div>
+  <div class="panel"><h4 style="color:var(--warn)">Đánh đổi cần biết</h4>
+    <ul class="small">
+      <li>Một số thư viện dùng reflection “động” cần “extension” riêng để hoạt động.</li>
+      <li>Build lâu hơn chút (vì làm nhiều việc hơn lúc build).</li>
+      <li>Tư duy “extension” thay vì “thả jar bất kỳ” (xem <span class="tag-file">upgrade-policy.md §3</span>: ưu tiên extension Quarkus).</li>
+    </ul>
+  </div>
+</div>
+
+<h3>Dev mode &amp; live reload — thứ bạn sẽ dùng cả ngày</h3>
+<p><code>./mvnw quarkus:dev</code> bật chế độ phát triển: sửa file <code>.java</code> rồi gọi lại API là Quarkus tự biên dịch lại phần thay đổi (không cần restart). Có sẵn <b>Dev UI</b> tại <code>http://localhost:8080/q/dev/</code> để xem bean, config, health…</p>
+<div class="callout info"><span class="tag">Dev Services</span><p style="margin:4px 0 0">Khi chạy test (hoặc dev mà chưa cấu hình DB), Quarkus có thể <b>tự bật một container Postgres</b> tạm bằng Testcontainers — gọi là <i>Dev Services</i>. Đó là lý do test tích hợp “tự có DB” mà bạn không phải khai báo gì.</p></div>
+
+<div class="selfcheck"><h4>✔ Tự kiểm</h4>
+  <p class="small" style="margin:0">Câu hỏi: “Vì sao Quarkus khởi động nhanh hơn Spring Boot?” → Trả lời được bằng cụm <b>build-time augmentation</b> (chuyển reflection/scan/DI sang lúc build) là đạt.</p></div>
+
+<!-- THEORY 2 CDI -->
+<h2 id="t2"><span class="lbl">Lý thuyết · Phần 2/7</span>CDI / ArC — tiêm phụ thuộc (Dependency Injection)</h2>
+<p>CDI (Contexts and Dependency Injection) là cách Quarkus “lắp ráp” các đối tượng cho bạn. Bạn khai báo một class là <b>bean</b>, CDI lo việc tạo và đưa nó vào nơi cần. Quarkus hiện thực CDI bằng engine tên <b>ArC</b>.</p>
+<h3>Scope — vòng đời của bean</h3>
+<table>
+  <thead><tr><th>Annotation</th><th>Ý nghĩa</th><th>Dùng cho</th></tr></thead>
+  <tbody>
+    <tr><td><code>@ApplicationScoped</code></td><td>1 instance dùng chung toàn app (lazy)</td><td>Service, repository — mặc định nên dùng</td></tr>
+    <tr><td><code>@RequestScoped</code></td><td>1 instance mỗi HTTP request</td><td>State theo request (hiếm khi tự viết)</td></tr>
+    <tr><td><code>@Singleton</code></td><td>Giống ApplicationScoped nhưng tạo sớm, không proxy</td><td>Bean hạ tầng đơn giản</td></tr>
+  </tbody>
+</table>
+
+<h3>Constructor injection — luật bắt buộc của repo</h3>
+<p>Có 2 kiểu tiêm: qua <b>field</b> (<code>@Inject</code> trên thuộc tính) và qua <b>constructor</b>. Repo này <b>cấm field injection</b> (<span class="tag-file">upgrade-policy.md §3</span>, <span class="tag-file">backend_coding.md §3</span>) vì constructor injection giúp: (1) field <code>final</code> bất biến, (2) test dễ (truyền mock vào constructor), (3) lộ rõ phụ thuộc.</p>
+<div class="ex-label">Ví dụ minh hoạ — đúng cách</div>
+<pre><code><span class="kw">@ApplicationScoped</span>
+<span class="kw">public class</span> <span class="ty">AccountService</span> {
+
+    <span class="kw">private final</span> <span class="ty">AccountRepository</span> repository;
+    <span class="kw">private final</span> <span class="ty">Argon2Hasher</span> hasher;
+
+    <span class="cmt">// CDI tự gọi constructor này và truyền 2 bean vào</span>
+    <span class="kw">public</span> AccountService(AccountRepository repository, Argon2Hasher hasher) {
+        <span class="kw">this</span>.repository = repository;
+        <span class="kw">this</span>.hasher = hasher;
+    }
+}</code></pre>
+<div class="pitfall"><b>Sai (đừng làm):</b> <code>@Inject AccountRepository repository;</code> đặt trên field. Code review của repo sẽ chặn.</div>
+
+<!-- THEORY 3 REST -->
+<h2 id="t3"><span class="lbl">Lý thuyết · Phần 3/7</span>Quarkus REST (JAX-RS) — tầng controller</h2>
+<p>Endpoint HTTP được khai báo bằng annotation JAX-RS (chuẩn <code>jakarta.ws.rs.*</code>). Extension trong repo tên <code>quarkus-rest</code> (chính là RESTEasy Reactive thế hệ mới).</p>
+<table>
+  <thead><tr><th>Annotation</th><th>Vai trò</th></tr></thead>
+  <tbody>
+    <tr><td><code>@Path("/accounts")</code></td><td>Đường dẫn gốc của resource / method</td></tr>
+    <tr><td><code>@GET @POST @PUT @PATCH @DELETE</code></td><td>HTTP method</td></tr>
+    <tr><td><code>@PathParam @QueryParam @HeaderParam</code></td><td>Lấy tham số từ URL/header</td></tr>
+    <tr><td><code>@Valid</code></td><td>Kích hoạt Bean Validation cho body</td></tr>
+    <tr><td><code>@RolesAllowed("USER")</code></td><td>Chặn theo vai trò (RBAC) — chuẩn <code>jakarta.annotation.security</code></td></tr>
+  </tbody>
+</table>
+<div class="ex-label file">Mẫu giống AccountResource trong repo</div>
+<pre><code><span class="kw">@Path</span>(<span class="str">"/accounts"</span>)
+<span class="kw">@Produces</span>(MediaType.APPLICATION_JSON)
+<span class="kw">@Consumes</span>(MediaType.APPLICATION_JSON)
+<span class="kw">public class</span> <span class="ty">AccountResource</span> {
+
+    <span class="kw">private final</span> <span class="ty">AccountService</span> service;
+    <span class="kw">public</span> AccountResource(AccountService service) { <span class="kw">this</span>.service = service; }
+
+    <span class="kw">@POST</span>
+    <span class="kw">public</span> <span class="ty">RestResponse</span>&lt;CreateAccountResponse&gt; signup(<span class="kw">@Valid</span> CreateAccountRequest req) {
+        <span class="kw">return</span> RestResponse.status(Status.CREATED, service.register(req));
+    }
+}</code></pre>
+<div class="callout warn"><span class="tag">Luật repo</span><p style="margin:4px 0 0">Resource <b>chỉ</b> trả DTO (record), <b>không bao giờ</b> trả thẳng JPA entity (<span class="tag-file">backend_coding.md §6</span>). Và <b>không</b> đặt <code>@Transactional</code> ở resource — nó thuộc service.</p></div>
+
+<!-- THEORY 4 PANACHE -->
+<h2 id="t4"><span class="lbl">Lý thuyết · Phần 4/7</span>Hibernate ORM + Panache — tầng truy cập dữ liệu</h2>
+<p>Panache là lớp “đường ngọt” trên Hibernate giúp viết DB code ngắn gọn. Có 2 phong cách; repo này chọn <b>Repository pattern</b> (không phải Active Record) để entity sạch, dễ mock khi test.</p>
+<div class="grid g2">
+  <div class="panel"><h4>Entity</h4>
+    <p class="small">Class ánh xạ tới bảng. Dùng <code>@Entity</code>, <code>@Table</code>, <code>@Id</code>, <code>@Column</code>. Tiền là <code>BigDecimal</code> ↔ <code>numeric(19,4)</code>; thời gian là <code>Instant</code>/<code>OffsetDateTime</code> ↔ <code>timestamptz</code>.</p>
+  </div>
+  <div class="panel"><h4>Repository</h4>
+    <p class="small">Implement <code>PanacheRepositoryBase&lt;Entity, UUID&gt;</code>. Có sẵn <code>findById</code>, <code>persist</code>, <code>list</code>, <code>find(...)</code>. Trả <code>Optional</code> cho tra cứu 1 dòng (repo cấm trả <code>null</code> — <span class="tag-file">backend_coding.md §5</span>).</p>
+  </div>
+</div>
+<div class="ex-label">Ví dụ minh hoạ — repository &amp; truy vấn có tham số ràng buộc</div>
+<pre><code><span class="kw">@ApplicationScoped</span>
+<span class="kw">public class</span> <span class="ty">AccountRepository</span> <span class="kw">implements</span> PanacheRepositoryBase&lt;AccountEntity, UUID&gt; {
+
+    <span class="kw">public</span> Optional&lt;AccountEntity&gt; findByEmail(String email) {
+        <span class="cmt">// dùng named parameter (:email) — KHÔNG nối chuỗi (chống injection)</span>
+        <span class="kw">return</span> find(<span class="str">"email"</span>, email).firstResultOptional();
+    }
+}</code></pre>
+
+<h3>Transaction đặt ở đâu?</h3>
+<p><code>@Transactional</code> đặt ở <b>method của service</b> — không phải resource, không phải repository. Method vừa đọc vừa ghi ledger thì bắt buộc <code>@Transactional</code>; method chỉ đọc thì dùng <code>@Transactional(TxType.SUPPORTS)</code> hoặc bỏ hẳn.</p>
+<div class="diagram">REQUEST
+  │
+  ▼
+┌──────────────┐   trả DTO    ┌──────────────┐  @Transactional  ┌──────────────┐
+│  Resource    │ ───────────► │   Service    │ ───────────────► │ Repository   │ ──► Postgres
+│ (JAX-RS)     │              │ (nghiệp vụ)  │                  │ (Panache)    │
+└──────────────┘              └──────────────┘                  └──────────────┘
+   @RolesAllowed                ownership check                   named params</div>
+
+<!-- THEORY 5 FLYWAY + CONFIG -->
+<h2 id="t5"><span class="lbl">Lý thuyết · Phần 5/7</span>Flyway (migration) &amp; Config</h2>
+<h3>Flyway — schema bằng SQL có phiên bản</h3>
+<p>Schema DB <b>không</b> được Hibernate tự sinh (repo đặt <code>quarkus.hibernate-orm.database.generation=none</code>). Mọi thay đổi schema là file SQL versioned: <code>V&lt;số&gt;__&lt;mô_tả&gt;.sql</code> trong <span class="tag-file">backend/src/main/resources/db/migration/</span>. Repo đã có <a href="../backend/src/main/resources/db/migration/V1__create_account_table.sql">V1__create_account_table.sql</a>. Quy tắc vàng: <b>entity và migration đi cùng một PR</b> (<span class="tag-file">backend_coding.md §13</span>).</p>
+<h3>Config — MicroProfile Config</h3>
+<p>Giá trị cấu hình nằm trong <a href="../backend/src/main/resources/application.properties">application.properties</a>, đọc bằng <code>@ConfigProperty</code> hoặc <code>@ConfigMapping</code> (cấm gọi thẳng <code>System.getenv</code>). Có 3 profile: <code>dev</code>, <code>test</code>, <code>prod</code>; ghi đè bằng tiền tố <code>%dev.</code>, <code>%test.</code>. Secret (mật khẩu DB, khoá JWT) <b>không</b> có default trong file — phải đến từ biến môi trường (<span class="tag-file">security.md §1</span>).</p>
+<div class="ex-label">Ví dụ minh hoạ — đọc config</div>
+<pre><code><span class="kw">public class</span> <span class="ty">SomeService</span> {
+    <span class="kw">private final</span> <span class="ty">int</span> pageSizeCap;
+    <span class="kw">public</span> SomeService(<span class="kw">@ConfigProperty</span>(name = <span class="str">"app.page-size-cap"</span>, defaultValue = <span class="str">"100"</span>) <span class="ty">int</span> cap) {
+        <span class="kw">this</span>.pageSizeCap = cap;
+    }
+}</code></pre>
+
+<!-- THEORY 6 JAVA 21 -->
+<h2 id="t6"><span class="lbl">Lý thuyết · Phần 6/7</span>Java 21 — 6 viên gạch bạn gặp khắp repo</h2>
+
+<h3>1) <code>record</code> — DTO bất biến</h3>
+<p>Record sinh sẵn constructor, getter, <code>equals</code>/<code>hashCode</code>/<code>toString</code>. Repo dùng record cho mọi DTO. Có thể thêm <b>compact constructor</b> để validate.</p>
+<div class="ex-label">Ví dụ</div>
+<pre><code><span class="kw">public record</span> <span class="ty">MoneyAmount</span>(BigDecimal value, String currencyCode) {
+    <span class="kw">public</span> MoneyAmount {                       <span class="cmt">// compact constructor</span>
+        <span class="kw">if</span> (value.signum() &lt;= 0)
+            <span class="kw">throw new</span> IllegalArgumentException(<span class="str">"amount must be &gt; 0"</span>);
+    }
+}</code></pre>
+
+<h3>2) <code>sealed</code> interface — tập con đóng</h3>
+<p>Cho phép liệt kê <b>chính xác</b> các class con. Repo dùng cho <code>DomainException permits ValidationException, ConflictException, …</code> để bộ <code>switch</code> xử lý lỗi không bao giờ “quên case”.</p>
+
+<h3>3) Pattern matching <code>switch</code></h3>
+<div class="ex-label">Ví dụ — map exception → HTTP status gọn gàng</div>
+<pre><code><span class="kw">int</span> status = <span class="kw">switch</span> (ex) {
+    <span class="kw">case</span> ValidationException v   -&gt; <span class="num">400</span>;
+    <span class="kw">case</span> AuthForbiddenException f -&gt; <span class="num">403</span>;
+    <span class="kw">case</span> ConflictException c      -&gt; <span class="num">409</span>;
+    <span class="kw">default</span>                       -&gt; <span class="num">422</span>;
+};</code></pre>
+
+<h3>4) <code>Optional</code> — không trả null</h3>
+<p><code>repository.findByIdOptional(id).orElseThrow(() -&gt; new SomeException(...))</code>. Tránh <code>NullPointerException</code> và làm rõ “có thể không tồn tại”.</p>
+
+<h3>5) <code>BigDecimal</code> cho tiền — TUYỆT ĐỐI không <code>double</code></h3>
+<div class="pitfall"><b>Bẫy kinh điển:</b> <code>0.1 + 0.2 == 0.30000000000000004</code> với <code>double</code>. Tiền phải dùng <code>BigDecimal</code>. So sánh giá trị bằng <code>compareTo</code> chứ không <code>equals</code> — vì <code>new BigDecimal("1.0").equals(new BigDecimal("1.00"))</code> trả <b>false</b> (khác scale) nhưng <code>compareTo</code> trả 0.</p>
+
+<h3>6) Text block &amp; <code>var</code></h3>
+<p>Text block <code>"""..."""</code> cho SQL/JSON nhiều dòng (đỡ nối <code>+ "\n"</code>). <code>var</code> cho biến local khi kiểu đã rõ ở vế phải — nhưng giữ kiểu tường minh cho <code>BigDecimal</code>, <code>UUID</code>, <code>Instant</code> để dễ đọc.</p>
+
+<!-- THEORY 7 VIRTUAL THREADS -->
+<h2 id="t7"><span class="lbl">Lý thuyết · Phần 7/7</span>Virtual threads (Project Loom) — chỉ cần hiểu khái niệm</h2>
+<p>Thread truyền thống của OS “nặng” (~1MB stack) nên không thể tạo hàng triệu. <b>Virtual thread</b> (Java 21) siêu nhẹ, JVM quản lý: khi một virtual thread <i>block</i> chờ I/O (gọi DB, gọi Kafka), nó “nhường” OS thread cho việc khác. Kết quả: viết code <b>blocking quen thuộc</b> (dễ đọc) nhưng vẫn scale như code async.</p>
+<p>Trong Quarkus, đánh dấu <code>@RunOnVirtualThread</code> trên endpoint/consumer để chạy trên virtual thread. Repo chọn Java 21 <i>chính vì điều này</i> (cho Kafka consumer &amp; HTTP — CLAUDE.md). <b>Hôm nay chưa cần dùng</b>, chỉ cần hiểu “vì sao Java 21”.</p>
+<div class="selfcheck"><h4>✔ Tự kiểm cuối phần lý thuyết</h4>
+  <ul class="small" style="margin:6px 0 0">
+    <li>Record khác class thường chỗ nào? (bất biến + sinh sẵn equals/hashCode/getter)</li>
+    <li>Vì sao tiền không dùng double? So sánh BigDecimal bằng gì?</li>
+    <li><code>@Transactional</code> đặt ở tầng nào?</li>
+  </ul>
+</div>
+
+<!-- ===================== PRACTICE ===================== -->
+<h2 id="p1"><span class="lbl">Thực hành · 1/4</span>Chạy stack &amp; gọi API có sẵn (≈ 60 phút)</h2>
+<ol class="steps">
+  <li><b class="act">Bật hạ tầng</b> (Postgres + Kafka + Redis):
+<pre><code>docker compose -f backend/docker-compose.yml up -d
+docker compose -f backend/docker-compose.yml ps   <span class="cmt"># thấy các container Up</span></code></pre></li>
+  <li><b class="act">Chạy backend dev mode</b>:
+<pre><code>cd backend
+./mvnw quarkus:dev</code></pre>
+    Chờ tới dòng <code>Listening on: http://localhost:8080</code>. Mở <b>Dev UI</b>: <code>http://localhost:8080/q/dev/</code>.</li>
+  <li><b class="act">Đăng ký tài khoản</b> (<code>POST /accounts</code>):
+<pre><code>curl -i -X POST http://localhost:8080/accounts \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@example.com","password":"S3cret!pass","baseCurrency":"USD"}'</code></pre>
+    Kỳ vọng <b>201 Created</b>. Thử gửi lại lần 2 → kỳ vọng <b>409</b> (email trùng).</li>
+  <li><b class="act">Đăng nhập</b> (<code>POST /auth/login</code>) để lấy JWT:
+<pre><code>curl -i -X POST http://localhost:8080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@example.com","password":"S3cret!pass"}'</code></pre>
+    Copy giá trị token trong response — bạn sẽ dùng nó ở phần thực hành 3.</li>
+</ol>
+<div class="checkpoint"><b>✅ Checkpoint:</b> signup trả 201, signup trùng trả 409, login trả token. Nếu được hết → hạ tầng + app OK.</div>
+
+<h2 id="p2"><span class="lbl">Thực hành · 2/4</span>Đọc slice <code>account</code> theo dòng chảy (≈ 60 phút)</h2>
+<p>Mở 5 file theo đúng thứ tự dưới đây và với <b>mỗi file</b>, tự trả lời “đây là lớp gì trong sơ đồ Resource→Service→Repository?”. Vừa đọc vừa điền bảng.</p>
+<table>
+  <thead><tr><th>#</th><th>File</th><th>Là lớp gì</th><th>Soi điều gì</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><a href="../backend/src/main/java/com/digitalwallet/account/api/AccountResource.java">account/api/AccountResource.java</a></td><td>Controller (JAX-RS)</td><td><code>@Path</code>, <code>@POST</code>, <code>@Valid</code>, trả DTO/RestResponse</td></tr>
+    <tr><td>2</td><td><a href="../backend/src/main/java/com/digitalwallet/account/service/AccountService.java">account/service/AccountService.java</a></td><td>Service (nghiệp vụ)</td><td>constructor injection, <code>@Transactional</code>, gọi hasher + repo</td></tr>
+    <tr><td>3</td><td><a href="../backend/src/main/java/com/digitalwallet/account/persistence/AccountRepository.java">account/persistence/AccountRepository.java</a></td><td>Repository (Panache)</td><td><code>PanacheRepositoryBase</code>, truy vấn tham số, trả <code>Optional</code></td></tr>
+    <tr><td>4</td><td><a href="../backend/src/main/java/com/digitalwallet/account/persistence/AccountEntity.java">account/persistence/AccountEntity.java</a></td><td>Entity (JPA)</td><td><code>@Entity</code>, kiểu cột, <code>password_hash</code></td></tr>
+    <tr><td>5</td><td><a href="../backend/src/main/resources/db/migration/V1__create_account_table.sql">db/migration/V1__…sql</a></td><td>Migration (Flyway)</td><td>cột, ràng buộc UNIQUE, enum fraud_status</td></tr>
+  </tbody>
+</table>
+<p>Đọc thêm 2 file cross-cutting để hiểu cách lỗi được biến thành HTTP response:</p>
+<ul>
+  <li><a href="../backend/src/main/java/com/digitalwallet/shared/exception/DomainException.java">shared/exception/DomainException.java</a> — sealed base, mang <code>errorKey</code>.</li>
+  <li><a href="../backend/src/main/java/com/digitalwallet/shared/exception/DomainExceptionMapper.java">shared/exception/DomainExceptionMapper.java</a> — <code>ExceptionMapper</code> dựng envelope JSON + set HTTP status.</li>
+</ul>
+<div class="checkpoint"><b>✅ Checkpoint:</b> bạn chỉ ra được chính xác dòng nào mở transaction, dòng nào hash mật khẩu, dòng nào chống email trùng (UNIQUE ở DB + check ở service).</div>
+
+<h2 id="p3"><span class="lbl">Thực hành · 3/4</span>Viết endpoint <code>GET /accounts/me</code> (≈ 90 phút)</h2>
+<p>Mục tiêu: lấy danh tính người gọi từ JWT, trả profile (ẩn <code>password_hash</code>). Đây là bài “đi hết slice” đầu tiên của bạn.</p>
+
+<h4>3.1 — Tạo DTO response (record)</h4>
+<p>Tạo file <span class="tag-file">account/dto/AccountProfileResponse.java</span>:</p>
+<div class="ex-label file">Gõ tương tự vào repo</div>
+<pre><code><span class="kw">package</span> com.digitalwallet.account.dto;
+
+<span class="kw">import</span> java.util.UUID;
+
+<span class="kw">public record</span> <span class="ty">AccountProfileResponse</span>(
+        UUID id,
+        String email,
+        String baseCurrency,
+        String role) { }</code></pre>
+
+<h4>3.2 — Thêm method service (chỉ đọc)</h4>
+<p>Trong <code>AccountService</code>, thêm:</p>
+<div class="ex-label file">Gõ tương tự vào repo</div>
+<pre><code><span class="kw">@Transactional</span>(Transactional.TxType.SUPPORTS)   <span class="cmt">// chỉ đọc</span>
+<span class="kw">public</span> <span class="ty">AccountProfileResponse</span> getProfile(UUID accountId) {
+    <span class="kw">return</span> repository.findByIdOptional(accountId)
+        .map(a -&gt; <span class="kw">new</span> AccountProfileResponse(
+                a.id, a.email, a.baseCurrency, a.role.name()))
+        .orElseThrow(() -&gt; <span class="kw">new</span> AuthForbiddenException(
+                <span class="str">"auth.forbidden"</span>, <span class="str">"Account not found"</span>));
+}</code></pre>
+<p class="small muted">Tên field/exception chỉ là minh hoạ — chỉnh theo đúng class thật trong repo (xem <code>AccountEntity</code> và package <code>shared/exception</code>).</p>
+
+<h4>3.3 — Thêm method resource lấy danh tính từ JWT</h4>
+<p>Extension <code>quarkus-smallrye-jwt</code> đã bật sẵn, nên có thể inject <code>JsonWebToken</code>. <code>jwt.getSubject()</code> chính là <code>accountId</code> đã được ký lúc login.</p>
+<div class="ex-label file">Gõ tương tự vào AccountResource</div>
+<pre><code><span class="kw">import</span> org.eclipse.microprofile.jwt.JsonWebToken;
+<span class="kw">import</span> jakarta.annotation.security.RolesAllowed;
+
+<span class="cmt">// inject qua constructor (KHÔNG field injection)</span>
+<span class="kw">private final</span> <span class="ty">AccountService</span> service;
+<span class="kw">private final</span> <span class="ty">JsonWebToken</span> jwt;
+<span class="kw">public</span> AccountResource(AccountService service, JsonWebToken jwt) {
+    <span class="kw">this</span>.service = service; <span class="kw">this</span>.jwt = jwt;
+}
+
+<span class="kw">@GET</span> <span class="kw">@Path</span>(<span class="str">"/me"</span>)
+<span class="kw">@RolesAllowed</span>(<span class="str">"USER"</span>)
+<span class="kw">public</span> <span class="ty">AccountProfileResponse</span> me() {
+    UUID accountId = UUID.fromString(jwt.getSubject());   <span class="cmt"># danh tính từ token, KHÔNG nhận từ client</span>
+    <span class="kw">return</span> service.getProfile(accountId);
+}</code></pre>
+<div class="callout warn"><span class="tag">Vì sao lấy id từ token?</span><p style="margin:4px 0 0">Đây là <b>ownership check</b> (<span class="tag-file">security.md §3</span>): nếu nhận <code>accountId</code> từ client, user A có thể đọc profile user B. Lấy từ token (<code>sub</code>) thì không thể giả mạo.</p></div>
+
+<h4>3.4 — Thử nghiệm thủ công</h4>
+<div class="ex-label">Dùng token lấy ở Thực hành 1</div>
+<pre><code>TOKEN=...&lt;dán token&gt;...
+curl -i http://localhost:8080/accounts/me -H "Authorization: Bearer $TOKEN"   <span class="cmt"># 200 + profile</span>
+curl -i http://localhost:8080/accounts/me                                     <span class="cmt"># 401 (không token)</span></code></pre>
+<div class="checkpoint"><b>✅ Checkpoint:</b> có token → 200 và <b>không</b> thấy <code>password_hash</code> trong JSON; không token → 401.</div>
+
+<h2 id="p4"><span class="lbl">Thực hành · 4/4</span>Viết unit test (JUnit 5 + Mockito) (≈ 60 phút)</h2>
+<p>Test service <b>mock repository</b> — không cần DB. Đặt tên theo chuẩn repo và <b>assert cả <code>errorKey</code></b> khi test exception.</p>
+<div class="ex-label file">backend/src/test/java/com/digitalwallet/account/service/AccountServiceProfileTest.java</div>
+<pre><code><span class="kw">@ExtendWith</span>(MockitoExtension.class)
+<span class="kw">class</span> <span class="ty">AccountServiceProfileTest</span> {
+
+    <span class="kw">@Mock</span>  AccountRepository repository;
+    <span class="kw">@InjectMocks</span> AccountService service;
+
+    <span class="kw">@Test</span>
+    <span class="kw">void</span> getProfile_givenExistingId_returnsProfile() {
+        <span class="kw">var</span> id = UUID.randomUUID();
+        <span class="kw">var</span> entity = <span class="kw">new</span> AccountEntity(<span class="cmt">/* ... id, email, USD, USER ... */</span>);
+        when(repository.findByIdOptional(id)).thenReturn(Optional.of(entity));
+
+        <span class="kw">var</span> res = service.getProfile(id);
+
+        assertThat(res.email()).isEqualTo(<span class="str">"alice@example.com"</span>);
+        assertThat(res.baseCurrency()).isEqualTo(<span class="str">"USD"</span>);
+    }
+
+    <span class="kw">@Test</span>
+    <span class="kw">void</span> getProfile_givenMissingId_throwsForbidden() {
+        <span class="kw">var</span> id = UUID.randomUUID();
+        when(repository.findByIdOptional(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -&gt; service.getProfile(id))
+            .isInstanceOf(AuthForbiddenException.class)
+            .extracting(<span class="str">"errorKey"</span>)            <span class="cmt"># bắt buộc assert errorKey</span>
+            .isEqualTo(<span class="str">"auth.forbidden"</span>);
+    }
+}</code></pre>
+<div class="ex-label">Chạy test</div>
+<pre><code>cd backend
+./mvnw test -Dtest=AccountServiceProfileTest</code></pre>
+<div class="callout info"><span class="tag">Mẹo</span><p style="margin:4px 0 0">Có skill sẵn để sinh khung test: gõ <code>/backend-create-unit-test</code> rồi trỏ vào <code>AccountService</code>. Vẫn nên tự viết tay 1 lần để hiểu.</p></div>
+
+<!-- TROUBLE -->
+<h2 id="trouble"><span class="lbl">Tham khảo nhanh</span>Lỗi thường gặp &amp; cách xử lý</h2>
+<table>
+  <thead><tr><th>Triệu chứng</th><th>Nguyên nhân &amp; cách xử lý</th></tr></thead>
+  <tbody>
+    <tr><td><code>Port 8080 already in use</code></td><td>App khác đang chiếm cổng. Tắt nó, hoặc đặt <code>quarkus.http.port=8081</code> khi dev.</td></tr>
+    <tr><td><code>Connection refused</code> tới Postgres</td><td>Container chưa lên. Chạy lại <code>docker compose ... up -d</code> và đợi <code>healthy</code>.</td></tr>
+    <tr><td>Gọi <code>/accounts/me</code> luôn 401</td><td>Thiếu header <code>Authorization: Bearer</code>, token sai/hết hạn, hoặc role trong token không phải <code>USER</code>.</td></tr>
+    <tr><td>Field injection bị từ chối khi review</td><td>Đổi sang constructor injection (luật repo).</td></tr>
+    <tr><td>Test đỏ vì so sánh tiền</td><td>Dùng <code>compareTo</code> cho <code>BigDecimal</code>, không dùng <code>equals</code>.</td></tr>
+    <tr><td>Live reload không nhận thay đổi</td><td>Lỗi biên dịch ở file khác. Xem log <code>quarkus:dev</code>, sửa lỗi đỏ trước.</td></tr>
+  </tbody>
+</table>
+
+<!-- DOD -->
+<h2 id="dod"><span class="lbl">Chốt ngày</span>Definition of Done — Ngày 1</h2>
+<div class="panel">
+  <ul class="dod">
+    <li><input type="checkbox"> Stack chạy; signup→201, signup trùng→409, login→token.</li>
+    <li><input type="checkbox"> Điền xong bảng “file → lớp” cho slice account; chỉ được transaction boundary &amp; chỗ hash mật khẩu.</li>
+    <li><input type="checkbox"> <code>GET /accounts/me</code> trả 200 với token, 401 không token, không lộ <code>password_hash</code>.</li>
+    <li><input type="checkbox"> Lấy danh tính từ <code>jwt.getSubject()</code> (không nhận id từ client).</li>
+    <li><input type="checkbox"> 2 unit test xanh, có assert <code>errorKey</code>.</li>
+    <li><input type="checkbox"> Giải thích miệng được: build-time augmentation, scope CDI, vì sao Java 21 (virtual threads).</li>
+  </ul>
+</div>
+
+<h2><span class="lbl">Tài liệu</span>Nguồn học ngày 1 (đọc khi cần đào sâu)</h2>
+<ul class="src-list">
+  <li><a href="https://quarkus.io/guides/getting-started">Quarkus — Getting Started</a> <span class="d">· tổng quan + dev mode</span></li>
+  <li><a href="https://quarkus.io/guides/cdi">Quarkus — CDI</a> &amp; <a href="https://quarkus.io/guides/cdi-reference">CDI reference</a> <span class="d">· bean, scope, injection</span></li>
+  <li><a href="https://quarkus.io/guides/rest">Quarkus — REST</a> <span class="d">· JAX-RS resource</span></li>
+  <li><a href="https://quarkus.io/guides/hibernate-orm-panache">Quarkus — Hibernate ORM Panache</a> <span class="d">· entity &amp; repository</span></li>
+  <li><a href="https://quarkus.io/guides/flyway">Quarkus — Flyway</a> &amp; <a href="https://quarkus.io/guides/config-reference">Config reference</a></li>
+  <li><a href="https://dev.java/learn/">Dev.java — Learn Java</a> <span class="d">· record, sealed, pattern matching (chính chủ Oracle)</span></li>
+  <li><a href="https://www.baeldung.com/java-record-keyword">Baeldung — Records</a> · <a href="https://www.baeldung.com/java-sealed-classes-interfaces">Sealed classes</a> · <a href="https://www.baeldung.com/java-switch-pattern-matching">Pattern matching switch</a></li>
+  <li><a href="https://quarkus.io/guides/virtual-threads">Quarkus — Virtual threads</a> · <a href="https://openjdk.org/jeps/444">JEP 444</a></li>
+</ul>
+
+<div class="daynav">
+  <a href="5-day-tech-stack-plan.html"><div class="dir">⟵ Quay lại</div><div class="ttl">Tổng quan kế hoạch 5 ngày</div></a>
+  <a class="next" href="day-2-hexagonal.html"><div class="dir">Ngày tiếp ⟶</div><div class="ttl">Ngày 2 · Hexagonal + SOLID + DDD</div></a>
+</div>
+
+<footer>DigitalWallet — Hướng dẫn học chi tiết · Ngày 1/5. Mọi đoạn code là <b>ví dụ minh hoạ để học</b>, gõ vào nhánh <code>learning/*</code>, không phải source production chính thức.</footer>
+
+</div>
+</body>
+</html>

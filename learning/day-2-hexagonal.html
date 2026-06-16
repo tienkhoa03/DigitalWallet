@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ngày 2 — Hexagonal Architecture + SOLID + DDD · Hướng dẫn chi tiết</title>
+<link rel="stylesheet" href="assets/guide.css">
+</head>
+<body>
+
+<header class="gh">
+  <div class="wrap">
+    <div class="breadcrumb"><a href="5-day-tech-stack-plan.html">← Kế hoạch 5 ngày</a> &nbsp;/&nbsp; Ngày 2</div>
+    <h1><span class="badge b2">2</span>Hexagonal Architecture + SOLID + DDD</h1>
+    <p class="lead">Hôm nay bạn học cách <b>tách nghiệp vụ khỏi framework</b>. Lý thuyết: SOLID (đặc biệt DIP), DDD tactical (entity / value object / aggregate), và kiến trúc Hexagonal (ports &amp; adapters). Thực hành: refactor module <code>account</code> đã có sẵn từ kiểu “layered” sang ports &amp; adapters — giữ nguyên hành vi, test cũ vẫn xanh.</p>
+    <div class="meta">
+      <span class="chip">⏱ ~8 giờ</span>
+      <span class="chip">🎯 Hiểu “dependency rule”</span>
+      <span class="chip">🛠 Refactor <b>account</b> → ports &amp; adapters</span>
+      <span class="chip">⚠ Spike — không merge main</span>
+    </div>
+  </div>
+</header>
+
+<nav class="toc-mini"><div class="wrap">
+  <a href="#outcome">Mục tiêu</a>
+  <a href="#prep">Chuẩn bị</a>
+  <a href="#t1">SOLID</a>
+  <a href="#t2">DDD</a>
+  <a href="#t3">Layered→Hexagonal</a>
+  <a href="#t4">Map vào Quarkus</a>
+  <a href="#p1">TH: vẽ port map</a>
+  <a href="#p2">TH: domain</a>
+  <a href="#p3">TH: ports</a>
+  <a href="#p4">TH: application</a>
+  <a href="#p5">TH: adapters</a>
+  <a href="#p6">TH: ArchUnit</a>
+  <a href="#trouble">Bẫy</a>
+  <a href="#dod">Hoàn thành</a>
+</div></nav>
+
+<div class="wrap">
+
+<section id="outcome">
+  <h2><span class="lbl">Kết quả mong đợi</span>Hết ngày 2 bạn sẽ…</h2>
+  <div class="panel"><ul>
+    <li>Phát biểu được 5 nguyên lý SOLID và chỉ ra <b>DIP</b> chính là “linh hồn” của hexagonal.</li>
+    <li>Phân biệt entity vs value object, biết aggregate giữ invariant thế nào.</li>
+    <li>Vẽ được hình lục giác: inbound/outbound port &amp; adapter, và “mũi tên phụ thuộc luôn trỏ vào domain”.</li>
+    <li>Refactor xong module <code>account</code>: <code>domain</code> không import jakarta/quarkus, resource chỉ gọi use-case, application service chỉ gọi out-port; test cũ xanh.</li>
+  </ul></div>
+</section>
+
+<section id="prep">
+  <h2><span class="lbl">Bước 0</span>Chuẩn bị (≈ 10 phút)</h2>
+  <ul>
+    <li>Đang ở nhánh <code>learning/tech-stack-spike</code>, slice account của Ngày 1 chạy được.</li>
+    <li>Mở sẵn 4 file để “bê” logic: <a href="../backend/src/main/java/com/digitalwallet/account/service/AccountService.java">AccountService</a>, <a href="../backend/src/main/java/com/digitalwallet/account/service/AuthService.java">AuthService</a>, <a href="../backend/src/main/java/com/digitalwallet/account/persistence/AccountEntity.java">AccountEntity</a>, <a href="../backend/src/main/java/com/digitalwallet/account/persistence/AccountRepository.java">AccountRepository</a>.</li>
+  </ul>
+  <div class="callout warn"><span class="tag">Nhớ vì sao là spike</span><p style="margin:4px 0 0">Repo mandate “feature + layered” (<span class="tag-file">backend_coding.md §1</span>). Hexagonal hôm nay là <b>bài học</b>, không phải đổi chuẩn team. Giữ trong nhánh learning; muốn áp dụng thật phải có ADR.</p></div>
+</section>
+
+<!-- THEORY 1 SOLID -->
+<h2 id="t1"><span class="lbl">Lý thuyết · 1/4</span>SOLID — 5 nguyên lý, nhớ kỹ chữ “D”</h2>
+<table>
+  <thead><tr><th>Chữ</th><th>Tên</th><th>Một câu</th><th>Ví dụ trong repo</th></tr></thead>
+  <tbody>
+    <tr><td><b>S</b></td><td>Single Responsibility</td><td>Mỗi class một lý do để thay đổi.</td><td><code>Argon2Hasher</code> chỉ lo hash; không lẫn issue JWT.</td></tr>
+    <tr><td><b>O</b></td><td>Open/Closed</td><td>Mở để mở rộng, đóng để sửa.</td><td>Thêm loại lỗi mới = thêm subclass <code>DomainException</code>, không sửa mapper.</td></tr>
+    <tr><td><b>L</b></td><td>Liskov Substitution</td><td>Class con thay được class cha mà không vỡ.</td><td>Mọi <code>DomainException</code> đều có <code>errorKey</code> → mapper xử lý đồng nhất.</td></tr>
+    <tr><td><b>I</b></td><td>Interface Segregation</td><td>Nhiều interface nhỏ &gt; một interface to.</td><td><code>LoadAccountPort</code> tách khỏi <code>SaveAccountPort</code> (đọc/ghi riêng).</td></tr>
+    <tr><td><b>D</b></td><td>Dependency Inversion</td><td>Phụ thuộc vào <b>trừu tượng</b>, không vào chi tiết.</td><td>Service phụ thuộc interface <code>TokenIssuerPort</code>, không phụ thuộc lớp <code>JwtIssuer</code> cụ thể.</td></tr>
+  </tbody>
+</table>
+<div class="callout info"><span class="tag">DIP = nền của Hexagonal</span>
+  <p style="margin:4px 0 0">Bình thường: nghiệp vụ → gọi → DB (nghiệp vụ phụ thuộc DB). DIP đảo ngược: <b>nghiệp vụ định nghĩa interface</b> (port), <b>DB đi implement</b> (adapter). Giờ mũi tên phụ thuộc trỏ <i>vào</i> nghiệp vụ. Đó chính xác là cái hexagonal làm ở quy mô module.</p>
+</div>
+<div class="diagram">KHÔNG có DIP:   Service ──phụ thuộc──► JwtIssuer (chi tiết)
+CÓ DIP:        Service ──phụ thuộc──► «interface» TokenIssuerPort ◄──implements── JwtIssuer
+                                          (trừu tượng do domain sở hữu)</div>
+
+<!-- THEORY 2 DDD -->
+<h2 id="t2"><span class="lbl">Lý thuyết · 2/4</span>DDD tactical — từ vựng để mô hình hoá nghiệp vụ</h2>
+<h3>Entity vs Value Object — khác biệt cốt lõi</h3>
+<div class="grid g2">
+  <div class="panel"><h4 style="color:var(--brand)">Entity</h4>
+    <p class="small">Có <b>danh tính (id)</b> tồn tại theo thời gian. Hai entity bằng nhau khi <b>cùng id</b>, dù thuộc tính khác. Ví dụ: <code>Account</code> — đổi email vẫn là account đó.</p></div>
+  <div class="panel"><h4 style="color:var(--brand2)">Value Object</h4>
+    <p class="small">Không có id; định danh bằng <b>giá trị</b>. Hai VO bằng nhau khi mọi field bằng nhau, và nên <b>bất biến</b>. Ví dụ: <code>Email</code>, <code>BaseCurrency</code>, <code>MoneyAmount</code>. Dùng VO để diệt “primitive obsession” (đừng để email là <code>String</code> trần).</p></div>
+</div>
+<h3>Aggregate &amp; invariant</h3>
+<p>Aggregate là cụm object được xem như <b>một khối nhất quán</b>, có một “gốc” (aggregate root) là cửa vào duy nhất. Mọi thay đổi đi qua root để root <b>giữ invariant</b> (luật luôn đúng). Ví dụ tương lai: <code>Wallet</code> là root, balance không bao giờ âm — luật đó được bảo vệ <i>bên trong</i> Wallet, không rải rác ở service.</p>
+<h3>Domain service vs Application service</h3>
+<table>
+  <thead><tr><th></th><th>Domain service</th><th>Application service (use case)</th></tr></thead>
+  <tbody>
+    <tr><td>Chứa gì</td><td>Logic nghiệp vụ thuần không thuộc riêng entity nào</td><td>Điều phối: gọi port, mở transaction, sắp xếp các bước</td></tr>
+    <tr><td>Biết framework?</td><td>Không</td><td>Biết transaction/CDI nhưng <b>không</b> biết HTTP/SQL</td></tr>
+    <tr><td>Ví dụ</td><td>Tính phí, quy đổi FX</td><td><code>RegisterAccount</code>: hash pass → save → issue token</td></tr>
+  </tbody>
+</table>
+<div class="callout warn"><span class="tag">Ubiquitous language</span><p style="margin:4px 0 0">Repo đã có glossary (Account, Wallet, Transfer, Outbox…). DDD bảo: <b>tên trong code = tên nghiệp vụ</b>. Khi refactor, đặt tên domain theo glossary, đừng bịa thuật ngữ kỹ thuật.</p></div>
+
+<!-- THEORY 3 HEXAGONAL -->
+<h2 id="t3"><span class="lbl">Lý thuyết · 3/4</span>Layered → Hexagonal (Ports &amp; Adapters)</h2>
+<h3>Vấn đề của “layered” thuần</h3>
+<p>Kiểu layered (api → service → persistence) rất phổ biến, nhưng nếu service <code>import</code> thẳng class persistence/Hibernate thì <b>nghiệp vụ bị dính vào DB</b>: muốn test phải có DB, muốn đổi DB phải sửa nghiệp vụ. Hexagonal sửa điều đó bằng DIP.</p>
+<h3>Hình lục giác</h3>
+<div class="diagram">                 INBOUND (driving)                         OUTBOUND (driven)
+   HTTP/REST ─┐                                                   ┌─► Postgres
+              │   ┌────────── «in-port» ─────────┐               │
+   (adapter)  └──►│  RegisterAccountUseCase       │               │
+                  │            ▲                  │   «out-port»  │
+                  │   ┌────────┴───────────┐      │   SaveAccountPort ◄─ PersistenceAdapter
+                  │   │  APPLICATION layer  │─────►│   LoadAccountPort
+                  │   │  (use case impl)    │      │   TokenIssuerPort ◄─ SecurityAdapter ─► JwtIssuer
+                  │   └────────┬───────────┘      │   PasswordHasherPort
+                  │            ▼                  │
+                  │     ┌─────────────┐           │
+                  │     │   DOMAIN    │  (Account, Email, BaseCurrency)
+                  │     │  thuần tuý  │  KHÔNG biết HTTP/SQL/Quarkus
+                  │     └─────────────┘           │
+                  └──────────────────────────────┘
+   ▲ Mọi mũi tên phụ thuộc đều trỏ VÀO TRONG (về phía domain). Domain không phụ thuộc ai.</div>
+<table>
+  <thead><tr><th>Khái niệm</th><th>Là gì</th><th>Ai sở hữu</th></tr></thead>
+  <tbody>
+    <tr><td><b>Inbound (driving) port</b></td><td>Interface use case — “app có thể làm gì”</td><td>Application layer định nghĩa</td></tr>
+    <tr><td><b>Inbound adapter</b></td><td>REST resource gọi vào in-port</td><td>Hạ tầng web</td></tr>
+    <tr><td><b>Outbound (driven) port</b></td><td>Interface “app cần gì từ thế giới ngoài” (lưu, hash, phát token)</td><td>Application/domain định nghĩa</td></tr>
+    <tr><td><b>Outbound adapter</b></td><td>Class implement out-port bằng Panache/JWT thật</td><td>Hạ tầng persistence/security</td></tr>
+  </tbody>
+</table>
+
+<!-- THEORY 4 MAP -->
+<h2 id="t4"><span class="lbl">Lý thuyết · 4/4</span>Ánh xạ vào Quarkus + đánh đổi với Panache</h2>
+<table>
+  <thead><tr><th>Khái niệm hexagonal</th><th>Hiện thực trong Quarkus</th></tr></thead>
+  <tbody>
+    <tr><td>Inbound adapter</td><td>JAX-RS <code>AccountResource</code> (chỉ map DTO ↔ command, gọi in-port)</td></tr>
+    <tr><td>Inbound port</td><td>interface <code>RegisterAccountUseCase</code></td></tr>
+    <tr><td>Application service</td><td><code>@ApplicationScoped AccountApplicationService implements ...UseCase</code> (giữ <code>@Transactional</code> ở đây)</td></tr>
+    <tr><td>Outbound port</td><td>interface <code>LoadAccountPort/SaveAccountPort/TokenIssuerPort/PasswordHasherPort</code></td></tr>
+    <tr><td>Outbound adapter</td><td><code>AccountPersistenceAdapter</code> (Panache), <code>SecurityAdapter</code> (JwtIssuer+Argon2)</td></tr>
+    <tr><td>Domain</td><td>POJO/record <code>Account</code>, VO <code>Email/BaseCurrency</code> — không annotation JPA</td></tr>
+  </tbody>
+</table>
+<div class="callout danger"><span class="tag">Đánh đổi Panache — phải tự quyết</span>
+  <p style="margin:4px 0 0">Panache khuyến khích entity “thông minh” (Active Record). Hexagonal “tinh khiết” lại muốn domain tách rời entity → phải viết <b>2 hàm map</b> (<code>toDomain</code>/<code>toEntity</code>). Lợi: test domain không cần DB, đổi ORM chỉ sửa adapter. Hại: thêm boilerplate. <b>Hãy tự ghi lại cảm nhận</b> sau khi làm — đó là bài học thật về trade-off, không có đáp án “đúng tuyệt đối”.</p>
+</div>
+
+<!-- ===================== PRACTICE ===================== -->
+<h2 id="p1"><span class="lbl">Thực hành · 1/6</span>Vẽ port map trước khi gõ code (≈ 25 phút)</h2>
+<p>Đừng vội code. Liệt kê ra giấy: app <code>account</code> <b>làm được gì</b> (→ in-ports) và <b>cần gì từ ngoài</b> (→ out-ports).</p>
+<div class="grid g2">
+  <div class="panel"><h4>In-ports (use cases)</h4>
+    <ul class="small"><li><code>RegisterAccountUseCase.register(cmd) → AccountId</code></li><li><code>AuthenticateUseCase.login(cmd) → AccessToken</code></li><li><code>GetProfileUseCase.byId(id) → Profile</code> (từ Ngày 1)</li></ul></div>
+  <div class="panel"><h4>Out-ports (cần từ ngoài)</h4>
+    <ul class="small"><li><code>LoadAccountPort.findByEmail / findById</code></li><li><code>SaveAccountPort.save(Account)</code></li><li><code>PasswordHasherPort.hash / verify</code></li><li><code>TokenIssuerPort.issue(account)</code></li></ul></div>
+</div>
+<p>Cấu trúc thư mục đích trong <code>com/digitalwallet/account/</code>:</p>
+<div class="diagram">account/
+├── domain/                         # KHÔNG import jakarta.persistence / io.quarkus
+│   ├── Account.java                # entity domain (record/class thuần)
+│   ├── AccountId.java  Email.java  BaseCurrency.java   # value objects
+│   └── AccountRole.java
+├── application/
+│   ├── port/in/   RegisterAccountUseCase  AuthenticateUseCase  GetProfileUseCase
+│   ├── port/out/  LoadAccountPort SaveAccountPort PasswordHasherPort TokenIssuerPort
+│   └── service/   AccountApplicationService          # @ApplicationScoped, @Transactional
+└── adapter/
+    ├── in/web/        AccountResource  AuthResource   # JAX-RS, DTO↔command
+    └── out/
+        ├── persistence/  AccountPersistenceAdapter + AccountEntity + AccountPanacheRepo
+        └── security/     SecurityAdapter (bọc JwtIssuer + Argon2Hasher)</div>
+
+<h2 id="p2"><span class="lbl">Thực hành · 2/6</span>Tạo domain model + value objects (≈ 45 phút)</h2>
+<div class="ex-label file">account/domain/Email.java — value object bất biến, tự validate</div>
+<pre><code><span class="kw">package</span> com.digitalwallet.account.domain;
+
+<span class="kw">public record</span> <span class="ty">Email</span>(String value) {
+    <span class="kw">public</span> Email {
+        <span class="kw">if</span> (value == <span class="kw">null</span> || !value.contains(<span class="str">"@"</span>))
+            <span class="kw">throw new</span> IllegalArgumentException(<span class="str">"invalid email"</span>);
+        value = value.trim().toLowerCase();
+    }
+}</code></pre>
+<div class="ex-label file">account/domain/Account.java — entity domain (KHÔNG có @Entity)</div>
+<pre><code><span class="kw">package</span> com.digitalwallet.account.domain;
+
+<span class="kw">public class</span> <span class="ty">Account</span> {
+    <span class="kw">private final</span> <span class="ty">AccountId</span> id;
+    <span class="kw">private final</span> <span class="ty">Email</span> email;
+    <span class="kw">private final</span> <span class="ty">String</span> passwordHash;
+    <span class="kw">private final</span> <span class="ty">BaseCurrency</span> baseCurrency;
+    <span class="kw">private final</span> <span class="ty">AccountRole</span> role;
+    <span class="cmt">// constructor + getter; bất biến; KHÔNG import jakarta/quarkus ở file này</span>
+}</code></pre>
+<div class="checkpoint"><b>✅ Checkpoint:</b> mở <code>Account.java</code>, <code>Email.java</code> — không có dòng <code>import jakarta.persistence</code> hay <code>io.quarkus</code> nào. Nếu có, bạn đang để hạ tầng rò vào domain.</div>
+
+<h2 id="p3"><span class="lbl">Thực hành · 3/6</span>Định nghĩa ports (≈ 30 phút)</h2>
+<div class="ex-label file">application/port/out/SaveAccountPort.java &amp; LoadAccountPort.java</div>
+<pre><code><span class="kw">public interface</span> <span class="ty">SaveAccountPort</span> {
+    <span class="ty">Account</span> save(Account account);
+}
+<span class="kw">public interface</span> <span class="ty">LoadAccountPort</span> {
+    Optional&lt;Account&gt; findByEmail(Email email);
+    Optional&lt;Account&gt; findById(AccountId id);
+}</code></pre>
+<div class="ex-label file">application/port/in/RegisterAccountUseCase.java</div>
+<pre><code><span class="kw">public interface</span> <span class="ty">RegisterAccountUseCase</span> {
+    <span class="ty">AccountId</span> register(RegisterAccountCommand command);
+    <span class="cmt">// command là record thuần trong application/, KHÁC với DTO web</span>
+}</code></pre>
+<div class="callout info"><span class="tag">Command vs DTO</span><p style="margin:4px 0 0">DTO (<code>CreateAccountRequest</code>) thuộc web, mang validation Bean. <i>Command</i> thuộc application, là input “sạch” của use case. Adapter web dịch DTO → command. Tách ra để domain không phụ thuộc annotation web.</p></div>
+
+<h2 id="p4"><span class="lbl">Thực hành · 4/6</span>Application service (di chuyển logic) (≈ 60 phút)</h2>
+<p>Bê logic từ <code>AccountService</code>/<code>AuthService</code> cũ vào đây, nhưng <b>chỉ gọi out-port</b> (interface), không gọi Panache/JwtIssuer trực tiếp.</p>
+<div class="ex-label file">application/service/AccountApplicationService.java</div>
+<pre><code><span class="kw">@ApplicationScoped</span>
+<span class="kw">public class</span> <span class="ty">AccountApplicationService</span>
+        <span class="kw">implements</span> RegisterAccountUseCase, AuthenticateUseCase, GetProfileUseCase {
+
+    <span class="kw">private final</span> <span class="ty">LoadAccountPort</span> loadPort;
+    <span class="kw">private final</span> <span class="ty">SaveAccountPort</span> savePort;
+    <span class="kw">private final</span> <span class="ty">PasswordHasherPort</span> hasher;
+    <span class="kw">private final</span> <span class="ty">TokenIssuerPort</span> tokenIssuer;
+
+    <span class="kw">public</span> AccountApplicationService(LoadAccountPort loadPort, SaveAccountPort savePort,
+                                   PasswordHasherPort hasher, TokenIssuerPort tokenIssuer) {
+        <span class="kw">this</span>.loadPort = loadPort; <span class="kw">this</span>.savePort = savePort;
+        <span class="kw">this</span>.hasher = hasher;     <span class="kw">this</span>.tokenIssuer = tokenIssuer;
+    }
+
+    <span class="kw">@Override</span> <span class="kw">@Transactional</span>
+    <span class="kw">public</span> <span class="ty">AccountId</span> register(RegisterAccountCommand cmd) {
+        <span class="kw">if</span> (loadPort.findByEmail(cmd.email()).isPresent())
+            <span class="kw">throw new</span> ConflictException(<span class="str">"account.duplicate_email"</span>, <span class="str">"Email exists"</span>);
+        <span class="kw">var</span> account = <span class="kw">new</span> Account(AccountId.newId(), cmd.email(),
+                hasher.hash(cmd.rawPassword()), cmd.baseCurrency(), AccountRole.USER);
+        <span class="kw">return</span> savePort.save(account).id();
+    }
+}</code></pre>
+<div class="checkpoint"><b>✅ Checkpoint:</b> file này <b>không</b> import <code>AccountEntity</code>, <code>AccountRepository</code>, <code>JwtIssuer</code>. Chỉ import port (interface) + domain.</div>
+
+<h2 id="p5"><span class="lbl">Thực hành · 5/6</span>Viết adapters (nối với thế giới thật) (≈ 75 phút)</h2>
+<h4>5.1 — Persistence adapter (map entity ↔ domain)</h4>
+<div class="ex-label file">adapter/out/persistence/AccountPersistenceAdapter.java</div>
+<pre><code><span class="kw">@ApplicationScoped</span>
+<span class="kw">public class</span> <span class="ty">AccountPersistenceAdapter</span> <span class="kw">implements</span> SaveAccountPort, LoadAccountPort {
+
+    <span class="kw">private final</span> <span class="ty">AccountPanacheRepository</span> repo;   <span class="cmt"># Panache repo nằm trong adapter này</span>
+    <span class="kw">public</span> AccountPersistenceAdapter(AccountPanacheRepository repo) { <span class="kw">this</span>.repo = repo; }
+
+    <span class="kw">@Override</span> <span class="kw">public</span> <span class="ty">Account</span> save(Account a) {
+        <span class="kw">var</span> e = toEntity(a);
+        repo.persist(e);
+        <span class="kw">return</span> toDomain(e);
+    }
+    <span class="kw">@Override</span> <span class="kw">public</span> Optional&lt;Account&gt; findByEmail(Email email) {
+        <span class="kw">return</span> repo.find(<span class="str">"email"</span>, email.value()).firstResultOptional().map(<span class="kw">this</span>::toDomain);
+    }
+
+    <span class="kw">private</span> <span class="ty">Account</span> toDomain(AccountEntity e) { <span class="cmt">/* ... map fields ... */</span> }
+    <span class="kw">private</span> <span class="ty">AccountEntity</span> toEntity(Account a) { <span class="cmt">/* ... map fields ... */</span> }
+}</code></pre>
+<h4>5.2 — Security adapter (bọc hạ tầng đã có)</h4>
+<div class="ex-label file">adapter/out/security/SecurityAdapter.java</div>
+<pre><code><span class="kw">@ApplicationScoped</span>
+<span class="kw">public class</span> <span class="ty">SecurityAdapter</span> <span class="kw">implements</span> PasswordHasherPort, TokenIssuerPort {
+    <span class="kw">private final</span> <span class="ty">Argon2Hasher</span> argon2;      <span class="cmt"># dùng lại class shared/security có sẵn</span>
+    <span class="kw">private final</span> <span class="ty">JwtIssuer</span> jwtIssuer;
+    <span class="cmt">// constructor + override hash()/verify()/issue()</span>
+}</code></pre>
+<h4>5.3 — Web adapter (resource gọi in-port)</h4>
+<p>Sửa <code>AccountResource</code>: inject <code>RegisterAccountUseCase</code> (interface) thay vì <code>AccountService</code>, map DTO → command, giữ nguyên path &amp; mã trạng thái để <b>test cũ không vỡ</b>.</p>
+<div class="ex-label">Chạy lại toàn bộ test</div>
+<pre><code>cd backend
+./mvnw test</code></pre>
+<div class="checkpoint"><b>✅ Checkpoint:</b> tất cả test cũ xanh. Nếu đỏ, thường do quên wiring (CDI không tìm thấy implement của port) — đảm bảo adapter có <code>@ApplicationScoped</code> và implement đúng interface.</div>
+
+<h2 id="p6"><span class="lbl">Thực hành · 6/6 (tuỳ chọn)</span>Chốt “dependency rule” bằng ArchUnit (≈ 30 phút)</h2>
+<p>ArchUnit là thư viện test kiến trúc: viết “luật” và CI sẽ fail nếu ai đó phá luật.</p>
+<div class="ex-label file">src/test/java/.../architecture/HexagonalArchTest.java</div>
+<pre><code><span class="kw">@AnalyzeClasses</span>(packages = <span class="str">"com.digitalwallet.account"</span>)
+<span class="kw">class</span> <span class="ty">HexagonalArchTest</span> {
+    <span class="kw">@ArchTest</span>
+    <span class="kw">static final</span> ArchRule domain_khong_phu_thuoc_ha_tang =
+        noClasses().that().resideInAPackage(<span class="str">"..account.domain.."</span>)
+          .should().dependOnClassesThat()
+          .resideInAnyPackage(<span class="str">"jakarta.persistence.."</span>, <span class="str">"io.quarkus.."</span>, <span class="str">"..adapter.."</span>);
+}</code></pre>
+<p class="small muted">Thêm dependency test <code>com.tngtech.archunit:archunit-junit5</code> vào <span class="tag-file">pom.xml</span> (scope test).</p>
+
+<!-- TROUBLE -->
+<h2 id="trouble"><span class="lbl">Tham khảo nhanh</span>Bẫy thường gặp khi mới làm hexagonal</h2>
+<table>
+  <thead><tr><th>Bẫy</th><th>Dấu hiệu</th><th>Sửa</th></tr></thead>
+  <tbody>
+    <tr><td><b>Entity rò vào domain</b></td><td><code>Account.java</code> có <code>@Entity</code> / import jakarta.persistence</td><td>Tách entity (adapter) khỏi domain; viết hàm map.</td></tr>
+    <tr><td><b>Anemic domain</b></td><td>Domain chỉ có getter/setter, mọi logic ở service</td><td>Đưa invariant vào VO/entity (validate trong constructor).</td></tr>
+    <tr><td><b>Over-engineering</b></td><td>Tạo port cho thứ chỉ có 1 implement &amp; không bao giờ đổi</td><td>Port hợp lý nhất ở ranh giới I/O (DB, security). Đừng port hoá mọi thứ.</td></tr>
+    <tr><td><b>CDI không resolve port</b></td><td>Lỗi “unsatisfied dependency” khi start</td><td>Adapter phải <code>@ApplicationScoped</code> &amp; implement đúng interface port.</td></tr>
+    <tr><td><b>Phụ thuộc vòng</b></td><td>application import adapter</td><td>Chỉ adapter được import application/domain, không ngược lại.</td></tr>
+  </tbody>
+</table>
+
+<!-- DOD -->
+<h2 id="dod"><span class="lbl">Chốt ngày</span>Definition of Done — Ngày 2</h2>
+<div class="panel"><ul class="dod">
+  <li><input type="checkbox"> Phát biểu được 5 SOLID + chỉ ra DIP trong code.</li>
+  <li><input type="checkbox"> <code>account/domain/*</code> compile, không import jakarta/quarkus.</li>
+  <li><input type="checkbox"> Resource chỉ gọi in-port; application service chỉ gọi out-port.</li>
+  <li><input type="checkbox"> Persistence adapter có 2 hàm map entity↔domain.</li>
+  <li><input type="checkbox"> Toàn bộ test cũ vẫn xanh (hành vi không đổi).</li>
+  <li><input type="checkbox"> (tuỳ chọn) ArchUnit chặn domain phụ thuộc hạ tầng.</li>
+  <li><input type="checkbox"> Ghi 3–4 dòng cảm nhận về trade-off Panache↔domain mapping.</li>
+</ul></div>
+<div class="selfcheck"><h4>✔ Câu hỏi “đậu phỏng vấn”</h4>
+  <ul class="small" style="margin:6px 0 0">
+    <li>Nếu mai đổi Postgres → MongoDB, bạn phải sửa những file nào? (Đúng: chỉ <code>adapter/out/persistence</code>.)</li>
+    <li>Vì sao test use case không cần DB nữa? (Vì mock out-port.)</li>
+    <li>Khác nhau giữa command và DTO web?</li>
+  </ul>
+</div>
+
+<h2><span class="lbl">Tài liệu</span>Nguồn học ngày 2</h2>
+<ul class="src-list">
+  <li><a href="https://alistair.cockburn.us/hexagonal-architecture/">Alistair Cockburn — Hexagonal Architecture</a> <span class="d">· bản gốc khái niệm</span></li>
+  <li><a href="https://reflectoring.io/spring-hexagonal/">Reflectoring — Hexagonal Architecture with Java</a> <span class="d">· ví dụ code, dễ map sang Quarkus</span></li>
+  <li><a href="https://www.baeldung.com/hexagonal-architecture-ddd-spring">Baeldung — Hexagonal + DDD</a></li>
+  <li><a href="https://netflixtechblog.com/ready-for-changes-with-hexagonal-architecture-b315ec967749">Netflix — Ready for changes with Hexagonal Architecture</a></li>
+  <li><a href="https://www.baeldung.com/solid-principles">Baeldung — SOLID principles</a></li>
+  <li><a href="https://martinfowler.com/bliki/DomainDrivenDesign.html">Martin Fowler — DDD</a> · <a href="https://martinfowler.com/bliki/ValueObject.html">Value Object</a> · <a href="https://martinfowler.com/bliki/DDD_Aggregate.html">Aggregate</a></li>
+  <li><a href="https://www.archunit.org/">ArchUnit</a> <span class="d">· test luật kiến trúc</span></li>
+</ul>
+
+<div class="daynav">
+  <a href="day-1-java-quarkus.html"><div class="dir">⟵ Ngày trước</div><div class="ttl">Ngày 1 · Java 21 + Quarkus</div></a>
+  <a class="next" href="day-3-microprofile.html"><div class="dir">Ngày tiếp ⟶</div><div class="ttl">Ngày 3 · Quarkus MicroProfile</div></a>
+</div>
+
+<footer>DigitalWallet — Hướng dẫn học chi tiết · Ngày 2/5. Code là ví dụ minh hoạ; refactor trên nhánh <code>learning/*</code>. Áp dụng cho team cần ADR (supersede <span class="tag-file">docs/architecture</span>).</footer>
+
+</div>
+</body>
+</html>

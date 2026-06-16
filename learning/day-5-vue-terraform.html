@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ngày 5 — VueJS + Terraform · Hướng dẫn chi tiết</title>
+<link rel="stylesheet" href="assets/guide.css">
+</head>
+<body>
+
+<header class="gh">
+  <div class="wrap">
+    <div class="breadcrumb"><a href="5-day-tech-stack-plan.html">← Kế hoạch 5 ngày</a> &nbsp;/&nbsp; Ngày 5</div>
+    <h1><span class="badge b5">5</span>VueJS (mini-app) + Terraform (IaC)</h1>
+    <p class="lead">Ngày cuối ráp mọi thứ lại. <b>Buổi sáng — Vue 3:</b> dựng một SPA nhỏ <code>frontend-vue/</code> đăng nhập qua Keycloak rồi gọi API <code>wallet</code> đã bảo vệ. <b>Buổi chiều — Terraform:</b> viết Infrastructure-as-Code dựng toàn bộ hạ tầng (Postgres/Redis/Kafka/Keycloak) bằng Docker provider, rồi demo end-to-end.</p>
+    <div class="meta">
+      <span class="chip">⏱ ~8 giờ (5h Vue · 3h Terraform)</span>
+      <span class="chip">🟢 App Vue riêng, không đụng React</span>
+      <span class="chip">🟢 Terraform Docker provider (local)</span>
+      <span class="chip">🎬 Demo E2E cuối ngày</span>
+    </div>
+  </div>
+</header>
+
+<nav class="toc-mini"><div class="wrap">
+  <a href="#outcome">Mục tiêu</a>
+  <a href="#ta1">Vue: SPA/reactivity</a>
+  <a href="#ta2">Vue: Composition API</a>
+  <a href="#ta3">Pinia/Router</a>
+  <a href="#pa1">TH: scaffold+login</a>
+  <a href="#pa2">TH: màn hình ví</a>
+  <a href="#tb1">Terraform: IaC</a>
+  <a href="#tb2">Terraform: HCL</a>
+  <a href="#pb1">TH: viết config</a>
+  <a href="#pb2">TH: apply+E2E</a>
+  <a href="#dod">Hoàn thành</a>
+</div></nav>
+
+<div class="wrap">
+
+<section id="outcome">
+  <h2><span class="lbl">Kết quả mong đợi</span>Hết ngày 5 bạn sẽ…</h2>
+  <div class="panel"><ul>
+    <li>Hiểu mô hình reactivity của Vue &amp; Composition API; ánh xạ được từ React sang Vue.</li>
+    <li>Có app Vue: đăng nhập Keycloak → xem danh sách ví → mở ví → nạp tiền, gọi backend thật.</li>
+    <li>Hiểu IaC: desired state, <code>plan/apply/destroy</code>, state file, provider/resource/variable/output.</li>
+    <li>Có <code>infra/terraform/</code> dựng &amp; xoá toàn bộ hạ tầng bằng 1 lệnh; chạy demo E2E hoàn chỉnh.</li>
+  </ul></div>
+</section>
+
+<!-- ===== PART A: VUE ===== -->
+<h2 style="border-top-color:var(--d5);color:var(--d5)"><span class="lbl" style="color:var(--d5)">Phần A — VueJS</span>Frontend reactive trong 5 giờ</h2>
+
+<h3 id="ta1">A · Lý thuyết 1 — SPA &amp; mô hình reactivity</h3>
+<p>Một <b>SPA</b> (Single Page Application) tải 1 lần, sau đó JS cập nhật DOM khi state đổi, không reload trang. Trái tim của Vue là <b>reactivity</b>: bạn khai báo state, Vue <i>tự</i> cập nhật phần giao diện phụ thuộc state đó khi nó thay đổi — bạn không tự sờ vào DOM.</p>
+<div class="diagram">state thay đổi  ──►  Vue phát hiện (reactive proxy)  ──►  render lại đúng phần phụ thuộc  ──►  DOM cập nhật
+   (bạn viết)            (framework lo)                       (framework lo)               (người dùng thấy)</div>
+
+<h3 id="ta2">A · Lý thuyết 2 — Composition API (<code>&lt;script setup&gt;</code>)</h3>
+<p>Vue 3 khuyến nghị Composition API: logic gom theo “mối quan tâm” thay vì rải theo options. Các viên gạch:</p>
+<table>
+  <thead><tr><th>API</th><th>Làm gì</th><th>Tương đương React</th></tr></thead>
+  <tbody>
+    <tr><td><code>ref(x)</code></td><td>State phản ứng cho giá trị đơn (đọc/ghi qua <code>.value</code>)</td><td><code>useState</code></td></tr>
+    <tr><td><code>reactive(obj)</code></td><td>State phản ứng cho object</td><td><code>useState</code> với object</td></tr>
+    <tr><td><code>computed(fn)</code></td><td>Giá trị dẫn xuất, cache theo phụ thuộc</td><td><code>useMemo</code></td></tr>
+    <tr><td><code>watch(src, fn)</code></td><td>Chạy side-effect khi nguồn đổi</td><td><code>useEffect</code></td></tr>
+    <tr><td><code>onMounted(fn)</code></td><td>Chạy khi component gắn vào DOM</td><td><code>useEffect(...,[])</code></td></tr>
+  </tbody>
+</table>
+<div class="ex-label">Ví dụ minh hoạ — một component đếm</div>
+<pre><code>&lt;script setup lang="ts"&gt;
+import { ref, computed } from 'vue'
+
+const count = ref(0)                       <span class="cmt">// state</span>
+const doubled = computed(() =&gt; count.value * 2)   <span class="cmt">// dẫn xuất</span>
+function inc() { count.value++ }            <span class="cmt">// đổi state → UI tự cập nhật</span>
+&lt;/script&gt;
+
+&lt;template&gt;
+  &lt;button @click="inc"&gt;count = {{ count }}, x2 = {{ doubled }}&lt;/button&gt;
+&lt;/template&gt;</code></pre>
+<p class="small muted">Cú pháp template: <code>{{ }}</code> nội suy, <code>@click</code> bắt sự kiện, <code>:prop</code> bind, <code>v-for</code>/<code>v-if</code> lặp/điều kiện.</p>
+
+<h3 id="ta3">A · Lý thuyết 3 — Pinia (state) &amp; Vue Router</h3>
+<div class="grid g2">
+  <div class="panel"><h4>Pinia store</h4>
+    <p class="small">State chia sẻ nhiều component: <code>state</code> (dữ liệu), <code>getters</code> (dẫn xuất), <code>actions</code> (hàm thay đổi/gọi API). Giống Redux nhưng gọn hơn nhiều, không boilerplate.</p></div>
+  <div class="panel"><h4>Vue Router</h4>
+    <p class="small">Map URL → component; <code>beforeEach</code> guard để chặn route cần đăng nhập (tương tự <code>&lt;RequireAuth&gt;</code> bên React).</p></div>
+</div>
+
+<h2 id="pa1"><span class="lbl">Thực hành A · 1/2</span>Scaffold app Vue + đăng nhập Keycloak (≈ 90 phút)</h2>
+<ol class="steps">
+  <li><b class="act">Tạo app tách biệt</b> (KHÔNG đụng <code>frontend/</code> React):
+<pre><code>pnpm create vue@latest frontend-vue
+<span class="cmt"># chọn: TypeScript ✔, Router ✔, Pinia ✔ (bỏ qua phần khác cho gọn)</span>
+cd frontend-vue &amp;&amp; pnpm install &amp;&amp; pnpm add keycloak-js</code></pre></li>
+  <li><b class="act">Khởi tạo Keycloak client</b> (public <code>digitalwallet-frontend</code> tạo ở Ngày 4):
+<div class="ex-label file">src/auth/keycloak.ts</div>
+<pre><code>import Keycloak from 'keycloak-js'
+
+export const keycloak = new Keycloak({
+  url: 'http://localhost:8081',
+  realm: 'digitalwallet',
+  clientId: 'digitalwallet-frontend',
+})
+<span class="cmt">// PKCE bật mặc định với client public; gọi keycloak.init({onLoad:'login-required'})</span></code></pre></li>
+  <li><b class="act">Pinia auth store</b> — giữ token <b>trong memory</b> (không localStorage — <span class="tag-file">security.md §6</span>):
+<div class="ex-label file">src/stores/auth.ts</div>
+<pre><code>import { defineStore } from 'pinia'
+import { keycloak } from '@/auth/keycloak'
+
+export const useAuth = defineStore('auth', {
+  state: () =&gt; ({ token: '' as string, username: '' as string }),
+  actions: {
+    async login() {
+      await keycloak.init({ onLoad: 'login-required', pkceMethod: 'S256' })
+      this.token = keycloak.token ?? ''
+      this.username = keycloak.tokenParsed?.preferred_username ?? ''
+    },
+    logout() { this.token = ''; keycloak.logout() },
+  },
+})</code></pre></li>
+  <li><b class="act">Route guard</b>: trong <code>router</code>, <code>beforeEach</code> nếu chưa có token → gọi <code>login()</code>.</li>
+</ol>
+<div class="checkpoint"><b>✅ Checkpoint:</b> mở app → bị đẩy sang trang đăng nhập Keycloak → nhập <code>alice</code> → quay lại app với token trong store.</div>
+
+<h2 id="pa2"><span class="lbl">Thực hành A · 2/2</span>Màn hình ví: list + mở + nạp (≈ 120 phút)</h2>
+<ol class="steps">
+  <li><b class="act">Wallet store</b> — gọi API kèm Bearer token:
+<div class="ex-label file">src/stores/wallet.ts</div>
+<pre><code>import { defineStore } from 'pinia'
+import { useAuth } from './auth'
+
+const API = '/api'   <span class="cmt"># Vite proxy → backend (xem bước 4)</span>
+
+export const useWallet = defineStore('wallet', {
+  state: () =&gt; ({ wallets: [] as Wallet[], loading: false }),
+  actions: {
+    async fetchWallets() {
+      this.loading = true
+      const res = await fetch(`${API}/wallets`, {
+        headers: { Authorization: `Bearer ${useAuth().token}` },
+      })
+      this.wallets = await res.json()
+      this.loading = false
+    },
+  },
+})</code></pre></li>
+  <li><b class="act">Trang danh sách ví</b> — hiện <b>label + currency + balance</b> cùng nhau (đừng định danh ví bằng currency); format tiền bằng <code>Intl.NumberFormat</code>, KHÔNG <code>toFixed</code> trên number (mất chính xác <code>numeric(19,4)</code>):
+<div class="ex-label file">src/views/WalletList.vue</div>
+<pre><code>&lt;script setup lang="ts"&gt;
+import { onMounted } from 'vue'
+import { useWallet } from '@/stores/wallet'
+const store = useWallet()
+const fmt = (v: string, c: string) =&gt;
+  new Intl.NumberFormat(undefined, { style: 'currency', currency: c }).format(Number(v))
+onMounted(() =&gt; store.fetchWallets())
+&lt;/script&gt;
+
+&lt;template&gt;
+  &lt;p v-if="store.loading"&gt;Đang tải…&lt;/p&gt;
+  &lt;ul v-else&gt;
+    &lt;li v-for="w in store.wallets" :key="w.id"&gt;
+      {{ w.label }} — {{ w.currencyCode }} — {{ fmt(w.balance, w.currencyCode) }}
+    &lt;/li&gt;
+  &lt;/ul&gt;
+&lt;/template&gt;</code></pre></li>
+  <li><b class="act">Form mở ví &amp; nạp tiền</b>: <code>POST /wallets</code> và <code>POST /wallets/{id}/deposits</code>. Form deposit sinh <code>Idempotency-Key</code> (UUID) <b>lúc mount</b> và dùng lại khi resubmit (đừng sinh mới mỗi lần bấm — sẽ thành giao dịch mới).</li>
+  <li><b class="act">Vite proxy</b> để tránh CORS khi dev — trỏ <code>/api</code> sang backend:
+<div class="ex-label file">vite.config.ts</div>
+<pre><code>server: {
+  port: 5173,
+  proxy: { '/api': { target: 'http://localhost:8080', changeOrigin: true,
+                     rewrite: p =&gt; p.replace(/^\/api/, '') } },
+}</code></pre></li>
+</ol>
+<div class="checkpoint"><b>✅ Checkpoint A:</b> đăng nhập → thấy ví → mở ví mới → nạp tiền → balance cập nhật, tất cả gọi backend đã bảo vệ bằng Keycloak.</div>
+
+<!-- ===== PART B: TERRAFORM ===== -->
+<h2 style="border-top-color:var(--d5);color:var(--d5)"><span class="lbl" style="color:var(--d5)">Phần B — Terraform</span>Infrastructure as Code trong 3 giờ</h2>
+
+<h3 id="tb1">B · Lý thuyết 1 — IaC là gì &amp; vòng đời</h3>
+<p>Thay vì click chuột/gõ lệnh tạo hạ tầng (dễ quên, khó tái lập), bạn <b>mô tả hạ tầng bằng file</b>. Terraform đọc file, so với thực tế, rồi tạo/sửa/xoá để đạt <b>desired state</b>. Đặc tính quan trọng: <b>declarative</b> (mô tả “muốn gì”, không phải “làm từng bước”) &amp; <b>idempotent</b> (apply nhiều lần vẫn ra một kết quả).</p>
+<div class="diagram">  .tf files  ──►  terraform plan   ──►  terraform apply  ──►  hạ tầng thật
+ (desired state)   (xem trước thay đổi)   (thực thi)            │
+                                                                ▼
+                                                         terraform.tfstate
+                                                   (Terraform nhớ nó đã tạo gì)
+  terraform destroy  ──►  xoá sạch mọi thứ đã tạo</div>
+<table>
+  <thead><tr><th>Lệnh</th><th>Làm gì</th></tr></thead>
+  <tbody>
+    <tr><td><code>terraform init</code></td><td>Tải provider, khởi tạo thư mục</td></tr>
+    <tr><td><code>terraform plan</code></td><td>Hiện <b>trước</b> những gì sẽ thay đổi (an toàn, không thực thi)</td></tr>
+    <tr><td><code>terraform apply</code></td><td>Thực thi để đạt desired state</td></tr>
+    <tr><td><code>terraform destroy</code></td><td>Xoá toàn bộ tài nguyên đã quản lý</td></tr>
+  </tbody>
+</table>
+<div class="callout warn"><span class="tag">State file</span><p style="margin:4px 0 0"><code>terraform.tfstate</code> là “bộ nhớ” của Terraform về tài nguyên đã tạo. Đừng commit nếu chứa secret; với team thật sẽ để remote state (S3…). Học local thì để mặc định.</p></div>
+
+<h3 id="tb2">B · Lý thuyết 2 — HCL &amp; các khối xây dựng</h3>
+<table>
+  <thead><tr><th>Khối</th><th>Ý nghĩa</th></tr></thead>
+  <tbody>
+    <tr><td><code>provider</code></td><td>Plugin nói chuyện với 1 nền tảng (docker, aws…)</td></tr>
+    <tr><td><code>resource</code></td><td>Một thứ cần tồn tại (container, network, image)</td></tr>
+    <tr><td><code>variable</code></td><td>Tham số đầu vào (port, password) — truyền qua <code>TF_VAR_*</code></td></tr>
+    <tr><td><code>output</code></td><td>Giá trị xuất ra sau apply (tên container, cổng)</td></tr>
+    <tr><td><code>data</code></td><td>Đọc thông tin có sẵn (vd pull image)</td></tr>
+    <tr><td><code>module</code></td><td>Gói tái sử dụng nhiều resource</td></tr>
+  </tbody>
+</table>
+
+<h2 id="pb1"><span class="lbl">Thực hành B · 1/2</span>Viết Terraform dựng hạ tầng local (≈ 105 phút)</h2>
+<p>Tạo <code>infra/terraform/</code> tái lập đúng stack đang chạy trong <code>backend/docker-compose.yml</code>, nhưng bằng resource Terraform với <b>Docker provider</b>.</p>
+<div class="ex-label file">infra/terraform/main.tf (rút gọn — Postgres + network; thêm Redis/Kafka/Keycloak tương tự)</div>
+<pre><code>terraform {
+  required_providers {
+    docker = { source = "kreuzwerker/docker", version = "~&gt; 3.0" }
+  }
+}
+provider "docker" {}
+
+resource "docker_network" "dw" { name = "dw-net" }
+
+resource "docker_image" "postgres" { name = "postgres:16" }
+
+resource "docker_container" "postgres" {
+  name  = "dw-postgres"
+  image = docker_image.postgres.image_id
+  env = [
+    "POSTGRES_DB=digitalwallet",
+    "POSTGRES_USER=dw",
+    "POSTGRES_PASSWORD=${var.db_password}",   <span class="cmt"># từ biến, KHÔNG hardcode</span>
+  ]
+  ports { internal = 5432, external = var.db_port }
+  networks_advanced { name = docker_network.dw.name }
+}</code></pre>
+<div class="ex-label file">infra/terraform/variables.tf &amp; outputs.tf</div>
+<pre><code><span class="cmt"># variables.tf</span>
+variable "db_password" { type = string, sensitive = true }   <span class="cmt"># truyền qua TF_VAR_db_password</span>
+variable "db_port"     { type = number, default = 5432 }
+
+<span class="cmt"># outputs.tf</span>
+output "postgres_container" { value = docker_container.postgres.name }
+output "postgres_port"      { value = var.db_port }</code></pre>
+<ol class="steps">
+  <li>Thêm tiếp resource cho <b>Redis 7</b>, <b>Kafka (KRaft)</b>, <b>Keycloak</b> (mount <code>realm-export.json</code> đã export ở Ngày 4) — cùng network <code>dw-net</code>.</li>
+  <li>Truyền secret qua env, không ghi vào file:
+<pre><code>export TF_VAR_db_password=...&lt;mật khẩu&gt;...</code></pre></li>
+</ol>
+<div class="callout danger"><span class="tag">⚠ Lệch §4.6</span><p style="margin:4px 0 0">Repo mandate Docker Compose. Terraform sống dưới <code>infra/terraform/</code> như spike song song, không thay compose của team trừ khi có ADR.</p></div>
+
+<h2 id="pb2"><span class="lbl">Thực hành B · 2/2</span>apply / destroy + Demo End-to-End (≈ 60 phút)</h2>
+<ol class="steps">
+  <li><b class="act">Khởi tạo &amp; xem trước</b>:
+<pre><code>cd infra/terraform
+terraform init       <span class="cmt"># tải Docker provider</span>
+terraform plan       <span class="cmt"># đọc kỹ: "X to add" — chưa tạo gì cả</span></code></pre></li>
+  <li><b class="act">Thực thi</b>:
+<pre><code>terraform apply      <span class="cmt"># gõ yes → các container lên</span>
+docker ps            <span class="cmt"># thấy dw-postgres, dw-redis, dw-kafka, dw-keycloak</span>
+terraform output     <span class="cmt"># xem tên container + cổng</span></code></pre></li>
+  <li><b class="act">Chạy demo E2E</b>:
+    <ul class="small">
+      <li>Backend: <code>cd backend &amp;&amp; ./mvnw quarkus:dev -Dquarkus.profile=keycloak</code></li>
+      <li>Vue: <code>pnpm --dir frontend-vue dev</code> → mở <code>http://localhost:5173</code></li>
+      <li>Đăng nhập Keycloak → mở ví → nạp tiền → balance cập nhật.</li>
+    </ul>
+  </li>
+  <li><b class="act">Dọn dẹp</b> để thấy trọn vòng đời IaC:
+<pre><code>terraform destroy    <span class="cmt"># gõ yes → mọi container/network biến mất sạch</span></code></pre></li>
+</ol>
+<div class="checkpoint"><b>✅ Checkpoint B:</b> một lệnh <code>apply</code> dựng cả hạ tầng, một lệnh <code>destroy</code> xoá sạch. Demo E2E chạy thông từ Vue → Keycloak → backend → DB.</div>
+
+<!-- DOD -->
+<h2 id="dod"><span class="lbl">Chốt ngày</span>Definition of Done — Ngày 5 (&amp; cả tuần)</h2>
+<div class="panel"><ul class="dod">
+  <li><input type="checkbox"> App Vue đăng nhập qua Keycloak, token in-memory.</li>
+  <li><input type="checkbox"> List ví + mở ví + nạp tiền chạy thật với backend đã bảo vệ.</li>
+  <li><input type="checkbox"> Tiền hiển thị bằng <code>Intl.NumberFormat</code>; ví hiện label + currency.</li>
+  <li><input type="checkbox"> Idempotency-Key sinh lúc mount, dùng lại khi resubmit.</li>
+  <li><input type="checkbox"> <code>terraform apply</code> dựng đủ Postgres/Redis/Kafka/Keycloak; <code>destroy</code> sạch.</li>
+  <li><input type="checkbox"> Demo E2E thành công — quay lại 60s làm “bằng chứng học”.</li>
+</ul></div>
+<div class="selfcheck"><h4>✔ Tự kiểm cuối tuần</h4>
+  <ul class="small" style="margin:6px 0 0">
+    <li>Pinia store khác Redux ở điểm nào? <code>ref</code> vs <code>useState</code>?</li>
+    <li>Vì sao token để in-memory an toàn hơn localStorage?</li>
+    <li><code>terraform plan</code> giúp gì <i>trước</i> <code>apply</code>? State file để làm gì?</li>
+    <li>Declarative vs imperative khác nhau thế nào?</li>
+  </ul>
+</div>
+
+<div class="callout ok"><span class="tag">Sau 5 ngày — bước tiếp</span>
+  <p style="margin:4px 0 0">Bạn đã chạm cả 6 stack. Giờ quay lại làm <b>đúng chuẩn production</b> trên nhánh feature thật: NFR1 (Redis lock + <code>PESSIMISTIC_WRITE</code>), NFR2 (Outbox + Kafka poller), NFR3 (idempotency_record), rồi fraud/PFM/advisor. Các pattern resilience (Ngày 3) &amp; security (Ngày 4) tái dùng trực tiếp. Muốn giữ Keycloak/Hexagonal/Vue/Terraform cho team → mở ADR theo <span class="tag-file">upgrade-policy.md §5</span>.</p>
+</div>
+
+<h2><span class="lbl">Tài liệu</span>Nguồn học ngày 5</h2>
+<div class="grid g2">
+  <div class="panel"><h4 style="color:var(--d5)">Vue</h4>
+    <ul class="src-list">
+      <li><a href="https://vuejs.org/guide/introduction.html">Vue 3 — Guide</a> · <a href="https://vuejs.org/tutorial/">Tutorial tương tác</a></li>
+      <li><a href="https://vuejs.org/guide/quick-start.html">Quick start (Vite)</a></li>
+      <li><a href="https://pinia.vuejs.org/introduction.html">Pinia</a> · <a href="https://router.vuejs.org/guide/">Vue Router</a></li>
+      <li><a href="https://www.keycloak.org/securing-apps/javascript-adapter">Keycloak — JavaScript adapter</a></li>
+    </ul>
+  </div>
+  <div class="panel"><h4 style="color:var(--d5)">Terraform</h4>
+    <ul class="src-list">
+      <li><a href="https://developer.hashicorp.com/terraform/tutorials/docker-get-started">Get started (Docker)</a></li>
+      <li><a href="https://developer.hashicorp.com/terraform/intro">Intro</a> · <a href="https://developer.hashicorp.com/terraform/language">Language</a></li>
+      <li><a href="https://registry.terraform.io/providers/kreuzwerker/docker/latest/docs">Docker provider (kreuzwerker)</a></li>
+    </ul>
+  </div>
+</div>
+
+<div class="daynav">
+  <a href="day-4-keycloak.html"><div class="dir">⟵ Ngày trước</div><div class="ttl">Ngày 4 · Keycloak (OAuth2/OIDC)</div></a>
+  <a class="next" href="5-day-tech-stack-plan.html"><div class="dir">Hoàn thành ✓</div><div class="ttl">Về tổng quan kế hoạch 5 ngày</div></a>
+</div>
+
+<footer>DigitalWallet — Hướng dẫn học chi tiết · Ngày 5/5. App Vue &amp; Terraform là spike song song (không thay React/Compose của team). Không bao giờ để secret trong <code>VITE_*</code> hay file <code>.tf</code>.</footer>
+
+</div>
+</body>
+</html>

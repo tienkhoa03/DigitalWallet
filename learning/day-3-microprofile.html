@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ngày 3 — Quarkus MicroProfile + wallet MVP · Hướng dẫn chi tiết</title>
+<link rel="stylesheet" href="assets/guide.css">
+</head>
+<body>
+
+<header class="gh">
+  <div class="wrap">
+    <div class="breadcrumb"><a href="5-day-tech-stack-plan.html">← Kế hoạch 5 ngày</a> &nbsp;/&nbsp; Ngày 3</div>
+    <h1><span class="badge b3">3</span>Quarkus MicroProfile + wallet MVP</h1>
+    <p class="lead">Hôm nay bạn dựng lát cắt tính năng <b>wallet</b> (mở ví, nạp tiền, liệt kê) — và dùng nó làm “sân tập” cho MicroProfile: <b>Health</b> (liveness/readiness), <b>Metrics</b> (Micrometer), <b>OpenAPI/Swagger</b>, và <b>Fault Tolerance</b> (circuit breaker, retry, fallback). Lý thuyết nền: 12-factor + các pattern chống lỗi trong hệ phân tán.</p>
+    <div class="meta">
+      <span class="chip">⏱ ~8 giờ</span>
+      <span class="chip">🎯 Hiểu resilience patterns</span>
+      <span class="chip">🛠 wallet slice + /q/swagger-ui</span>
+      <span class="chip">🧪 Circuit breaker chạy thật</span>
+    </div>
+  </div>
+</header>
+
+<nav class="toc-mini"><div class="wrap">
+  <a href="#outcome">Mục tiêu</a>
+  <a href="#t1">12-factor</a>
+  <a href="#t2">Resilience</a>
+  <a href="#t3">Observability</a>
+  <a href="#t4">MicroProfile/SmallRye</a>
+  <a href="#p1">TH: extensions+V2</a>
+  <a href="#p2">TH: wallet slice</a>
+  <a href="#p3">TH: Health</a>
+  <a href="#p4">TH: Metrics</a>
+  <a href="#p5">TH: OpenAPI</a>
+  <a href="#p6">TH: Circuit Breaker</a>
+  <a href="#p7">TH: Test</a>
+  <a href="#dod">Hoàn thành</a>
+</div></nav>
+
+<div class="wrap">
+
+<section id="outcome">
+  <h2><span class="lbl">Kết quả mong đợi</span>Hết ngày 3 bạn sẽ…</h2>
+  <div class="panel"><ul>
+    <li>Hiểu &amp; thấy tận mắt: liveness vs readiness, timer metric, breaker chuyển trạng thái open.</li>
+    <li>Có 3 endpoint wallet chạy thật, gọi được ngay trên Swagger UI.</li>
+    <li>Biết khi nào nên <b>retry</b>, khi nào nên <b>mở circuit breaker</b>, khi nào dùng <b>fallback</b>.</li>
+    <li>Giữ coverage service ≥ 80% (NFR4) — <code>./mvnw verify</code> xanh.</li>
+  </ul></div>
+  <div class="callout danger"><span class="tag">Nhắc lại phạm vi</span><p style="margin:4px 0 0">Lát cắt <b>deposit hôm nay là “đồ chơi”</b>: KHÔNG có Redis lock (NFR1), KHÔNG outbox/Kafka (NFR2), KHÔNG enforce idempotency replay (NFR3). Mục tiêu là học MicroProfile, không phải money-path production.</p></div>
+</section>
+
+<!-- THEORY 1 -->
+<h2 id="t1"><span class="lbl">Lý thuyết · 1/4</span>12-factor app — 4 yếu tố liên quan hôm nay</h2>
+<table>
+  <thead><tr><th>Factor</th><th>Nói gì</th><th>Áp dụng</th></tr></thead>
+  <tbody>
+    <tr><td><b>III. Config</b></td><td>Cấu hình ở environment, không hard-code</td><td>Ngưỡng, port, secret qua env / <code>application.properties</code></td></tr>
+    <tr><td><b>IV. Backing services</b></td><td>DB/Kafka/Redis là “tài nguyên gắn ngoài”, thay được</td><td>Readiness check ping DB; đổi DB không sửa code nghiệp vụ</td></tr>
+    <tr><td><b>XI. Logs</b></td><td>Log là luồng sự kiện, app không tự quản file log</td><td>Quarkus xuất ra stdout; không log PII (<span class="tag-file">backend_coding.md §11</span>)</td></tr>
+    <tr><td><b>IX. Disposability</b></td><td>Khởi động nhanh, tắt êm</td><td>Quarkus khởi động mili-giây; health cho orchestrator biết khi nào sẵn sàng</td></tr>
+  </tbody>
+</table>
+
+<!-- THEORY 2 -->
+<h2 id="t2"><span class="lbl">Lý thuyết · 2/4</span>Resilience patterns — chống lỗi trong hệ phân tán</h2>
+<p>Khi app gọi service ngoài (DB, LLM, FX API), thứ ngoài đó <b>sẽ</b> chậm hoặc chết. 5 pattern dưới đây giúp lỗi cục bộ không kéo sập cả hệ thống.</p>
+<table>
+  <thead><tr><th>Pattern</th><th>Giải quyết</th><th>Khi nào dùng</th></tr></thead>
+  <tbody>
+    <tr><td><b>Timeout</b></td><td>Cuộc gọi treo vô hạn</td><td>Mọi cuộc gọi I/O ra ngoài</td></tr>
+    <tr><td><b>Retry (+ backoff)</b></td><td>Lỗi <i>thoáng qua</i> (mạng chớp tắt)</td><td>Lỗi có khả năng tự khỏi; <b>không</b> retry lỗi logic (400/422)</td></tr>
+    <tr><td><b>Circuit Breaker</b></td><td>Service ngoài <i>chết kéo dài</i> → đừng gọi nữa, để nó hồi</td><td>Khi retry chỉ làm tệ hơn</td></tr>
+    <tr><td><b>Bulkhead</b></td><td>Một phần chậm “ăn” hết thread của phần khác</td><td>Cô lập pool theo loại việc</td></tr>
+    <tr><td><b>Fallback</b></td><td>Cần một câu trả lời “tạm chấp nhận” khi lỗi</td><td>Trả giá trị mặc định / cache cũ</td></tr>
+  </tbody>
+</table>
+<h3>Circuit breaker — 3 trạng thái (nhớ kỹ)</h3>
+<div class="diagram">           lỗi vượt ngưỡng                  hết thời gian chờ
+  CLOSED ───────────────────► OPEN ───────────────────► HALF-OPEN
+   ▲  (cho gọi bình thường)   (chặn ngay,        (cho gọi thử vài request)
+   │   đếm tỉ lệ lỗi)          trả fallback)               │
+   └───────────────────────────────────────────────────────┘
+              thử thành công → đóng lại (CLOSED)</div>
+<p class="why"><b>Liên hệ repo:</b> NFR8 yêu cầu bọc circuit breaker quanh cuộc gọi LLM của advisor. Bài demo hôm nay là “bản nháp” của chính pattern đó.</p>
+
+<!-- THEORY 3 -->
+<h2 id="t3"><span class="lbl">Lý thuyết · 3/4</span>Observability — health &amp; metrics</h2>
+<div class="grid g2">
+  <div class="panel"><h4>Health: liveness vs readiness</h4>
+    <ul class="small">
+      <li><b>Liveness</b> = “app còn sống không?” Nếu fail → orchestrator <b>restart</b> container.</li>
+      <li><b>Readiness</b> = “app sẵn sàng nhận traffic chưa?” (vd DB đã kết nối). Nếu fail → tạm <b>ngừng route</b> traffic, không restart.</li>
+      <li>Endpoint Quarkus: <code>/q/health/live</code>, <code>/q/health/ready</code>, <code>/q/health</code>.</li>
+    </ul>
+  </div>
+  <div class="panel"><h4>Metrics: RED method</h4>
+    <ul class="small">
+      <li><b>R</b>ate — số request/giây.</li>
+      <li><b>E</b>rrors — tỉ lệ lỗi.</li>
+      <li><b>D</b>uration — độ trễ (timer/histogram).</li>
+      <li>Repo dùng <b>Micrometer + Prometheus</b> (đã có extension). Prometheus <i>kéo</i> số liệu từ <code>/q/metrics</code> (pull-based).</li>
+    </ul>
+  </div>
+</div>
+
+<!-- THEORY 4 -->
+<h2 id="t4"><span class="lbl">Lý thuyết · 4/4</span>MicroProfile &amp; SmallRye — bộ spec cho microservice Java</h2>
+<p><b>MicroProfile</b> là tập các đặc tả (spec) chuẩn hoá những thứ microservice nào cũng cần: Config, Health, Metrics, Fault Tolerance, OpenAPI, JWT… <b>SmallRye</b> là bộ hiện thực mà Quarkus dùng. Bạn lập trình theo annotation chuẩn, Quarkus lo phần còn lại.</p>
+<table>
+  <thead><tr><th>Spec</th><th>Annotation chính</th><th>Trong repo</th></tr></thead>
+  <tbody>
+    <tr><td>MP Config</td><td><code>@ConfigProperty</code>, <code>@ConfigMapping</code></td><td>✅ đã dùng</td></tr>
+    <tr><td>MP JWT</td><td><code>@RolesAllowed</code>, <code>JsonWebToken</code></td><td>✅ smallrye-jwt</td></tr>
+    <tr><td>Metrics (Micrometer)</td><td><code>@Timed</code>, <code>@Counted</code></td><td>✅ micrometer-prometheus</td></tr>
+    <tr><td>MP Health</td><td><code>@Liveness</code>, <code>@Readiness</code></td><td>➕ thêm hôm nay</td></tr>
+    <tr><td>MP Fault Tolerance</td><td><code>@CircuitBreaker</code>, <code>@Retry</code>, <code>@Timeout</code>, <code>@Fallback</code>, <code>@Bulkhead</code></td><td>➕ thêm hôm nay</td></tr>
+    <tr><td>MP OpenAPI</td><td><code>@Operation</code>, <code>@APIResponse</code>, <code>@Schema</code></td><td>➕ thêm hôm nay</td></tr>
+  </tbody>
+</table>
+
+<!-- ===================== PRACTICE ===================== -->
+<h2 id="p1"><span class="lbl">Thực hành · 1/7</span>Thêm extension &amp; migration V2 (≈ 30 phút)</h2>
+<ol class="steps">
+  <li><b class="act">Thêm 3 extension</b> (micrometer-prometheus đã có):
+<pre><code>cd backend
+./mvnw quarkus:add-extension -Dextensions="smallrye-health,smallrye-fault-tolerance,smallrye-openapi"</code></pre></li>
+  <li><b class="act">Viết Flyway V2</b> — file <span class="tag-file">src/main/resources/db/migration/V2__create_wallet_table.sql</span>:
+<div class="ex-label file">V2__create_wallet_table.sql</div>
+<pre><code><span class="kw">CREATE TABLE</span> wallet (
+    id            uuid         <span class="kw">PRIMARY KEY</span>,
+    account_id    uuid         <span class="kw">NOT NULL REFERENCES</span> account(id),
+    currency_code varchar(3)   <span class="kw">NOT NULL</span>,
+    label         varchar(64)  <span class="kw">NOT NULL</span>,
+    balance       numeric(19,4) <span class="kw">NOT NULL DEFAULT</span> 0,
+    created_at    timestamptz  <span class="kw">NOT NULL DEFAULT</span> now(),
+    <span class="kw">CONSTRAINT</span> uq_wallet_label <span class="kw">UNIQUE</span> (account_id, label)
+);
+<span class="kw">CREATE INDEX</span> idx_wallet_account <span class="kw">ON</span> wallet(account_id);</code></pre></li>
+</ol>
+<div class="callout warn"><span class="tag">Luật repo</span><p style="margin:4px 0 0">Entity + migration <b>cùng một PR</b> (<span class="tag-file">backend_coding.md §13</span>); tiền là <code>numeric(19,4)</code>, thời gian là <code>timestamptz</code>; <code>generation=none</code> (Hibernate không tự sửa schema).</p></div>
+
+<h2 id="p2"><span class="lbl">Thực hành · 2/7</span>Dựng wallet slice (theo hexagonal Ngày 2) (≈ 120 phút)</h2>
+<p>Tái dùng đúng khuôn ports &amp; adapters đã học. Tối thiểu cần:</p>
+<div class="diagram">wallet/
+├── domain/         Wallet, WalletId, Money (VO)
+├── application/
+│   ├── port/in/    OpenWalletUseCase, DepositUseCase, ListWalletsUseCase
+│   ├── port/out/   WalletPersistencePort
+│   └── service/    WalletApplicationService  (@Transactional, ownership check)
+└── adapter/
+    ├── in/web/     WalletResource (+ DTO: OpenWalletRequest, DepositRequest, WalletResponse)
+    └── out/persistence/  WalletPersistenceAdapter + WalletEntity + WalletPanacheRepo</div>
+<div class="ex-label file">wallet/adapter/in/web/WalletResource.java — 3 endpoint</div>
+<pre><code><span class="kw">@Path</span>(WalletResource.BASE)
+<span class="kw">@Produces</span>(MediaType.APPLICATION_JSON) <span class="kw">@Consumes</span>(MediaType.APPLICATION_JSON)
+<span class="kw">public class</span> <span class="ty">WalletResource</span> {
+    <span class="kw">public static final</span> String BASE = <span class="str">"/wallets"</span>;   <span class="cmt"># path constant (luật §2)</span>
+
+    <span class="kw">private final</span> <span class="ty">OpenWalletUseCase</span> openWallet;
+    <span class="kw">private final</span> <span class="ty">DepositUseCase</span> deposit;
+    <span class="kw">private final</span> <span class="ty">ListWalletsUseCase</span> listWallets;
+    <span class="kw">private final</span> <span class="ty">JsonWebToken</span> jwt;
+    <span class="cmt">// constructor injection ...</span>
+
+    <span class="kw">@POST</span> <span class="kw">@RolesAllowed</span>(<span class="str">"USER"</span>)
+    <span class="kw">public</span> RestResponse&lt;WalletResponse&gt; open(<span class="kw">@Valid</span> OpenWalletRequest req) {
+        <span class="kw">var</span> id = UUID.fromString(jwt.getSubject());
+        <span class="kw">return</span> RestResponse.status(Status.CREATED, openWallet.open(id, req.currencyCode(), req.label()));
+    }
+
+    <span class="kw">@POST</span> <span class="kw">@Path</span>(<span class="str">"/{walletId}/deposits"</span>) <span class="kw">@RolesAllowed</span>(<span class="str">"USER"</span>)
+    <span class="kw">public</span> WalletResponse deposit(<span class="kw">@PathParam</span>(<span class="str">"walletId"</span>) UUID walletId,
+            <span class="kw">@HeaderParam</span>(<span class="str">"Idempotency-Key"</span>) <span class="kw">@NotNull</span> UUID key,   <span class="cmt"># chỉ NHẬN, chưa enforce (NFR3 ngoài scope)</span>
+            <span class="kw">@Valid</span> DepositRequest req) {
+        <span class="kw">var</span> account = UUID.fromString(jwt.getSubject());
+        <span class="kw">return</span> deposit.deposit(account, walletId, req.amount());
+    }
+
+    <span class="kw">@GET</span> <span class="kw">@RolesAllowed</span>(<span class="str">"USER"</span>)
+    <span class="kw">public</span> List&lt;WalletResponse&gt; list() {
+        <span class="kw">return</span> listWallets.byOwner(UUID.fromString(jwt.getSubject()));
+    }
+}</code></pre>
+<div class="callout warn"><span class="tag">Ownership ở service</span><p style="margin:4px 0 0">Trong <code>DepositUseCase.deposit</code>: nạp tiền chỉ khi <code>wallet.accountId == account</code> lấy từ token; nếu không → ném <code>AuthForbiddenException("auth.forbidden")</code> (<span class="tag-file">security.md §3</span>). Validation <code>amount &gt; 0</code> bằng <code>@DecimalMin(value="0", inclusive=false)</code> trên DTO.</p></div>
+
+<h2 id="p3"><span class="lbl">Thực hành · 3/7</span>Health check readiness (≈ 30 phút)</h2>
+<p>Thay/ bổ sung cho <a href="../backend/src/main/java/com/digitalwallet/health/HealthResource.java">HealthResource.java</a> tự viết bằng MicroProfile Health chuẩn.</p>
+<div class="ex-label file">shared/health/DatabaseReadinessCheck.java</div>
+<pre><code><span class="kw">@Readiness</span>
+<span class="kw">@ApplicationScoped</span>
+<span class="kw">public class</span> <span class="ty">DatabaseReadinessCheck</span> <span class="kw">implements</span> HealthCheck {
+    <span class="kw">private final</span> <span class="ty">AgroalDataSource</span> ds;
+    <span class="kw">public</span> DatabaseReadinessCheck(AgroalDataSource ds) { <span class="kw">this</span>.ds = ds; }
+
+    <span class="kw">@Override</span> <span class="kw">public</span> <span class="ty">HealthCheckResponse</span> call() {
+        <span class="kw">try</span> (var c = ds.getConnection()) {
+            <span class="kw">return</span> HealthCheckResponse.up(<span class="str">"database"</span>);
+        } <span class="kw">catch</span> (Exception e) {
+            <span class="kw">return</span> HealthCheckResponse.down(<span class="str">"database"</span>);
+        }
+    }
+}</code></pre>
+<div class="ex-label">Kiểm tra</div>
+<pre><code>curl http://localhost:8080/q/health/ready   <span class="cmt"># {"status":"UP", checks:[{name:"database",...}]}</span>
+curl http://localhost:8080/q/health/live</code></pre>
+<div class="checkpoint"><b>✅ Checkpoint:</b> tắt container Postgres → <code>/q/health/ready</code> chuyển <code>DOWN</code>; bật lại → <code>UP</code>.</div>
+
+<h2 id="p4"><span class="lbl">Thực hành · 4/7</span>Metric cho deposit (≈ 20 phút)</h2>
+<div class="ex-label file">trong DepositUseCase / WalletApplicationService</div>
+<pre><code><span class="kw">@Timed</span>(value = <span class="str">"wallet.deposit"</span>, description = <span class="str">"Deposit latency"</span>)
+<span class="kw">@Transactional</span>
+<span class="kw">public</span> <span class="ty">WalletResponse</span> deposit(UUID account, UUID walletId, BigDecimal amount) { <span class="cmt">/* ... */</span> }</code></pre>
+<div class="ex-label">Nạp vài lần rồi xem metric</div>
+<pre><code>curl -s http://localhost:8080/q/metrics | grep wallet_deposit
+<span class="cmt"># wallet_deposit_seconds_count, wallet_deposit_seconds_sum ... tăng dần</span></code></pre>
+
+<h2 id="p5"><span class="lbl">Thực hành · 5/7</span>OpenAPI + Swagger UI (≈ 40 phút)</h2>
+<p>Sau khi thêm <code>smallrye-openapi</code>, mặc định đã có <code>/q/openapi</code> (spec) và <code>/q/swagger-ui</code> (UI). Chú thích thêm cho đẹp &amp; rõ:</p>
+<div class="ex-label file">chú thích trên method resource</div>
+<pre><code><span class="kw">@POST</span>
+<span class="kw">@Operation</span>(summary = <span class="str">"Mở ví mới cho người dùng hiện tại"</span>)
+<span class="kw">@APIResponse</span>(responseCode = <span class="str">"201"</span>, description = <span class="str">"Đã tạo ví"</span>)
+<span class="kw">@APIResponse</span>(responseCode = <span class="str">"409"</span>, description = <span class="str">"Trùng label"</span>)
+<span class="kw">public</span> RestResponse&lt;WalletResponse&gt; open(<span class="kw">@Valid</span> OpenWalletRequest req) { <span class="cmt">/* ... */</span> }</code></pre>
+<ol class="steps">
+  <li>Mở <code>http://localhost:8080/q/swagger-ui</code>.</li>
+  <li>Bấm <b>Authorize</b>, dán <code>Bearer &lt;token&gt;</code> (lấy từ <code>POST /auth/login</code>).</li>
+  <li>Thử lần lượt: <code>POST /wallets</code> → <code>POST /wallets/{id}/deposits</code> → <code>GET /wallets</code>. Quan sát request/response ngay trên UI.</li>
+</ol>
+<div class="checkpoint"><b>✅ Checkpoint:</b> mở ví → nạp tiền → list thấy balance tăng đúng, tất cả từ Swagger UI.</div>
+
+<h2 id="p6"><span class="lbl">Thực hành · 6/7</span>Circuit Breaker — demo NFR8 (≈ 45 phút)</h2>
+<p>Mô phỏng một dịch vụ ngoài hay chết (như API tỉ giá FX), rồi bọc fault-tolerance để thấy breaker bảo vệ.</p>
+<div class="ex-label file">wallet/adapter/out/fx/FlakyFxRateAdapter.java</div>
+<pre><code><span class="kw">@ApplicationScoped</span>
+<span class="kw">public class</span> <span class="ty">FlakyFxRateAdapter</span> <span class="kw">implements</span> FxRatePort {
+
+    <span class="kw">private final</span> Random rnd = <span class="kw">new</span> Random();
+
+    <span class="kw">@Override</span>
+    <span class="kw">@Retry</span>(maxRetries = 2, delay = 200)                <span class="cmt"># thử lại lỗi thoáng qua</span>
+    <span class="kw">@Timeout</span>(value = 500)                               <span class="cmt"># quá 500ms coi là lỗi</span>
+    <span class="kw">@CircuitBreaker</span>(requestVolumeThreshold = 4,         <span class="cmt"># xét trên 4 lần gọi gần nhất</span>
+                    failureRatio = 0.5,                  <span class="cmt"># &gt;50% lỗi → OPEN</span>
+                    delay = 5000)                        <span class="cmt"># mở 5s rồi half-open</span>
+    <span class="kw">@Fallback</span>(fallbackMethod = <span class="str">"defaultRate"</span>)        <span class="cmt"># khi lỗi/đang OPEN</span>
+    <span class="kw">public</span> BigDecimal rateFor(String from, String to) {
+        <span class="kw">if</span> (rnd.nextBoolean()) <span class="kw">throw new</span> RuntimeException(<span class="str">"FX provider down"</span>);
+        <span class="kw">return new</span> BigDecimal(<span class="str">"1.10"</span>);
+    }
+    <span class="cmt">// chữ ký fallback PHẢI khớp tham số + kiểu trả về</span>
+    <span class="kw">public</span> BigDecimal defaultRate(String from, String to) { <span class="kw">return</span> BigDecimal.ONE; }
+}</code></pre>
+<p>Gọi <code>rateFor</code> liên tục (qua một endpoint test tạm hoặc unit test) ~10 lần: ban đầu lúc được lúc fallback, sau khi tỉ lệ lỗi vượt ngưỡng → breaker <b>OPEN</b>, mọi cuộc gọi <b>trả thẳng fallback</b> không chạy method gốc nữa, 5s sau thử lại (half-open).</p>
+<div class="callout info"><span class="tag">Đọc thông số</span><p style="margin:4px 0 0"><code>requestVolumeThreshold</code> = cửa sổ xét; <code>failureRatio</code> = ngưỡng lỗi để mở; <code>delay</code> = thời gian OPEN trước khi half-open. Tinh chỉnh và quan sát hành vi đổi.</p></div>
+
+<h2 id="p7"><span class="lbl">Thực hành · 7/7</span>Test &amp; giữ coverage ≥ 80% (≈ 45 phút)</h2>
+<ul>
+  <li><b>Unit (mock out-port):</b> <code>deposit_givenAmountZero_throwsValidation</code>; boundary <code>amount</code> tại <code>0</code>, <code>0.0001</code>, số âm (<span class="tag-file">testing.md §2.6</span>). So tiền bằng <code>compareTo</code>.</li>
+  <li><b>Ownership:</b> <code>deposit_whenWalletOfAnotherAccount_throwsForbidden</code>.</li>
+  <li><b>Integration (Testcontainers Postgres):</b> test <code>WalletPersistenceAdapter</code> lưu/đọc; Flyway chạy lúc start container (không H2).</li>
+  <li><b>Fault tolerance:</b> ép method gốc luôn throw → assert <code>defaultRate</code> được gọi (fallback).</li>
+</ul>
+<div class="ex-label">Chạy gate coverage</div>
+<pre><code>cd backend
+./mvnw verify    <span class="cmt"># JaCoCo yêu cầu ≥80% LINE trên com/digitalwallet/*/service/**</span></code></pre>
+<div class="pitfall"><b>Nếu gate đỏ:</b> JaCoCo chỉ tính package <code>service/**</code>. Tập trung viết test cho <code>WalletApplicationService</code>/<code>DepositUseCase</code>, đừng phí công test getter DTO (repo cấm test trivial — <span class="tag-file">testing.md §5</span>).</p>
+
+<!-- DOD -->
+<h2 id="dod"><span class="lbl">Chốt ngày</span>Definition of Done — Ngày 3</h2>
+<div class="panel"><ul class="dod">
+  <li><input type="checkbox"> 3 endpoint wallet chạy &amp; thử được trên <code>/q/swagger-ui</code>.</li>
+  <li><input type="checkbox"> <code>/q/health/ready</code> phản ánh đúng trạng thái DB (tắt DB → DOWN).</li>
+  <li><input type="checkbox"> Thấy timer <code>wallet_deposit</code> ở <code>/q/metrics</code>.</li>
+  <li><input type="checkbox"> Circuit breaker mở được &amp; fallback chạy (có test chứng minh).</li>
+  <li><input type="checkbox"> Ownership check ở service; <code>amount &gt; 0</code> validate.</li>
+  <li><input type="checkbox"> <code>./mvnw verify</code> xanh, coverage service ≥ 80%.</li>
+</ul></div>
+<div class="selfcheck"><h4>✔ Tự kiểm</h4>
+  <ul class="small" style="margin:6px 0 0">
+    <li>Liveness fail thì orchestrator làm gì? Readiness fail thì làm gì? (restart vs ngừng route)</li>
+    <li>Vì sao <b>không</b> nên retry lỗi 422? (lỗi logic, retry vô ích)</li>
+    <li>Breaker chuyển OPEN→HALF-OPEN khi nào?</li>
+  </ul>
+</div>
+
+<h2><span class="lbl">Tài liệu</span>Nguồn học ngày 3</h2>
+<ul class="src-list">
+  <li><a href="https://microprofile.io/">MicroProfile</a> <span class="d">· tổng quan các spec</span></li>
+  <li><a href="https://quarkus.io/guides/smallrye-health">Quarkus — SmallRye Health</a></li>
+  <li><a href="https://quarkus.io/guides/smallrye-fault-tolerance">Quarkus — SmallRye Fault Tolerance</a></li>
+  <li><a href="https://quarkus.io/guides/telemetry-micrometer">Quarkus — Micrometer metrics</a></li>
+  <li><a href="https://quarkus.io/guides/openapi-swaggerui">Quarkus — OpenAPI &amp; Swagger UI</a></li>
+  <li><a href="https://12factor.net/">The Twelve-Factor App</a></li>
+  <li><a href="https://martinfowler.com/bliki/CircuitBreaker.html">Martin Fowler — CircuitBreaker</a></li>
+</ul>
+
+<div class="daynav">
+  <a href="day-2-hexagonal.html"><div class="dir">⟵ Ngày trước</div><div class="ttl">Ngày 2 · Hexagonal + SOLID + DDD</div></a>
+  <a class="next" href="day-4-keycloak.html"><div class="dir">Ngày tiếp ⟶</div><div class="ttl">Ngày 4 · Keycloak (OAuth2/OIDC)</div></a>
+</div>
+
+<footer>DigitalWallet — Hướng dẫn học chi tiết · Ngày 3/5. Deposit MVP là đồ chơi học tập (thiếu NFR1/2/3), không dùng cho production.</footer>
+
+</div>
+</body>
+</html>
