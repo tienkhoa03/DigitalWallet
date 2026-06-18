@@ -84,7 +84,7 @@ The orchestrator (this command) directly executes phases that are neither pure b
 - Edits under [../../docs/](../../docs/) — API contract updates, business-rule additions, ADR drafting, plan archive moves.
 - Root config — `pom.xml`, `package.json`, `pnpm-workspace.yaml`, `docker-compose.yml`, `application.properties` at the project root.
 - Shared contract scaffolding when the plan calls it out (e.g. agreeing on an `errorKey` string in [../../docs/api/README.md](../../docs/api/README.md) before either agent writes the implementation).
-- Wiring that requires sequencing both sides (e.g. confirming the frontend RTK Query path string matches the backend `@Path` constant after both agents finish).
+- Wiring that requires sequencing both sides (e.g. confirming the frontend Vue Query path string matches the backend `@Path` constant after both agents finish).
 
 Do this work before, between, or after the agent dispatch as the phase ordering demands. If the plan's Progress Tracker shows a cross-module phase before the agents can start, complete it first.
 

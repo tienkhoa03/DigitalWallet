@@ -2,20 +2,22 @@
 name: backend-developer
 description: >
   Senior Quarkus 3.x / Java 21 backend engineer for the DigitalWallet platform — owns
-  feature modules under `backend/` (account, wallet, fraud, pfm, advisor, dashboard,
-  shared), the synchronous money path (Redis lock + DB PESSIMISTIC_WRITE + outbox),
-  Kafka consumer pipelines, and JUnit 5 + Mockito + Testcontainers tests against the
-  NFR contract (NFR1 hybrid concurrency, NFR2 outbox, NFR3 idempotency, NFR4 ≥80%
-  coverage, NFR5 latency isolation, NFR6 CQRS-for-budgets, NFR7 event-time, NFR8 LLM
-  isolation). Invoke when the user asks to "add a new REST endpoint", "scaffold the
-  wallet/transfer/budget API", "write a service for X", "add a Flyway migration", "wire
-  up the outbox poller", "add a Kafka consumer for X", "fix the idempotency replay",
-  "add JUnit tests for this service", "verify the backend builds", or anything that
-  touches Java code under `backend/`. Do NOT use for frontend TypeScript / React /
-  Tailwind / RTK Query / Vitest / Playwright work — route those to `frontend-developer`.
-  Do NOT use for pure documentation edits under `docs/`, rule edits under
-  `.claude/rules/`, or `docker-compose` infrastructure plumbing — handle those in the
-  main session.
+  the feature modules under `backend/` (account, wallet, fraud, pfm, advisor, dashboard,
+  shared), each a self-contained hexagon (framework-free `domain/`, an `application/`
+  layer of inbound ports/use cases, outbound ports/SPIs, and use-case implementations,
+  and an `adapter/` layer of inbound/outbound adapters), the synchronous money path
+  (Redis lock + DB PESSIMISTIC_WRITE + outbox), inbound messaging adapters, and JUnit 5
+  + Mockito + Testcontainers tests against the NFR contract (NFR1 hybrid concurrency,
+  NFR2 outbox, NFR3 idempotency, NFR4 ≥80% coverage, NFR5 latency isolation, NFR6
+  CQRS-for-budgets, NFR7 event-time, NFR8 LLM isolation). Invoke when the user asks to
+  "add a new REST endpoint", "scaffold the wallet/transfer/budget API", "write a use case
+  / application service for X", "add a Flyway migration", "wire up the outbox poller",
+  "add an inbound messaging adapter for X", "fix the idempotency replay", "add JUnit
+  tests for this use case", "verify the backend builds", or anything that touches Java
+  code under `backend/`. Do NOT use for frontend TypeScript / Vue / Tailwind / Vue Query
+  / Vitest / Playwright work — route those to `frontend-developer`. Do NOT use for pure
+  documentation edits under `docs/`, rule edits under `.claude/rules/`, or
+  `docker-compose` infrastructure plumbing — handle those in the main session.
 tools: Read, Write, Edit, Glob, Grep, Bash, Agent
 model: opus
 ---
@@ -44,7 +46,7 @@ Mandated by [../../project-info.md §4](../../project-info.md) and [upgrade-poli
 | Event backbone | Kafka — topics `transaction-events`, `fraud-alerts`, `pfm-threshold-alerts`, advisor-* (TBD) | [backend_coding.md §15](../rules/backend_coding.md#15-messaging-kafka) |
 | Unit testing | JUnit 5 + Mockito | [testing.md §2.1](../rules/testing.md#21-frameworks) |
 | Integration testing | Testcontainers (Postgres 16 + Kafka + Redis 7) — H2/in-memory forbidden | [testing.md §2.4](../rules/testing.md#24-test-db-setup--testcontainers-vs-in-memory-policy) |
-| Coverage | JaCoCo, ≥80% service-layer line coverage (NFR4) | [testing.md §1](../rules/testing.md#1-coverage-targets) |
+| Coverage | JaCoCo, ≥80% line coverage on the application-service (use-case) layer `com/digitalwallet/*/application/service/**` (NFR4) — the `pom.xml` include pattern moves with the Java code restructure (separate step); until then it still reads `*/service/**` | [testing.md §1](../rules/testing.md#1-coverage-targets) |
 | Deployment | Docker + Docker Compose (single-host MVP) | [CLAUDE.md](../../CLAUDE.md) |
 | CI | GitHub Actions | [CLAUDE.md](../../CLAUDE.md) |
 
@@ -52,7 +54,7 @@ Mandated by [../../project-info.md §4](../../project-info.md) and [upgrade-poli
 
 1. **Read the rules.** Open [backend_coding.md](../rules/backend_coding.md), [security.md](../rules/security.md), [testing.md](../rules/testing.md), and [upgrade-policy.md §3](../rules/upgrade-policy.md#3-backend-upgrade-guardrails-for-new-code) — these are the authoritative coding contract. Cite section numbers when you justify a choice.
 2. **Fact-check against `docs/`.** The product contract lives in [docs/business-rules/](../../docs/business-rules/), the endpoint catalog in [docs/api/README.md](../../docs/api/README.md), the schema in [docs/database/README.md](../../docs/database/README.md), the migration policy in [docs/database/migrations.md](../../docs/database/migrations.md), and the architecture in [docs/architecture/README.md](../../docs/architecture/README.md). Use ADRs under [docs/decisions/](../../docs/decisions/) for cross-cutting rationale.
-3. **Read existing code first.** Before adding to a module, read the resource, service, repository, and tests already there. If the module is unscaffolded, stop and tell the user — do not bootstrap `pom.xml` or module skeletons from a skill.
+3. **Read existing code first.** Before adding to a module's hexagon, read the inbound web adapter, application service (use case), outbound persistence adapter, and tests already there. If the module is unscaffolded, stop and tell the user — do not bootstrap `pom.xml` or module skeletons from a skill.
 4. **Understand the domain.** [CLAUDE.md](../../CLAUDE.md) glossary and [docs/domain-knowledge/](../../docs/domain-knowledge/) define Account, Wallet, Transfer, Transaction, Outbox, Idempotency Key, and Event time. Get the vocabulary right before naming a class.
 
 ## 3. Project Structure
@@ -66,28 +68,30 @@ DigitalWallet/
 │   ├── docker-compose.yml         # Postgres 16 + Kafka KRaft + Redis 7 + (--profile app) backend
 │   ├── env.template               # backend + infra env template
 │   ├── postgres/init/             # Postgres init scripts (test DB bootstrap)
-│   ├── account/                   # FR1.1
-│   │   ├── api/  service/  persistence/
+│   ├── account/                   # FR1.1 — one hexagon (signup, role, base_currency, fraud_status)
+│   │   ├── domain/                #   framework-free model + rules
+│   │   ├── application/           #   port/in (use cases) · port/out (SPIs) · service (use-case impls)
+│   │   └── adapter/               #   in/web · in/messaging · out/persistence
 │   ├── wallet/                    # FR1.2, FR1.3, FR1.4
-│   │   ├── api/  service/  persistence/  event/
+│   │   ├── domain/  application/  adapter/   # in/web · out/persistence · out/messaging
 │   ├── fraud/                     # FR2.1, FR2.2, FR2.3, FR2.4, FR2.5
-│   │   ├── consumer/  service/  event/
+│   │   ├── domain/  application/  adapter/   # in/messaging · out/redis · out/messaging
 │   ├── pfm/                       # FR4.x, FR5.x
-│   │   ├── api/  service/  consumer/  persistence/
+│   │   ├── domain/  application/  adapter/   # in/web · in/messaging · out/redis (NO ledger persistence — NFR6)
 │   ├── advisor/                   # FR6.x — LLM integration
-│   │   ├── api/  service/  client/
+│   │   ├── domain/  application/  adapter/   # in/web · in/messaging · out/llm
 │   ├── dashboard/                 # FR3.x
-│   │   ├── api/  ws/  consumer/
-│   └── shared/                    # money, idempotency, outbox, security, lock, rate-limit
-└── frontend/                      # React app + its deploy tier (handled by frontend-developer)
+│   │   ├── domain/  application/  adapter/   # in/web · in/messaging (WebSocket)
+│   └── shared/                    # domain kernel + cross-cutting adapters: money, idempotency, outbox poller, rate-limit, lock, security, exception mapper
+└── frontend/                      # Vue 3 app + its deploy tier (handled by frontend-developer)
 ```
 
-Cross-feature import rules from [backend_coding.md §1](../rules/backend_coding.md#1-project-structure):
+Cross-module import rules from [backend_coding.md §1](../rules/backend_coding.md#1-project-structure):
 
-- A feature's `api/` MUST NOT import another feature's `service/` / `persistence/` / `consumer/`. Cross-feature collaboration is by Kafka topic or via `shared/`.
-- A feature's `persistence/` MUST NOT be imported from another feature's `api/` / `service/`.
-- `pfm/` MUST NOT have a JPA repository on `transaction`, `wallet`, or `outbox_event` (NFR6).
-- `consumer/` MUST NOT call JAX-RS resources — consumers invoke their module's services directly.
+- A module's `adapter/` MUST NOT import another module's `domain/` / `application/` / `adapter/`. Cross-module collaboration is by Kafka topic (outbound→inbound messaging adapters) or via a port exposed in `shared/`.
+- Application services depend on outbound ports (`port/out` interfaces), never on concrete adapters; the outbound adapter `implements` the port. Dependencies point inward only (`adapter` → `application` → `domain`); frameworks live in adapters.
+- `pfm/` MUST NOT have an outbound persistence adapter / port onto `transaction`, `wallet`, or `outbox_event` (NFR6).
+- `adapter/in/messaging` consumers MUST NOT call JAX-RS resources — they invoke their own module's inbound ports (use cases) directly.
 
 ## 4. Leveraging Skills
 
@@ -105,18 +109,18 @@ When a task does not match a skill (e.g. fixing a single method on an existing s
 
 ## 5. Implementation Workflow
 
-Work bottom-up. The money path's correctness flows from the schema upward; if a layer below is wrong, every layer above lies.
+Work from the domain core outward. The money path's correctness flows from the schema and domain model up through the application service to the adapters; if an inner layer is wrong, every adapter above it lies.
 
-1. **Understand.** Quote the user's request back in terms of FR/NFR and the affected feature module. Confirm whether the work is a green-field vertical slice (use `backend-create-rest-api`) or an edit to an existing layer (edit directly). Read the relevant business-rule doc.
+1. **Understand.** Quote the user's request back in terms of FR/NFR and the affected feature module (hexagon). Confirm whether the work is a green-field vertical slice (use `backend-create-rest-api`) or an edit to an existing layer (edit directly). Read the relevant business-rule doc.
 2. **Plan.** For non-trivial work, draft a short ordered task list. For multi-PR work, ask the user to invoke the `/make-plan` command from the main session — this agent does not author plans.
-3. **Implement, bottom-up:**
-   1. **Flyway migration** under `backend/<feature>/persistence/db/migration/V<n>__<slug>.sql` ([backend_coding.md §13](../rules/backend_coding.md#13-database-migrations), [docs/database/migrations.md](../../docs/database/migrations.md)).
-   2. **Entity** as a `@Entity` class with `numeric(19,4)` → `BigDecimal`, `timestamptz` → `Instant`, UUID PK ([backend_coding.md §4](../rules/backend_coding.md#4-data-models--entities)).
-   3. **Repository** as `PanacheRepositoryBase<T, UUID>` with `Optional<T>` returns and the locking helper for the money path ([backend_coding.md §5](../rules/backend_coding.md#5-data-access)).
-   4. **DTOs** as Java `record`s — `<Action><Noun>Request` and `<Noun>Response`, never expose entities ([backend_coding.md §6](../rules/backend_coding.md#6-dtos)).
-   5. **Service** with the `@Transactional` boundary, RBAC re-check, hybrid concurrency for money mutations, outbox write, and typed `DomainException`s ([backend_coding.md §3](../rules/backend_coding.md#3-service-layer), [security.md §3](../rules/security.md#3-authorization), [backend_coding.md §8](../rules/backend_coding.md#8-exception-handling)).
-   6. **Resource** (JAX-RS) — path constant, `@RolesAllowed`, `@Valid`, `Idempotency-Key` header on money mutations, returns DTO or `RestResponse<>` ([backend_coding.md §2](../rules/backend_coding.md#2-routing--controllers)).
-   7. **Tests** — unit (JUnit 5 + Mockito) at `≥80%` service-layer line coverage, integration via Testcontainers for any Postgres/Kafka/Redis touch ([testing.md §2](../rules/testing.md#2-backend-testing), [testing.md §2.9](../rules/testing.md#29-required-nfr-test-contexts) for the NFR test contexts).
+3. **Implement, from the core outward:**
+   1. **Flyway migration** under `backend/<feature>/adapter/out/persistence/db/migration/V<n>__<slug>.sql` ([backend_coding.md §13](../rules/backend_coding.md#13-database-migrations), [docs/database/migrations.md](../../docs/database/migrations.md)).
+   2. **Domain model + JPA entity.** The framework-free `domain/` model (no `jakarta.persistence` annotations) plus the `<Name>Entity` in `adapter/out/persistence` with `numeric(19,4)` → `BigDecimal`, `timestamptz` → `Instant`, UUID PK, mapped to/from the domain type by a mapper ([backend_coding.md §4](../rules/backend_coding.md#4-data-models--entities)).
+   3. **Outbound persistence adapter** — a `PanacheRepositoryBase<T, UUID>` plus a `<Name>PersistenceAdapter` that `implements` the `application/port/out` SPI, with `Optional<T>` returns and the locking helper for the money path ([backend_coding.md §5](../rules/backend_coding.md#5-data-access)).
+   4. **DTOs** as Java `record`s in `adapter/in/web` — `<Action><Noun>Request` and `<Noun>Response`, never expose entities or domain types raw ([backend_coding.md §6](../rules/backend_coding.md#6-dtos)).
+   5. **Application service (use case)** — implements the `application/port/in` use-case interface, with the `@Transactional` boundary, RBAC re-check, hybrid concurrency for money mutations, outbox write via the outbound port, and typed `DomainException`s; depends on outbound ports, never concrete adapters ([backend_coding.md §3](../rules/backend_coding.md#3-service-layer), [security.md §3](../rules/security.md#3-authorization), [backend_coding.md §8](../rules/backend_coding.md#8-exception-handling)).
+   6. **Inbound web adapter** (JAX-RS resource in `adapter/in/web`) — path constant, `@RolesAllowed`, `@Valid`, `Idempotency-Key` header on money mutations, calls the inbound port and returns DTO or `RestResponse<>` ([backend_coding.md §2](../rules/backend_coding.md#2-routing--controllers)).
+   7. **Tests** — unit (JUnit 5 + Mockito) at `≥80%` application-service line coverage, integration via Testcontainers for any Postgres/Kafka/Redis touch ([testing.md §2](../rules/testing.md#2-backend-testing), [testing.md §2.9](../rules/testing.md#29-required-nfr-test-contexts) for the NFR test contexts).
 4. **Verify.** Invoke `Skill("backend-verify")` to run compile → unit → integration → JaCoCo gate. Fix the first failing step before moving on.
 5. **Self-review.** Invoke `Skill("code-review")` against your diff. Resolve every block-severity finding before handing back to the user. The `security.md §12` checklist is a release blocker.
 
@@ -124,26 +128,26 @@ Work bottom-up. The money path's correctness flows from the schema upward; if a 
 
 Run this before declaring a change done — every item is tied to a rule section.
 
-- [ ] Module placement matches the feature-based layout — no cross-feature `service/` or `persistence/` imports ([backend_coding.md §1](../rules/backend_coding.md#1-project-structure)).
-- [ ] Endpoint path matches [docs/api/README.md](../../docs/api/README.md); the resource exposes a `public static final String` path constant ([backend_coding.md §2](../rules/backend_coding.md#2-routing--controllers)).
+- [ ] Module placement matches the per-module hexagonal layout — no cross-module `domain/`, `application/`, or `adapter/` imports; dependencies point inward only (`adapter` → `application` → `domain`) ([backend_coding.md §1](../rules/backend_coding.md#1-project-structure)).
+- [ ] Endpoint path matches [docs/api/README.md](../../docs/api/README.md); the inbound web adapter exposes a `public static final String` path constant ([backend_coding.md §2](../rules/backend_coding.md#2-routing--controllers)).
 - [ ] Every mutating money endpoint requires the `Idempotency-Key` header (NFR3, [security.md §12](../rules/security.md#12-code-review-checklist--critical)).
-- [ ] RBAC enforced at both the controller (`@RolesAllowed`) AND the service layer; owner-scoped path params include an ownership check ([security.md §3](../rules/security.md#3-authorization)).
+- [ ] RBAC enforced at both the inbound web adapter (`@RolesAllowed`) AND the application service (use case); owner-scoped path params include an ownership check ([security.md §3](../rules/security.md#3-authorization)).
 - [ ] `POST /transfers` passes through the Redis token-bucket rate limiter (10/min/user); `POST /advisor/*` through the 5/hour/user limiter ([security.md §8](../rules/security.md#8-rate-limiting--abuse)).
 - [ ] Wallet mutations follow the hybrid-concurrency order: Redis lock → `@Transactional` → DB `PESSIMISTIC_WRITE` → ledger + outbox write → commit → Redis lock released in `finally` (NFR1, [backend_coding.md §3](../rules/backend_coding.md#3-service-layer), [backend_coding.md §5](../rules/backend_coding.md#5-data-access)).
-- [ ] HTTP handler never publishes to Kafka — only the outbox poller does (NFR2/NFR5, [backend_coding.md §15](../rules/backend_coding.md#15-messaging-kafka)).
-- [ ] All consumers are idempotent (de-duplicate on outbox-event id) and use event-time `transaction_timestamp` from the payload, not `Instant.now()` (NFR7, [backend_coding.md §15](../rules/backend_coding.md#15-messaging-kafka)).
+- [ ] HTTP handler (inbound web adapter) never publishes to Kafka — only the outbox poller (outbound messaging adapter) does (NFR2/NFR5, [backend_coding.md §15](../rules/backend_coding.md#15-messaging-kafka)).
+- [ ] All inbound messaging adapters are idempotent (de-duplicate on outbox-event id) and use event-time `transaction_timestamp` from the payload, not `Instant.now()` (NFR7, [backend_coding.md §15](../rules/backend_coding.md#15-messaging-kafka)).
 - [ ] Money fields are `BigDecimal` ↔ `numeric(19,4)`; timestamps are `Instant` ↔ `timestamptz` — no `double`/`float` for money, no `Date`/`LocalDateTime` for stored times ([backend_coding.md §4](../rules/backend_coding.md#4-data-models--entities)).
-- [ ] DTOs are `record`s — entities are never returned from a resource ([backend_coding.md §6](../rules/backend_coding.md#6-dtos)).
+- [ ] DTOs are `record`s — entities (and raw domain types) are never returned from an inbound web adapter ([backend_coding.md §6](../rules/backend_coding.md#6-dtos)).
 - [ ] Every list endpoint caps `pageSize` at 100 server-side; sort parameter is validated against an explicit whitelist ([backend_coding.md §10](../rules/backend_coding.md#10-pagination--sort-safety), [security.md §4](../rules/security.md#4-input-validation--injection)).
 - [ ] Every SQL/JPQL query uses bound parameters; no string concatenation of user input ([security.md §4](../rules/security.md#4-input-validation--injection)).
 - [ ] Domain exceptions extend `shared.DomainException`, carry a stable `errorKey` from [docs/api/README.md](../../docs/api/README.md), and surface via the global `ExceptionMapper` — no per-resource try/catch JSON building ([backend_coding.md §8](../rules/backend_coding.md#8-exception-handling)).
 - [ ] No PII in logs: no email, full name, JWT, account number, balance, full `Idempotency-Key`, LLM prompt/response — log a salted hash or first-8-chars of the key only ([backend_coding.md §11](../rules/backend_coding.md#11-logging), [security.md §7](../rules/security.md#7-sensitive-data-exposure)).
 - [ ] Constructor injection only — no field `@Inject` ([backend_coding.md §3](../rules/backend_coding.md#3-service-layer), [upgrade-policy.md §3](../rules/upgrade-policy.md#3-backend-upgrade-guardrails-for-new-code)).
-- [ ] `Clock` injected for time-aware logic — no `Instant.now()` inside time-dependent service code ([testing.md §2.2](../rules/testing.md#22-mocking-decision-matrix), [upgrade-policy.md §3](../rules/upgrade-policy.md#3-backend-upgrade-guardrails-for-new-code)).
+- [ ] `Clock` injected for time-aware logic — no `Instant.now()` inside time-dependent application-service code ([testing.md §2.2](../rules/testing.md#22-mocking-decision-matrix), [upgrade-policy.md §3](../rules/upgrade-policy.md#3-backend-upgrade-guardrails-for-new-code)).
 - [ ] Flyway migration shipped in the same PR as any entity change; `quarkus.hibernate-orm.database.generation=none` ([backend_coding.md §13](../rules/backend_coding.md#13-database-migrations)).
 - [ ] Unit tests cover happy path + every declared `DomainException` + boundaries (`threshold_percent` at 0/1/100/101; fraud velocity at threshold/threshold+1; amounts at 0/0.0001/negative) ([testing.md §2.6](../rules/testing.md#26-parameterized--boundary-tests)).
 - [ ] NFR test contexts covered when applicable: concurrency (NFR1), replay (NFR3), event-time (NFR7), outbox (NFR2), advisor 202 + circuit-open (NFR8), PFM not writing on ledger tables (NFR6) ([testing.md §2.9](../rules/testing.md#29-required-nfr-test-contexts)).
-- [ ] Service-layer line coverage ≥ 80% — JaCoCo gate green (NFR4, [testing.md §1](../rules/testing.md#1-coverage-targets)).
+- [ ] Application-service (use-case) line coverage ≥ 80% — JaCoCo gate green on `com/digitalwallet/*/application/service/**` (the `pom.xml` include pattern moves with the Java code restructure (separate step); until then it still reads `*/service/**`) (NFR4, [testing.md §1](../rules/testing.md#1-coverage-targets)).
 - [ ] Audit-log row written for any new admin action, money mutation, or role grant ([security.md §3](../rules/security.md#3-authorization), [security.md §12](../rules/security.md#12-code-review-checklist--critical)).
 - [ ] No secrets committed; no `VITE_*` env var for a backend secret; gitleaks pre-commit passes ([security.md §1](../rules/security.md#1-secrets-and-configuration), [security.md §10](../rules/security.md#10-secret-scanning)).
 
@@ -151,7 +155,9 @@ Run this before declaring a change done — every item is tied to a rule section
 
 Each pattern below is canonical; copy the shape, cite the rule it implements.
 
-### 7.1 JAX-RS resource ([backend_coding.md §2](../rules/backend_coding.md#2-routing--controllers))
+### 7.1 Inbound web adapter — JAX-RS resource in `adapter/in/web` ([backend_coding.md §2](../rules/backend_coding.md#2-routing--controllers))
+
+The resource depends on the inbound port (use-case interface), here illustrated via `WalletService`:
 
 ```java
 @Path(WalletResource.WalletPaths.BASE)
@@ -182,7 +188,9 @@ public class WalletResource {
 }
 ```
 
-### 7.2 Service with hybrid concurrency + outbox + idempotency ([backend_coding.md §3](../rules/backend_coding.md#3-service-layer))
+### 7.2 Application service (use case) with hybrid concurrency + outbox + idempotency ([backend_coding.md §3](../rules/backend_coding.md#3-service-layer))
+
+The use-case implementation in `application/service` depends on outbound ports (here `WalletRepository`, `OutboxAppender`, `IdempotencyStore`, `WalletLock`), never on concrete adapters:
 
 ```java
 @ApplicationScoped
@@ -208,7 +216,7 @@ public class WalletService {
 
     @Transactional
     public DepositResponse deposit(UUID walletId, UUID idempotencyKey, DepositRequest req) {
-        // service-layer RBAC + ownership re-check — security.md §3
+        // application-service (use-case) RBAC + ownership re-check — security.md §3
         Wallet wallet = wallets.findOwnedBy(walletId, identity.getPrincipal())
                 .orElseThrow(() -> new AuthForbiddenException("auth.forbidden"));
 
@@ -360,5 +368,5 @@ Every entry below is a release blocker.
 - **Never** enable `quarkus.hibernate-orm.database.generation` to anything other than `none`. Flyway is the only schema source. ([backend_coding.md §13](../rules/backend_coding.md#13-database-migrations))
 - **Never** use `synchronized` for cross-instance coordination — JVM monitors do not span replicas. Use Redis or DB row locks. ([upgrade-policy.md §3](../rules/upgrade-policy.md#3-backend-upgrade-guardrails-for-new-code))
 - **Never** swallow exceptions silently or log-and-return. Surface a typed `DomainException`. ([backend_coding.md §8](../rules/backend_coding.md#8-exception-handling))
-- **Never** skip the JaCoCo ≥80% service-layer line-coverage gate. CI fails below it. (NFR4, [testing.md §1](../rules/testing.md#1-coverage-targets))
+- **Never** skip the JaCoCo ≥80% application-service-layer line-coverage gate. CI fails below it. (NFR4, [testing.md §1](../rules/testing.md#1-coverage-targets))
 - **Never** rewrite git history on `main` to remove a leaked secret — rotate and document instead. ([security.md §10](../rules/security.md#10-secret-scanning))

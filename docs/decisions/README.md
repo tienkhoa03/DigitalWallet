@@ -42,6 +42,7 @@ The status column reflects the bootstrap state of each ADR. ADRs whose decisions
 | 5 | [Outbox publisher](0005-outbox-publisher.md) | Proposed | 2026-05-13 |
 | 6 | [Multi-currency model](0006-multi-currency-model.md) | Accepted | 2026-05-21 |
 | 7 | [Build tool](0007-build-tool.md) | Proposed | 2026-05-13 |
-| 8 | [Frontend stack](0008-frontend-stack.md) | Proposed | 2026-05-13 |
+| 8 | [Frontend stack (Vue 3 + Pinia + TanStack Query/Vue Query + VeeValidate + Zod + Vue Router)](0008-frontend-stack.md) | Accepted | 2026-06-10 |
 | 9 | [RBAC roles in MVP](0009-rbac-roles.md) | Accepted | 2026-05-25 |
 | 10 | [Fraud enforcement model](0010-fraud-enforcement-model.md) | Accepted | 2026-05-25 |
+| 12 | [Hexagonal architecture (ports & adapters)](0012-hexagonal-architecture.md) | Accepted | 2026-06-10 |

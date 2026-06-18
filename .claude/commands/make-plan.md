@@ -26,16 +26,16 @@ Skills before research. Detect the surface area from the parsed task and invoke 
 
 | Trigger | Skill | Purpose |
 |---|---|---|
-| Task mentions a REST endpoint, JAX-RS resource, service method, or any path under `backend/` | `Skill("backend-create-rest-api")` | Loads the vertical-slice procedure (resource → service → persistence → outbox → tests) and the canonical project structure. |
+| Task mentions a REST endpoint, JAX-RS resource, service method, or any path under `backend/` | `Skill("backend-create-rest-api")` | Loads the vertical-slice procedure (inbound web adapter → application service → outbound persistence adapter → outbox → tests) and the canonical hexagonal project structure. |
 | Task adds or substantially changes a backend Java class with branching logic | `Skill("backend-create-unit-test")` | Loads the JUnit 5 + Mockito scaffolding rules and the boundary / idempotency / lock-path test matrix. |
-| Task adds a React route, page, form, or presentational component under `frontend/` | `Skill("frontend-implement-ui-component")` | Loads the React + TypeScript + RTK Query + React Hook Form + Zod scaffolding rules. |
+| Task adds a Vue route, page, form, or presentational component under `frontend/` | `Skill("frontend-implement-ui-component")` | Loads the Vue 3 + TypeScript + TanStack Query (Vue Query) + VeeValidate + Zod scaffolding rules. |
 | Task touches both backend and frontend | Invoke both backend and frontend skills above | Plans the contract once and the two implementations consistently. |
 | Pure documentation, ADR, or rule-file change | No code skill — read the corresponding doc / rule directly | Planning is mostly textual; no scaffold needed. |
 
 Detection rules:
 
 - **Backend signal** — any of: REST endpoint, JAX-RS, Quarkus, Kafka, outbox, ledger, wallet service, fraud rule, PFM aggregator, advisor backend, JPA, Flyway migration, Redis lock.
-- **Frontend signal** — any of: React, route, page, form, RTK Query, Redux slice, Tailwind, WebSocket client, Zod schema.
+- **Frontend signal** — any of: Vue, route, page, form, Vue Query, Pinia store, Tailwind, WebSocket client, Zod schema.
 - **Both** — anything that spans an end-to-end user flow (e.g. "deposit money", "open a budget", "show fraud alerts") implies both signals unless the task is explicitly scoped.
 
 If neither signal fires (e.g. "update ADR 0002"), skip Step 2 and proceed.
@@ -167,9 +167,9 @@ Phases as a checklist. Each item is tagged with the executing agent and the skil
 
 ```
 - [ ] Phase 1: Scaffold the JAX-RS resource — @backend-developer, Skill("backend-create-rest-api")
-- [ ] Phase 2: Wire the service + outbox + Redis lock — @backend-developer
+- [ ] Phase 2: Wire the application service + outbox + Redis lock — @backend-developer
 - [ ] Phase 3: Add unit + integration tests — @backend-developer, Skill("backend-create-unit-test")
-- [ ] Phase 4: Frontend form + RTK Query slice — @frontend-developer, Skill("frontend-implement-ui-component")
+- [ ] Phase 4: Frontend form + Vue Query API client — @frontend-developer, Skill("frontend-implement-ui-component")
 - [ ] Phase 5: Verify + review — orchestrator, Skill("backend-verify"), Skill("frontend-verify"), Skill("code-review")
 ```
 
@@ -191,8 +191,8 @@ For every change, map to the relevant section of [../rules/security.md](../rules
 
 - §1 secrets and configuration — any new env vars?
 - §2 authentication — does the endpoint require a JWT?
-- §3 authorization — role and ownership checks at both controller and service.
-- §4 input validation & injection — `@Valid`, sort whitelist, no `dangerouslySetInnerHTML`.
+- §3 authorization — role and ownership checks at both the inbound web adapter and the application service.
+- §4 input validation & injection — `@Valid`, sort whitelist, no `v-html` on user input.
 - §7 sensitive data exposure — DTO fields, log redaction.
 - §8 rate limiting — does this need a new Redis token bucket?
 - §11 testing security-sensitive code — which of (unauthenticated / wrong-role / wrong-tenant / replay / boundary / XSS / rate-limit / audit-log) tests apply?
@@ -204,8 +204,8 @@ Cite [../rules/testing.md](../rules/testing.md). Specify:
 
 - **Unit tests** — class list, framework (JUnit 5 + Mockito), boundary and exception cases.
 - **Integration tests** — Testcontainers (Postgres / Kafka / Redis) scenarios, NFR test contexts (NFR1 concurrency, NFR2 outbox, NFR3 idempotency, NFR7 event time, NFR8 LLM isolation).
-- **Frontend specs** — Vitest + React Testing Library, XSS regression, money-format assertion.
-- **Coverage floor** — restate the NFR4 80% service-layer rule and any frontend coverage expectations.
+- **Frontend specs** — Vitest + @testing-library/vue, XSS regression, money-format assertion.
+- **Coverage floor** — restate the NFR4 80% application-service-layer rule and any frontend coverage expectations.
 
 ### 13. Reference Files
 

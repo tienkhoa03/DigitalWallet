@@ -10,7 +10,7 @@ This page is the runbook for bringing the DigitalWallet stack up locally from a 
 |---|---|---|
 | Java JDK | 21 (LTS) | Eclipse Temurin / Azul Zulu / Liberica `(verify)` |
 | Maven wrapper | bundled `mvnw` | shipped under `backend/mvnw` |
-| Node.js | 20.x (Vitest + Playwright support) `(verify)` | nodejs.org / nvm |
+| Node.js | 20.x (Vue 3 + Vitest + Playwright support) `(verify)` | nodejs.org / nvm |
 | pnpm | latest | `npm install -g pnpm` |
 | Docker Engine | 24.x or newer `(verify)` | docker.com |
 | Docker Compose | v2 (`docker compose` plugin) | bundled with Docker Desktop, or `apt install docker-compose-plugin` |
@@ -51,12 +51,13 @@ All steps below are scaffolded against the mandated stack in [../../project-info
    cd backend && ./mvnw quarkus:dev
    ```
    The dev UI is exposed on `http://localhost:8080/q/dev/` by Quarkus default `(verify once port is committed)`.
-6. **Install frontend dependencies and start the dev server.** The Vite dev server proxies `/api/*` and WebSocket upgrades to the backend on `localhost:8080`, matching the production nginx config.
+6. **Install frontend dependencies and start the dev server.** The Vite dev server (with `@vitejs/plugin-vue`) proxies `/api/*` and WebSocket upgrades to the backend on `localhost:8080`, matching the production nginx config.
    ```bash
    cd frontend
    pnpm install
    pnpm dev
    ```
+   For a one-off TypeScript type-check of the Vue SFCs, run `pnpm exec vue-tsc --noEmit`.
    For a production-like local run, bring up the frontend compose (requires the backend's `dw-net` to already exist — step 3):
    ```bash
    docker compose -f frontend/docker-compose.yml up -d --build
@@ -65,8 +66,8 @@ All steps below are scaffolded against the mandated stack in [../../project-info
 7. **Run the test suites.**
    ```bash
    cd backend && ./mvnw test        # JUnit 5 + Testcontainers
-   cd backend && ./mvnw verify      # adds JaCoCo coverage gate (≥80% service layer)
-   pnpm --dir frontend test         # Vitest
+   cd backend && ./mvnw verify      # adds JaCoCo coverage gate (≥80% application service layer)
+   pnpm --dir frontend test         # Vitest + @testing-library/vue
    pnpm --dir frontend e2e          # Playwright smoke
    ```
 

@@ -3,7 +3,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-DigitalWallet is a multi-currency internal wallet platform with real-time fraud detection and an AI-driven personal finance manager. The Claude-ready baseline (Phase A–E of the bootstrap) is scaffolded: `backend/` (Quarkus 3.33.2 LTS, Java 21, 7 modules with `shared/` infrastructure and Flyway V1; ships its own `Dockerfile` + `docker-compose.yml` that owns Postgres 16 + Kafka KRaft + Redis 7 + the optional Quarkus container), `frontend/` (Vite 5 + React 18 + TS 5 strict + Tailwind 3 + Redux Toolkit + RTK Query; ships its own `Dockerfile` + `docker-compose.yml` that serves the build via nginx and reverse-proxies `/api` to the backend), and `.github/workflows/ci.yml` (parallel backend/frontend jobs with JaCoCo 80% gate). Phase 1 (FR1.1 account identity) is complete: signup (`POST /accounts`) and login (`POST /auth/login`) ship on top of `shared/exception`, `shared/security` (ES256 JWT issuance + verification, with the SmallRye JWT verifier enabled), and `shared/validation`, backed by Flyway V1's `account` table — and [ADR 0001 (JWT signing algorithm)](docs/decisions/0001-jwt-signing-algorithm.md) is **Accepted**. The remaining feature modules (`wallet`, `fraud`, `pfm`, `advisor`, `dashboard`) are not yet written. The design contract lives in [project-info.md](project-info.md) and supporting documents (see [§15](project-info.md#15-reference-materials)). The PRD source is the FR/NFR summary captured directly into `project-info.md` on 2026-05-12. When the code and `project-info.md` conflict, `project-info.md` is authoritative until an ADR under [docs/decisions/](docs/decisions/) supersedes it.
+DigitalWallet is a multi-currency internal wallet platform with real-time fraud detection and an AI-driven personal finance manager. The Claude-ready baseline (Phase A–E of the bootstrap) is scaffolded: `backend/` (Quarkus 3.33.2 LTS, Java 21, 7 modules with `shared/` infrastructure and Flyway V1; ships its own `Dockerfile` + `docker-compose.yml` that owns Postgres 16 + Kafka KRaft + Redis 7 + the optional Quarkus container), `frontend/` (Vite 5 + Vue 3 + TS 5 strict + Tailwind 3 + Pinia + TanStack Query/Vue Query; ships its own `Dockerfile` + `docker-compose.yml` that serves the build via nginx and reverse-proxies `/api` to the backend), and `.github/workflows/ci.yml` (parallel backend/frontend jobs with JaCoCo 80% gate). Phase 1 (FR1.1 account identity) is complete: signup (`POST /accounts`) and login (`POST /auth/login`) ship on top of `shared/exception`, `shared/security` (ES256 JWT issuance + verification, with the SmallRye JWT verifier enabled), and `shared/validation`, backed by Flyway V1's `account` table — and [ADR 0001 (JWT signing algorithm)](docs/decisions/0001-jwt-signing-algorithm.md) is **Accepted**. The remaining feature modules (`wallet`, `fraud`, `pfm`, `advisor`, `dashboard`) are not yet written. The design contract lives in [project-info.md](project-info.md) and supporting documents (see [§15](project-info.md#15-reference-materials)). The PRD source is the FR/NFR summary captured directly into `project-info.md` on 2026-05-12. When the code and `project-info.md` conflict, `project-info.md` is authoritative until an ADR under [docs/decisions/](docs/decisions/) supersedes it.
 
 ## Tech Stack (Mandated by Spec)
 
@@ -19,22 +19,22 @@ DigitalWallet is a multi-currency internal wallet platform with real-time fraud 
 - **Persistence (ledger):** PostgreSQL 16. Money columns `numeric(19,4)`; timestamps `timestamptz`. Materialized views permitted for the PFM read model (NFR6).
 - **Cache / locks / idempotency:** Redis 7. Not a source of truth — state must be reconstructable from Postgres + Kafka.
 - **Event backbone:** Kafka. Topics: `transaction-events`, `fraud-alerts`, `pfm-threshold-alerts`, `advisor-requests`/`advisor-responses` (advisor topic names TBD).
-- **Frontend:** React 18.x + TypeScript 5.x **strict** + Tailwind 3.x + Redux Toolkit (incl. RTK Query) + React Hook Form + Zod + pnpm + native WebSocket API.
-- **Testing (backend):** JUnit 5, Mockito, Testcontainers (Postgres + Kafka + Redis), JaCoCo. ≥80% service-layer line coverage (NFR4) enforced in CI.
-- **Testing (frontend):** Vitest + React Testing Library, c8 coverage, Playwright for E2E smoke per epic.
+- **Frontend:** Vue 3.x + TypeScript 5.x **strict** + Tailwind 3.x + Pinia (incl. TanStack Query/Vue Query) + VeeValidate + Zod + pnpm + native WebSocket API.
+- **Testing (backend):** JUnit 5, Mockito, Testcontainers (Postgres + Kafka + Redis), JaCoCo. ≥80% application-service-layer line coverage (NFR4) enforced in CI.
+- **Testing (frontend):** Vitest + `@testing-library/vue`, c8 coverage, Playwright for E2E smoke per epic.
 - **Deployment:** Docker + Docker Compose (single-host local-first stack). No Kubernetes in MVP.
 - **CI/CD:** GitHub Actions — build, tests (incl. Testcontainers), JaCoCo gate, frontend lint+test.
 
 ## Architecture
 
-Modular monolith organised under `backend/` as feature modules (`account`, `wallet`, `fraud`, `pfm`, `advisor`, `dashboard`, `shared`), with two parallel execution streams decoupled by Kafka: the synchronous money path commits the ledger on the request thread (after a bounded fraud pre-check at the edge, NFR9), and one or more asynchronous Kafka consumers (Fraud, PFM, Dashboard, AI Advisor) run on separate thread pools. Cross-system consistency between the two streams is achieved with the Transactional Outbox Pattern, not by writing to Kafka inside the request handler (NFR2, NFR5). The frontend is a single React app serving both end users and the admin dashboard, with realtime updates over WebSocket.
+Modular monolith organised under `backend/` as feature modules (`account`, `wallet`, `fraud`, `pfm`, `advisor`, `dashboard`, `shared`), each structured internally as a per-module hexagon (ports & adapters): a framework-free `domain/`, an `application/` layer of inbound ports (use cases), outbound ports (SPIs), and use-case implementations (application services), and an `adapter/` layer split into inbound adapters (`in/web` JAX-RS, `in/messaging` Kafka) and outbound adapters (`out/persistence` JPA, `out/redis`, `out/messaging`, `out/llm`); dependencies point inward only, and frameworks live in adapters. Two parallel execution streams are decoupled by Kafka: the synchronous money path commits the ledger on the request thread (after a bounded fraud pre-check at the edge, NFR9), and one or more asynchronous Kafka consumers (Fraud, PFM, Dashboard, AI Advisor) run on separate thread pools. Cross-system consistency between the two streams is achieved with the Transactional Outbox Pattern, not by writing to Kafka inside the request handler (NFR2, NFR5). The frontend is a single Vue app serving both end users and the admin dashboard, with realtime updates over WebSocket.
 
 ### Synchronous stream (money path)
 
 - Entry: REST endpoints for signup, wallet, deposit, withdraw, transfer, statement.
 - Fraud pre-check: bounded Redis sliding-window counter lookups (velocity FR2.1, volume FR2.2) plus a `account.fraud_status` read (FR2.4) before opening the DB transaction; a breach rejects the request inline with `fraud.velocity_exceeded` / `fraud.volume_exceeded` / `account.suspended` (NFR9; the `account.suspended` error key is preserved for API back-compat). Blocked attempts write a `transaction.blocked` outbox event in a short `@Transactional` boundary. *(MVP: the `audit_log` row originally specified for block paths is deferred — see project-info.md §8.)*
 - Concurrency: outer Redis distributed lock keyed on `wallet_id` (fast-fail), inner DB `SELECT … FOR UPDATE` via JPA `PESSIMISTIC_WRITE` (NFR1).
-- Persistence: `@Transactional` boundary on the service layer; ledger row + outbox row committed atomically.
+- Persistence: `@Transactional` boundary on the application service (use case); ledger row + outbox row committed atomically.
 - Idempotency: mutating endpoints require an `Idempotency-Key` header; replays return the original outcome (NFR3). Implemented via the `idempotency_record` table with UNIQUE`(account_id, endpoint, idempotency_key)` and an `IN_FLIGHT`/`COMPLETED` status column.
 - Output: writes to the outbox table only. The HTTP thread never publishes to Kafka directly (NFR5).
 - Rate limiting: Redis token bucket on `POST /transfers` (10/min/user) and `POST /advisor/*` (5/hour/user).
@@ -54,7 +54,7 @@ Treat any change that weakens these as a regression.
 - **Hybrid concurrency (NFR1):** every wallet mutation MUST acquire the Redis distributed lock on `wallet_id` (short TTL) before opening the DB transaction, and the DB transaction MUST hold a `PESSIMISTIC_WRITE` row lock on the ledger row. Redis fails fast; DB is authoritative.
 - **ACID + Outbox (NFR2):** ledger writes and outbox writes commit in a single DB transaction; Kafka publishing is performed only by the scheduled outbox poller. Consumers must be idempotent.
 - **Idempotency (NFR3):** all mutating transfer/deposit/withdraw endpoints require an `Idempotency-Key` header and MUST return the original outcome on replay.
-- **Coverage floor (NFR4):** ≥80% line coverage on the service layer; CI fails below this threshold.
+- **Coverage floor (NFR4):** ≥80% line coverage on the application service layer (use-case implementations); CI fails below this threshold.
 - **Latency isolation (NFR5):** the HTTP path MAY perform fast, bounded Redis-counter pre-checks (fraud velocity / volume per FR2.1–FR2.2, plus `account.fraud_status` lookup per FR2.4), but MUST NOT run heavy fraud / PFM / dashboard analytics inline. Cross-event fraud analysis, alert fan-out, suspension policy, PFM aggregation, and dashboard aggregation MUST run in Kafka-consumer threads.
 - **CQRS for budgets (NFR6):** budget state is NEVER maintained by direct `UPDATE`s against ledger tables. Redis is the hot read-model; a Postgres materialized view is the durable backup and rebuild source for Redis.
 - **Event-time correctness (NFR7):** PFM uses `event_timestamp` from the Kafka payload, not consumer wall-clock; late events must not corrupt accounting.
@@ -68,10 +68,11 @@ Backend uses **Maven** (per §4.1, ADR #7); frontend uses **pnpm** (per §4.2, A
 - Backend build: `cd backend && ./mvnw clean install`
 - Backend dev mode: `cd backend && ./mvnw quarkus:dev`
 - Backend tests (unit + integration via Testcontainers): `cd backend && ./mvnw test`
-- Backend coverage: `cd backend && ./mvnw verify` (JaCoCo report under `backend/target/site/jacoco/`; 80% gate on `com/digitalwallet/*/service/**`)
+- Backend coverage: `cd backend && ./mvnw verify` (JaCoCo report under `backend/target/site/jacoco/`; 80% gate targets `com/digitalwallet/*/application/service/**` — the use-case implementations; the `pom.xml` include pattern moves with the Java code restructure and still reads `*/service/**` until then)
 - Frontend install: `cd frontend && pnpm install`
 - Frontend dev: `cd frontend && pnpm dev`
 - Frontend lint: `cd frontend && pnpm lint`
+- Frontend type-check: `cd frontend && pnpm type-check` (`vue-tsc --noEmit`)
 - Frontend tests: `cd frontend && pnpm test` (Vitest); `cd frontend && pnpm e2e` (Playwright)
 - Local infra (Postgres + Kafka + Redis): `docker compose -f backend/docker-compose.yml up -d`
 - Local stack incl. containerised backend: `docker compose -f backend/docker-compose.yml --profile app up -d`
@@ -103,27 +104,29 @@ DigitalWallet/
 │   ├── docker-compose.yml         # Postgres 16 + Kafka KRaft + Redis 7 + (--profile app) backend
 │   ├── env.template               # backend + infra env (DB / Kafka / Redis / JWT / LLM / fraud)
 │   ├── postgres/init/             # Postgres init scripts (bootstraps test DB)
-│   ├── account/                      # FR1.1 (signup, role, base_currency, fraud_status)
-│   │   ├── api/  service/  persistence/
+│   ├── account/                   # FR1.1 — one hexagon (signup, role, base_currency, fraud_status)
+│   │   ├── domain/                #   framework-free model + rules
+│   │   ├── application/           #   port/in (use cases) · port/out (SPIs) · service (use-case impls)
+│   │   └── adapter/               #   in/web · in/messaging · out/persistence
 │   ├── wallet/                    # FR1.2, FR1.3, FR1.4
-│   │   ├── api/  service/  persistence/  event/
+│   │   ├── domain/  application/  adapter/   # in/web · out/persistence · out/messaging
 │   ├── fraud/                     # FR2.1, FR2.2, FR2.3, FR2.4, FR2.5
-│   │   ├── consumer/  service/  event/
+│   │   ├── domain/  application/  adapter/   # in/messaging · out/redis · out/messaging
 │   ├── pfm/                       # FR4.x, FR5.x
-│   │   ├── api/  service/  consumer/  persistence/
+│   │   ├── domain/  application/  adapter/   # in/web · in/messaging · out/redis (NO ledger persistence — NFR6)
 │   ├── advisor/                   # FR6.x — LLM integration
-│   │   ├── api/  service/  client/
+│   │   ├── domain/  application/  adapter/   # in/web · in/messaging · out/llm
 │   ├── dashboard/                 # FR3.x
-│   │   ├── api/  ws/  consumer/
-│   └── shared/                    # money, idempotency, outbox, security
-└── frontend/                      # React app (user app + admin dashboard) + its deploy tier
+│   │   ├── domain/  application/  adapter/   # in/web · in/messaging (WebSocket)
+│   └── shared/                    # domain kernel + cross-cutting adapters: money, idempotency, outbox poller, rate-limit, lock, security, exception mapper
+└── frontend/                      # Vue 3 app (user app + admin dashboard) + its deploy tier
     ├── Dockerfile                 # multi-stage Node 20 build → nginx 1.27
     ├── docker-compose.yml         # nginx serving dist/, joins backend's dw-net
     ├── nginx.conf                 # static + /api reverse-proxy + WebSocket upgrade
     └── env.template               # FRONTEND_HOST_PORT, VITE_API_BASE_URL (no secrets — VITE_* is public)
 ```
 
-Feature-based + layered: group by feature module, keep `api/` / `service/` / `persistence/` (and `consumer/` / `event/` where applicable) inside each module. Cross-cutting concerns live in `shared/`.
+Per-module hexagonal (ports & adapters) within a modular monolith: each feature module is its own hexagon with a framework-free `domain/`, an `application/` layer (inbound ports / use cases, outbound ports / SPIs, and the use-case implementations / application services), and an `adapter/` layer split into inbound adapters (`in/web` JAX-RS, `in/messaging` Kafka) and outbound adapters (`out/persistence` JPA, `out/redis`, `out/messaging`, `out/llm`). Dependencies point inward only; frameworks live in adapters. Cross-cutting concerns — the domain kernel (money type), exception/security/validation infrastructure, and the cross-cutting outbound adapters (idempotency, outbox poller, rate-limit, Redis lock) — live in `shared/`.
 
 ## Gaps in project-info.md to address before step 2
 

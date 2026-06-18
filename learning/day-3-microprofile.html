@@ -3,38 +3,50 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ngày 3 — Quarkus MicroProfile + wallet MVP · Hướng dẫn chi tiết</title>
+<title>Ngày 3 — Quarkus MicroProfile + wallet MVP + Keycloak · Hướng dẫn chi tiết</title>
 <link rel="stylesheet" href="assets/guide.css">
 </head>
 <body>
 
 <header class="gh">
   <div class="wrap">
-    <div class="breadcrumb"><a href="5-day-tech-stack-plan.html">← Kế hoạch 5 ngày</a> &nbsp;/&nbsp; Ngày 3</div>
-    <h1><span class="badge b3">3</span>Quarkus MicroProfile + wallet MVP</h1>
-    <p class="lead">Hôm nay bạn dựng lát cắt tính năng <b>wallet</b> (mở ví, nạp tiền, liệt kê) — và dùng nó làm “sân tập” cho MicroProfile: <b>Health</b> (liveness/readiness), <b>Metrics</b> (Micrometer), <b>OpenAPI/Swagger</b>, và <b>Fault Tolerance</b> (circuit breaker, retry, fallback). Lý thuyết nền: 12-factor + các pattern chống lỗi trong hệ phân tán.</p>
+    <div class="breadcrumb"><a href="4-day-tech-stack-plan.html">← Kế hoạch 4 ngày</a> &nbsp;/&nbsp; Ngày 3</div>
+    <h1><span class="badge b3">3</span>Quarkus MicroProfile + wallet MVP + Keycloak</h1>
+    <p class="lead">Đây là <b>ngày dày nhất</b> của bản 4 ngày: gộp toàn bộ MicroProfile (Phần A) và Keycloak (Phần B). <b>Phần A —</b> dựng lát cắt tính năng <b>wallet</b> (mở ví, nạp tiền, liệt kê) rồi dùng nó làm bài thực hành cho MicroProfile: <b>Health</b> (liveness/readiness), <b>Metrics</b> (Micrometer), <b>OpenAPI/Swagger</b>, và <b>Fault Tolerance</b> (circuit breaker, retry, fallback). <b>Phần B —</b> để Keycloak (OAuth2/OIDC) phát hành token, backend chỉ <b>verify</b> token và map role để bảo vệ chính endpoint wallet vừa dựng.</p>
     <div class="meta">
-      <span class="chip">⏱ ~8 giờ</span>
-      <span class="chip">🎯 Hiểu resilience patterns</span>
+      <span class="chip">⏱ ~8h (Phần A) + ~8h (Phần B)</span>
+      <span class="chip">🎯 Resilience + OAuth2/OIDC</span>
       <span class="chip">🛠 wallet slice + /q/swagger-ui</span>
-      <span class="chip">🧪 Circuit breaker chạy thật</span>
+      <span class="chip">🔒 Keycloak bảo vệ wallet</span>
+      <span class="chip">🌿 nhánh <b>learning/tech-stack-spike</b></span>
     </div>
   </div>
 </header>
 
 <nav class="toc-mini"><div class="wrap">
   <a href="#outcome">Mục tiêu</a>
-  <a href="#t1">12-factor</a>
-  <a href="#t2">Resilience</a>
-  <a href="#t3">Observability</a>
-  <a href="#t4">MicroProfile/SmallRye</a>
-  <a href="#p1">TH: extensions+V2</a>
-  <a href="#p2">TH: wallet slice</a>
-  <a href="#p3">TH: Health</a>
-  <a href="#p4">TH: Metrics</a>
-  <a href="#p5">TH: OpenAPI</a>
-  <a href="#p6">TH: Circuit Breaker</a>
-  <a href="#p7">TH: Test</a>
+  <a href="#t1">A·12-factor</a>
+  <a href="#t2">A·Resilience</a>
+  <a href="#t3">A·Observability</a>
+  <a href="#t4">A·MicroProfile</a>
+  <a href="#p1">A·extensions+V2</a>
+  <a href="#p2">A·wallet slice</a>
+  <a href="#p3">A·Health</a>
+  <a href="#p4">A·Metrics</a>
+  <a href="#p5">A·OpenAPI</a>
+  <a href="#p6">A·Circuit Breaker</a>
+  <a href="#p7">A·Test</a>
+  <a href="#t5">B·AuthN/AuthZ</a>
+  <a href="#t6">B·OAuth2</a>
+  <a href="#t7">B·OIDC</a>
+  <a href="#t8">B·JWT/JWKS</a>
+  <a href="#t9">B·Keycloak model</a>
+  <a href="#p8">B·dựng Keycloak</a>
+  <a href="#p9">B·realm/client</a>
+  <a href="#p10">B·Quarkus OIDC</a>
+  <a href="#p11">B·lấy token</a>
+  <a href="#p12">B·test bảo mật</a>
+  <a href="#trouble">Bẫy</a>
   <a href="#dod">Hoàn thành</a>
 </div></nav>
 
@@ -43,16 +55,22 @@
 <section id="outcome">
   <h2><span class="lbl">Kết quả mong đợi</span>Hết ngày 3 bạn sẽ…</h2>
   <div class="panel"><ul>
-    <li>Hiểu &amp; thấy tận mắt: liveness vs readiness, timer metric, breaker chuyển trạng thái open.</li>
-    <li>Có 3 endpoint wallet chạy thật, gọi được ngay trên Swagger UI.</li>
-    <li>Biết khi nào nên <b>retry</b>, khi nào nên <b>mở circuit breaker</b>, khi nào dùng <b>fallback</b>.</li>
-    <li>Giữ coverage service ≥ 80% (NFR4) — <code>./mvnw verify</code> xanh.</li>
+    <li><b>(A)</b> Hiểu &amp; thấy tận mắt: liveness vs readiness, timer metric, breaker chuyển trạng thái open.</li>
+    <li><b>(A)</b> Có 3 endpoint wallet chạy thật, gọi được ngay trên Swagger UI; coverage service ≥ 80% (NFR4).</li>
+    <li><b>(B)</b> Vẽ được luồng Authorization Code + PKCE; phân biệt ID token vs access token; hiểu vì sao JWKS cho phép verify offline.</li>
+    <li><b>(B)</b> Backend (profile <code>keycloak</code>) verify token Keycloak, map realm role → <code>@RolesAllowed</code>; test 401/403 xanh; path ES256 cũ vẫn còn.</li>
   </ul></div>
-  <div class="callout danger"><span class="tag">Nhắc lại phạm vi</span><p style="margin:4px 0 0">Lát cắt <b>deposit hôm nay là “đồ chơi”</b>: KHÔNG có Redis lock (NFR1), KHÔNG outbox/Kafka (NFR2), KHÔNG enforce idempotency replay (NFR3). Mục tiêu là học MicroProfile, không phải money-path production.</p></div>
+  <div class="callout warn">
+    <span class="tag">Ngày 3 nặng gấp đôi — chủ động cắt nếu trễ</span>
+    <p style="margin:4px 0 0">Bản 4 ngày dồn cả MicroProfile lẫn Keycloak vào đây để giữ đủ khối lượng công việc của bản 5 ngày. Nếu một ngày không kham hết: ưu tiên Phần A chạy được trước (wallet + health + Swagger), bỏ circuit-breaker demo, ở Phần B chỉ làm 1 client + role <code>USER</code>; có thể đẩy Phần B sang buổi tối hoặc đầu Ngày 4.</p>
+  </div>
+  <div class="callout danger"><span class="tag">Nhắc lại phạm vi</span><p style="margin:4px 0 0">Lát cắt <b>deposit hôm nay là phiên bản rút gọn chỉ để học</b>: KHÔNG có Redis lock (NFR1), KHÔNG outbox/Kafka (NFR2), KHÔNG enforce idempotency replay (NFR3). Mục tiêu là học MicroProfile + bảo mật, không phải money-path production.</p></div>
 </section>
 
+<h2 style="border-top-color:var(--d3);color:var(--d3)"><span class="lbl" style="color:var(--d3)">Phần A — MicroProfile + wallet</span>Dựng wallet &amp; làm cho nó quan sát được + chịu lỗi</h2>
+
 <!-- THEORY 1 -->
-<h2 id="t1"><span class="lbl">Lý thuyết · 1/4</span>12-factor app — 4 yếu tố liên quan hôm nay</h2>
+<h2 id="t1"><span class="lbl">Phần A · Lý thuyết 1/4</span>12-factor app — 4 yếu tố liên quan hôm nay</h2>
 <table>
   <thead><tr><th>Factor</th><th>Nói gì</th><th>Áp dụng</th></tr></thead>
   <tbody>
@@ -64,7 +82,7 @@
 </table>
 
 <!-- THEORY 2 -->
-<h2 id="t2"><span class="lbl">Lý thuyết · 2/4</span>Resilience patterns — chống lỗi trong hệ phân tán</h2>
+<h2 id="t2"><span class="lbl">Phần A · Lý thuyết 2/4</span>Resilience patterns — chống lỗi trong hệ phân tán</h2>
 <p>Khi app gọi service ngoài (DB, LLM, FX API), thứ ngoài đó <b>sẽ</b> chậm hoặc chết. 5 pattern dưới đây giúp lỗi cục bộ không kéo sập cả hệ thống.</p>
 <table>
   <thead><tr><th>Pattern</th><th>Giải quyết</th><th>Khi nào dùng</th></tr></thead>
@@ -83,10 +101,10 @@
    │   đếm tỉ lệ lỗi)          trả fallback)               │
    └───────────────────────────────────────────────────────┘
               thử thành công → đóng lại (CLOSED)</div>
-<p class="why"><b>Liên hệ repo:</b> NFR8 yêu cầu bọc circuit breaker quanh cuộc gọi LLM của advisor. Bài demo hôm nay là “bản nháp” của chính pattern đó.</p>
+<p class="why"><b>Liên hệ repo:</b> NFR8 yêu cầu bọc circuit breaker quanh cuộc gọi LLM của advisor. Bài demo hôm nay là một phiên bản thu nhỏ của chính pattern đó.</p>
 
 <!-- THEORY 3 -->
-<h2 id="t3"><span class="lbl">Lý thuyết · 3/4</span>Observability — health &amp; metrics</h2>
+<h2 id="t3"><span class="lbl">Phần A · Lý thuyết 3/4</span>Observability — health &amp; metrics</h2>
 <div class="grid g2">
   <div class="panel"><h4>Health: liveness vs readiness</h4>
     <ul class="small">
@@ -106,7 +124,7 @@
 </div>
 
 <!-- THEORY 4 -->
-<h2 id="t4"><span class="lbl">Lý thuyết · 4/4</span>MicroProfile &amp; SmallRye — bộ spec cho microservice Java</h2>
+<h2 id="t4"><span class="lbl">Phần A · Lý thuyết 4/4</span>MicroProfile &amp; SmallRye — bộ spec cho microservice Java</h2>
 <p><b>MicroProfile</b> là tập các đặc tả (spec) chuẩn hoá những thứ microservice nào cũng cần: Config, Health, Metrics, Fault Tolerance, OpenAPI, JWT… <b>SmallRye</b> là bộ hiện thực mà Quarkus dùng. Bạn lập trình theo annotation chuẩn, Quarkus lo phần còn lại.</p>
 <table>
   <thead><tr><th>Spec</th><th>Annotation chính</th><th>Trong repo</th></tr></thead>
@@ -120,8 +138,8 @@
   </tbody>
 </table>
 
-<!-- ===================== PRACTICE ===================== -->
-<h2 id="p1"><span class="lbl">Thực hành · 1/7</span>Thêm extension &amp; migration V2 (≈ 30 phút)</h2>
+<!-- ===================== PRACTICE A ===================== -->
+<h2 id="p1"><span class="lbl">Phần A · Thực hành 1/7</span>Thêm extension &amp; migration V2 (≈ 30 phút)</h2>
 <ol class="steps">
   <li><b class="act">Thêm 3 extension</b> (micrometer-prometheus đã có):
 <pre><code>cd backend
@@ -141,7 +159,7 @@
 </ol>
 <div class="callout warn"><span class="tag">Luật repo</span><p style="margin:4px 0 0">Entity + migration <b>cùng một PR</b> (<span class="tag-file">backend_coding.md §13</span>); tiền là <code>numeric(19,4)</code>, thời gian là <code>timestamptz</code>; <code>generation=none</code> (Hibernate không tự sửa schema).</p></div>
 
-<h2 id="p2"><span class="lbl">Thực hành · 2/7</span>Dựng wallet slice (theo hexagonal Ngày 2) (≈ 120 phút)</h2>
+<h2 id="p2"><span class="lbl">Phần A · Thực hành 2/7</span>Dựng wallet slice (theo hexagonal Ngày 2) (≈ 120 phút)</h2>
 <p>Tái dùng đúng khuôn ports &amp; adapters đã học. Tối thiểu cần:</p>
 <div class="diagram">wallet/
 ├── domain/         Wallet, WalletId, Money (VO)
@@ -185,7 +203,7 @@
 }</code></pre>
 <div class="callout warn"><span class="tag">Ownership ở service</span><p style="margin:4px 0 0">Trong <code>DepositUseCase.deposit</code>: nạp tiền chỉ khi <code>wallet.accountId == account</code> lấy từ token; nếu không → ném <code>AuthForbiddenException("auth.forbidden")</code> (<span class="tag-file">security.md §3</span>). Validation <code>amount &gt; 0</code> bằng <code>@DecimalMin(value="0", inclusive=false)</code> trên DTO.</p></div>
 
-<h2 id="p3"><span class="lbl">Thực hành · 3/7</span>Health check readiness (≈ 30 phút)</h2>
+<h2 id="p3"><span class="lbl">Phần A · Thực hành 3/7</span>Health check readiness (≈ 30 phút)</h2>
 <p>Thay/ bổ sung cho <a href="../backend/src/main/java/com/digitalwallet/health/HealthResource.java">HealthResource.java</a> tự viết bằng MicroProfile Health chuẩn.</p>
 <div class="ex-label file">shared/health/DatabaseReadinessCheck.java</div>
 <pre><code><span class="kw">@Readiness</span>
@@ -207,7 +225,7 @@
 curl http://localhost:8080/q/health/live</code></pre>
 <div class="checkpoint"><b>✅ Checkpoint:</b> tắt container Postgres → <code>/q/health/ready</code> chuyển <code>DOWN</code>; bật lại → <code>UP</code>.</div>
 
-<h2 id="p4"><span class="lbl">Thực hành · 4/7</span>Metric cho deposit (≈ 20 phút)</h2>
+<h2 id="p4"><span class="lbl">Phần A · Thực hành 4/7</span>Metric cho deposit (≈ 20 phút)</h2>
 <div class="ex-label file">trong DepositUseCase / WalletApplicationService</div>
 <pre><code><span class="kw">@Timed</span>(value = <span class="str">"wallet.deposit"</span>, description = <span class="str">"Deposit latency"</span>)
 <span class="kw">@Transactional</span>
@@ -216,7 +234,7 @@ curl http://localhost:8080/q/health/live</code></pre>
 <pre><code>curl -s http://localhost:8080/q/metrics | grep wallet_deposit
 <span class="cmt"># wallet_deposit_seconds_count, wallet_deposit_seconds_sum ... tăng dần</span></code></pre>
 
-<h2 id="p5"><span class="lbl">Thực hành · 5/7</span>OpenAPI + Swagger UI (≈ 40 phút)</h2>
+<h2 id="p5"><span class="lbl">Phần A · Thực hành 5/7</span>OpenAPI + Swagger UI (≈ 40 phút)</h2>
 <p>Sau khi thêm <code>smallrye-openapi</code>, mặc định đã có <code>/q/openapi</code> (spec) và <code>/q/swagger-ui</code> (UI). Chú thích thêm cho đẹp &amp; rõ:</p>
 <div class="ex-label file">chú thích trên method resource</div>
 <pre><code><span class="kw">@POST</span>
@@ -231,7 +249,7 @@ curl http://localhost:8080/q/health/live</code></pre>
 </ol>
 <div class="checkpoint"><b>✅ Checkpoint:</b> mở ví → nạp tiền → list thấy balance tăng đúng, tất cả từ Swagger UI.</div>
 
-<h2 id="p6"><span class="lbl">Thực hành · 6/7</span>Circuit Breaker — demo NFR8 (≈ 45 phút)</h2>
+<h2 id="p6"><span class="lbl">Phần A · Thực hành 6/7</span>Circuit Breaker — demo NFR8 (≈ 45 phút)</h2>
 <p>Mô phỏng một dịch vụ ngoài hay chết (như API tỉ giá FX), rồi bọc fault-tolerance để thấy breaker bảo vệ.</p>
 <div class="ex-label file">wallet/adapter/out/fx/FlakyFxRateAdapter.java</div>
 <pre><code><span class="kw">@ApplicationScoped</span>
@@ -256,7 +274,7 @@ curl http://localhost:8080/q/health/live</code></pre>
 <p>Gọi <code>rateFor</code> liên tục (qua một endpoint test tạm hoặc unit test) ~10 lần: ban đầu lúc được lúc fallback, sau khi tỉ lệ lỗi vượt ngưỡng → breaker <b>OPEN</b>, mọi cuộc gọi <b>trả thẳng fallback</b> không chạy method gốc nữa, 5s sau thử lại (half-open).</p>
 <div class="callout info"><span class="tag">Đọc thông số</span><p style="margin:4px 0 0"><code>requestVolumeThreshold</code> = cửa sổ xét; <code>failureRatio</code> = ngưỡng lỗi để mở; <code>delay</code> = thời gian OPEN trước khi half-open. Tinh chỉnh và quan sát hành vi đổi.</p></div>
 
-<h2 id="p7"><span class="lbl">Thực hành · 7/7</span>Test &amp; giữ coverage ≥ 80% (≈ 45 phút)</h2>
+<h2 id="p7"><span class="lbl">Phần A · Thực hành 7/7</span>Test &amp; giữ coverage ≥ 80% (≈ 45 phút)</h2>
 <ul>
   <li><b>Unit (mock out-port):</b> <code>deposit_givenAmountZero_throwsValidation</code>; boundary <code>amount</code> tại <code>0</code>, <code>0.0001</code>, số âm (<span class="tag-file">testing.md §2.6</span>). So tiền bằng <code>compareTo</code>.</li>
   <li><b>Ownership:</b> <code>deposit_whenWalletOfAnotherAccount_throwsForbidden</code>.</li>
@@ -268,17 +286,7 @@ curl http://localhost:8080/q/health/live</code></pre>
 ./mvnw verify    <span class="cmt"># JaCoCo yêu cầu ≥80% LINE trên com/digitalwallet/*/service/**</span></code></pre>
 <div class="pitfall"><b>Nếu gate đỏ:</b> JaCoCo chỉ tính package <code>service/**</code>. Tập trung viết test cho <code>WalletApplicationService</code>/<code>DepositUseCase</code>, đừng phí công test getter DTO (repo cấm test trivial — <span class="tag-file">testing.md §5</span>).</p>
 
-<!-- DOD -->
-<h2 id="dod"><span class="lbl">Chốt ngày</span>Definition of Done — Ngày 3</h2>
-<div class="panel"><ul class="dod">
-  <li><input type="checkbox"> 3 endpoint wallet chạy &amp; thử được trên <code>/q/swagger-ui</code>.</li>
-  <li><input type="checkbox"> <code>/q/health/ready</code> phản ánh đúng trạng thái DB (tắt DB → DOWN).</li>
-  <li><input type="checkbox"> Thấy timer <code>wallet_deposit</code> ở <code>/q/metrics</code>.</li>
-  <li><input type="checkbox"> Circuit breaker mở được &amp; fallback chạy (có test chứng minh).</li>
-  <li><input type="checkbox"> Ownership check ở service; <code>amount &gt; 0</code> validate.</li>
-  <li><input type="checkbox"> <code>./mvnw verify</code> xanh, coverage service ≥ 80%.</li>
-</ul></div>
-<div class="selfcheck"><h4>✔ Tự kiểm</h4>
+<div class="selfcheck"><h4>✔ Tự kiểm Phần A</h4>
   <ul class="small" style="margin:6px 0 0">
     <li>Liveness fail thì orchestrator làm gì? Readiness fail thì làm gì? (restart vs ngừng route)</li>
     <li>Vì sao <b>không</b> nên retry lỗi 422? (lỗi logic, retry vô ích)</li>
@@ -286,23 +294,242 @@ curl http://localhost:8080/q/health/live</code></pre>
   </ul>
 </div>
 
-<h2><span class="lbl">Tài liệu</span>Nguồn học ngày 3</h2>
-<ul class="src-list">
-  <li><a href="https://microprofile.io/">MicroProfile</a> <span class="d">· tổng quan các spec</span></li>
-  <li><a href="https://quarkus.io/guides/smallrye-health">Quarkus — SmallRye Health</a></li>
-  <li><a href="https://quarkus.io/guides/smallrye-fault-tolerance">Quarkus — SmallRye Fault Tolerance</a></li>
-  <li><a href="https://quarkus.io/guides/telemetry-micrometer">Quarkus — Micrometer metrics</a></li>
-  <li><a href="https://quarkus.io/guides/openapi-swaggerui">Quarkus — OpenAPI &amp; Swagger UI</a></li>
-  <li><a href="https://12factor.net/">The Twelve-Factor App</a></li>
-  <li><a href="https://martinfowler.com/bliki/CircuitBreaker.html">Martin Fowler — CircuitBreaker</a></li>
+<h2 style="border-top-color:var(--d3);color:var(--d3)"><span class="lbl" style="color:var(--d3)">Phần B — Keycloak (OAuth2/OIDC)</span>Để một Identity Provider bảo vệ API wallet</h2>
+<div class="callout danger"><span class="tag">⚠ Lệch ADR 0001</span><p style="margin:4px 0 0">Repo dùng JWT ES256 tự ký (<code>JwtIssuer</code>), ADR 0001 đang <b>Accepted</b>. Keycloak ở Phần B chạy <b>song song theo profile</b>, KHÔNG xoá path cũ. Muốn thay thật phải viết ADR supersede 0001.</p></div>
+
+<!-- THEORY 5 -->
+<h2 id="t5"><span class="lbl">Phần B · Lý thuyết 1/5</span>AuthN vs AuthZ vs RBAC</h2>
+<table>
+  <thead><tr><th>Khái niệm</th><th>Trả lời câu hỏi</th><th>Ví dụ</th></tr></thead>
+  <tbody>
+    <tr><td><b>Authentication (AuthN)</b></td><td>“Bạn là <i>ai</i>?”</td><td>Đăng nhập email/mật khẩu → xác định danh tính</td></tr>
+    <tr><td><b>Authorization (AuthZ)</b></td><td>“Bạn được <i>làm gì</i>?”</td><td>USER được nạp ví; ADMIN xem dashboard</td></tr>
+    <tr><td><b>RBAC</b></td><td>Cấp quyền theo <i>vai trò</i></td><td><code>@RolesAllowed("ADMIN")</code></td></tr>
+  </tbody>
+</table>
+<p class="why"><b>Repo:</b> chỉ 2 role MVP là <code>USER</code> và <code>ADMIN</code> (<code>FRAUD_ANALYST</code> bị hoãn — ADR 0009). RBAC phải check ở <b>cả</b> controller lẫn service (<span class="tag-file">security.md §3</span>).</p>
+
+<!-- THEORY 6 -->
+<h2 id="t6"><span class="lbl">Phần B · Lý thuyết 2/5</span>OAuth2 — uỷ quyền truy cập</h2>
+<h3>4 vai</h3>
+<table>
+  <thead><tr><th>Vai</th><th>Là ai trong app của bạn</th></tr></thead>
+  <tbody>
+    <tr><td><b>Resource Owner</b></td><td>Người dùng (alice)</td></tr>
+    <tr><td><b>Client</b></td><td>App xin truy cập thay người dùng (Vue app, backend)</td></tr>
+    <tr><td><b>Authorization Server</b></td><td><b>Keycloak</b> — xác thực &amp; phát token</td></tr>
+    <tr><td><b>Resource Server</b></td><td>Backend Quarkus — bảo vệ API, chỉ nhận token hợp lệ</td></tr>
+  </tbody>
+</table>
+<h3>Các grant type (cách lấy token)</h3>
+<table>
+  <thead><tr><th>Grant</th><th>Dùng khi</th><th>Trong plan này</th></tr></thead>
+  <tbody>
+    <tr><td><b>Authorization Code + PKCE</b></td><td>App có UI (SPA, mobile) — chuẩn vàng hiện nay</td><td>✅ Vue app (Ngày 4)</td></tr>
+    <tr><td><b>Client Credentials</b></td><td>Server↔server, không có người dùng</td><td>Khi service gọi service</td></tr>
+    <tr><td><b>Password (ROPC)</b></td><td>Đã <i>không khuyến nghị</i>; chỉ test nhanh</td><td>⚠ chỉ để curl lấy token thử (Thực hành 4 của Phần B)</td></tr>
+  </tbody>
+</table>
+<h3>Luồng Authorization Code + PKCE (vẽ kỹ)</h3>
+<div class="diagram">  Người dùng        Vue app (client public)        Keycloak (Auth Server)     Backend (Resource Server)
+     │                    │                              │                          │
+     │  bấm "Login"       │                              │                          │
+     │───────────────────►│  redirect kèm code_challenge │                          │
+     │                    │─────────────────────────────►│                          │
+     │   nhập user/pass trên trang Keycloak              │                          │
+     │◄──────────────────────────────────────────────────│                          │
+     │                    │   redirect về kèm "code"     │                          │
+     │                    │◄─────────────────────────────│                          │
+     │                    │  đổi code + code_verifier →  │                          │
+     │                    │─────────────────────────────►│  trả access + id token   │
+     │                    │◄─────────────────────────────│                          │
+     │                    │   gọi API kèm Bearer access_token                       │
+     │                    │────────────────────────────────────────────────────────►│  verify (JWKS) → cho qua
+     ▲ PKCE = code_challenge/verifier chống đánh cắp "code"; client public KHÔNG cần secret.</div>
+
+<!-- THEORY 7 -->
+<h2 id="t7"><span class="lbl">Phần B · Lý thuyết 3/5</span>OIDC — lớp danh tính trên OAuth2</h2>
+<p>OAuth2 vốn để <i>uỷ quyền truy cập</i> (authorization), không chuẩn hoá “người dùng là ai”. <b>OpenID Connect (OIDC)</b> thêm lớp <i>identity</i> lên trên:</p>
+<ul>
+  <li><b>ID token</b> (JWT) — cho <i>client</i> biết người dùng là ai (tên, email, sub). Khác access token.</li>
+  <li><b>Access token</b> — cho <i>resource server</i>; mang scope/role để cấp quyền API.</li>
+  <li><b>UserInfo endpoint</b> — lấy thêm thông tin người dùng.</li>
+  <li><b>Discovery</b> — <code>/.well-known/openid-configuration</code> liệt kê mọi endpoint + URL của JWKS.</li>
 </ul>
+<div class="callout info"><span class="tag">Phân biệt 2 token</span><p style="margin:4px 0 0"><b>ID token</b> là bằng chứng người dùng đã đăng nhập (dành cho client); <b>access token</b> là chứng từ để gọi API (dành cho resource server). Backend chỉ quan tâm <b>access token</b>.</p></div>
+
+<!-- THEORY 8 -->
+<h2 id="t8"><span class="lbl">Phần B · Lý thuyết 4/5</span>JWT &amp; JWKS — verify token thế nào</h2>
+<p>JWT gồm 3 phần ngăn bởi dấu chấm: <code>header.payload.signature</code> (Base64URL).</p>
+<div class="diagram">header  : {"alg":"RS256","kid":"abc","typ":"JWT"}      ← thuật toán + id khoá
+payload : {"sub":"...","exp":...,"realm_access":{"roles":["USER"]}}   ← claims
+signature: ký bằng PRIVATE key của Keycloak</div>
+<p><b>JWKS</b> (JSON Web Key Set) là tập <i>public key</i> Keycloak công khai tại URL trong discovery. Backend tải JWKS một lần, rồi <b>tự verify chữ ký offline</b> (không phải hỏi Keycloak mỗi request) — nhanh &amp; scale. <code>kid</code> trong header chỉ ra dùng key nào.</p>
+<p>Các bước verify (Quarkus OIDC làm tự động): kiểm chữ ký bằng JWKS → kiểm <code>iss</code> (issuer đúng realm) → kiểm <code>exp</code>/<code>nbf</code> (cho phép lệch đồng hồ ≤ 30s) → đọc role từ claim.</p>
+<div class="pitfall"><b>Bẫy “alg confusion”:</b> tuyệt đối không chấp nhận <code>alg: none</code> hay đổi RS256→HS256. Allow-list thuật toán cứng (<span class="tag-file">security.md §2</span>). Quarkus OIDC mặc định an toàn việc này.</div>
+
+<!-- THEORY 9 -->
+<h2 id="t9"><span class="lbl">Phần B · Lý thuyết 5/5</span>Mô hình Keycloak + Quarkus OIDC</h2>
+<table>
+  <thead><tr><th>Khái niệm Keycloak</th><th>Ý nghĩa</th></tr></thead>
+  <tbody>
+    <tr><td><b>Realm</b></td><td>Không gian cô lập người dùng + cấu hình (vd <code>digitalwallet</code>)</td></tr>
+    <tr><td><b>Client</b></td><td>Một ứng dụng. <b>public</b> (SPA, không giữ secret) / <b>confidential</b> (server, có secret) / bearer-only</td></tr>
+    <tr><td><b>Role</b></td><td><i>realm role</i> (toàn realm) hoặc <i>client role</i> (riêng 1 client)</td></tr>
+    <tr><td><b>User / Group</b></td><td>Người dùng; group gom role cho tiện gán</td></tr>
+    <tr><td><b>Mapper</b></td><td>Quyết định claim nào vào token (vd đưa roles vào <code>realm_access.roles</code>)</td></tr>
+  </tbody>
+</table>
+<p><b>Quarkus OIDC</b> có 2 kiểu app: <code>service</code> (chỉ verify bearer token — backend của ta) và <code>web-app</code> (tự lo redirect đăng nhập — cho app server-side render). Ta dùng <code>service</code>.</p>
+
+<!-- ===================== PRACTICE B ===================== -->
+<h2 id="p8"><span class="lbl">Phần B · Thực hành 1/5</span>Dựng Keycloak bằng Docker (≈ 30 phút)</h2>
+<p>Tạm thêm service vào <code>backend/docker-compose.yml</code> (Ngày 4 sẽ chuyển sang Terraform). Dùng dev mode cho nhanh.</p>
+<div class="ex-label file">thêm vào backend/docker-compose.yml (services:)</div>
+<pre><code>  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: [<span class="str">"start-dev"</span>, <span class="str">"--import-realm"</span>]
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    ports: [<span class="str">"8081:8080"</span>]
+    volumes:
+      - ./infra/keycloak:/opt/keycloak/data/import   <span class="cmt"># để import realm-export.json</span>
+    networks: [dw-net]</code></pre>
+<div class="ex-label">Bật &amp; mở console</div>
+<pre><code>docker compose -f backend/docker-compose.yml up -d keycloak
+<span class="cmt"># Mở http://localhost:8081  → đăng nhập admin/admin</span></code></pre>
+
+<h2 id="p9"><span class="lbl">Phần B · Thực hành 2/5</span>Tạo realm, client, role, user (≈ 45 phút)</h2>
+<ol class="steps">
+  <li><b class="act">Tạo realm</b>: góc trên trái → <i>Create realm</i> → tên <code>digitalwallet</code> → Create.</li>
+  <li><b class="act">Tạo realm roles</b>: menu <i>Realm roles</i> → Create role → <code>USER</code>; lặp lại với <code>ADMIN</code>.</li>
+  <li><b class="act">Client backend</b>: <i>Clients</i> → Create → Client ID <code>digitalwallet-backend</code>, type OpenID Connect. Bước Capability: bật <i>Client authentication</i> (confidential). Lưu.</li>
+  <li><b class="act">Client frontend (cho Vue)</b>: tạo <code>digitalwallet-frontend</code>, <b>tắt</b> Client authentication (public), bật <i>Standard flow</i>. Valid redirect URIs: <code>http://localhost:5173/*</code>; Web origins: <code>http://localhost:5173</code>.</li>
+  <li><b class="act">Tạo user</b>: <i>Users</i> → Create user → username <code>alice</code> → tab <i>Credentials</i> đặt password (tắt Temporary) → tab <i>Role mapping</i> → Assign role <code>USER</code>.</li>
+  <li><b class="act">Export realm</b> để tái lập: <code>docker exec ... /opt/keycloak/bin/kc.sh export</code> hoặc dùng UI <i>Realm settings → Action → Partial export</i> → lưu thành <span class="tag-file">backend/infra/keycloak/realm-export.json</span>.</li>
+</ol>
+<div class="checkpoint"><b>✅ Checkpoint:</b> mở <code>http://localhost:8081/realms/digitalwallet/.well-known/openid-configuration</code> thấy JSON liệt kê <code>token_endpoint</code>, <code>jwks_uri</code>…</div>
+
+<h2 id="p10"><span class="lbl">Phần B · Thực hành 3/5</span>Tích hợp Quarkus OIDC (theo profile) (≈ 60 phút)</h2>
+<ol class="steps">
+  <li><b class="act">Thêm extension</b>:
+<pre><code>cd backend
+./mvnw quarkus:add-extension -Dextensions="oidc"</code></pre></li>
+  <li><b class="act">Cấu hình profile <code>keycloak</code></b> trong <a href="../backend/src/main/resources/application.properties">application.properties</a> — chỉ kích hoạt khi chạy với <code>-Dquarkus.profile=keycloak</code>, nên path ES256 mặc định không bị đụng:
+<div class="ex-label file">application.properties</div>
+<pre><code>%keycloak.quarkus.oidc.auth-server-url=http://localhost:8081/realms/digitalwallet
+%keycloak.quarkus.oidc.client-id=digitalwallet-backend
+%keycloak.quarkus.oidc.credentials.secret=${KC_BACKEND_SECRET}   <span class="cmt"># từ env, KHÔNG hardcode</span>
+%keycloak.quarkus.oidc.application-type=service
+%keycloak.quarkus.oidc.token.audience=account                    <span class="cmt"># tuỳ cấu hình realm</span>
+%keycloak.quarkus.oidc.roles.role-claim-path=realm_access/roles  <span class="cmt"># map role từ claim này</span></code></pre></li>
+  <li><b class="act">Giữ nguyên</b> <code>@RolesAllowed("USER")</code> trên <code>WalletResource</code> (vừa dựng ở Phần A) — giờ role đến từ token Keycloak qua <code>role-claim-path</code> ở trên.</li>
+  <li><b class="act">Chạy backend ở profile keycloak</b>:
+<pre><code>export KC_BACKEND_SECRET=...&lt;client secret từ tab Credentials của client backend&gt;...
+./mvnw quarkus:dev -Dquarkus.profile=keycloak</code></pre></li>
+</ol>
+<div class="callout warn"><span class="tag">Vì sao dùng profile</span><p style="margin:4px 0 0">Profile <code>keycloak</code> cô lập cấu hình OIDC. Chạy <code>quarkus:dev</code> bình thường → vẫn là path ES256 cũ (ADR 0001 còn nguyên). Đây là cách học mà không phá vỡ cấu hình production của repo.</p></div>
+
+<h2 id="p11"><span class="lbl">Phần B · Thực hành 4/5</span>Lấy token &amp; gọi API (≈ 45 phút)</h2>
+<div class="ex-label">Lấy access token (password grant — chỉ để test)</div>
+<pre><code>curl -s -X POST \
+  http://localhost:8081/realms/digitalwallet/protocol/openid-connect/token \
+  -d grant_type=password \
+  -d client_id=digitalwallet-frontend \
+  -d username=alice -d password=&lt;pw&gt; | jq -r .access_token</code></pre>
+<ol class="steps">
+  <li>Dán token vào <a href="https://jwt.io">jwt.io</a> để xem payload: tìm <code>realm_access.roles</code> có <code>USER</code>, <code>iss</code> đúng realm, <code>exp</code> còn hạn.</li>
+  <li>Gọi API đã bảo vệ:
+<pre><code>TOKEN=...&lt;access_token&gt;...
+curl -i http://localhost:8080/wallets -H "Authorization: Bearer $TOKEN"   <span class="cmt"># 200</span></code></pre></li>
+</ol>
+<div class="checkpoint"><b>✅ Checkpoint:</b> có token Keycloak → <code>GET /wallets</code> trả 200. Đây là lần đầu API của bạn được bảo vệ bởi một IdP thực thụ.</div>
+
+<h2 id="p12"><span class="lbl">Phần B · Thực hành 5/5</span>Test bảo mật 401 / 403 (≈ 40 phút)</h2>
+<p>Đây là ma trận test bắt buộc của repo (<span class="tag-file">security.md §11</span>): unauthenticated → 401, wrong-role → 403.</p>
+<div class="ex-label file">WalletResourceSecurityTest (QuarkusTest + RestAssured)</div>
+<pre><code><span class="kw">@QuarkusTest</span>
+<span class="kw">class</span> <span class="ty">WalletResourceSecurityTest</span> {
+
+    <span class="kw">@Test</span>
+    <span class="kw">void</span> getWallets_khongToken_tra401() {
+        given().when().get(<span class="str">"/wallets"</span>).then().statusCode(<span class="num">401</span>);
+    }
+
+    <span class="kw">@Test</span>
+    <span class="kw">void</span> getWallets_saiRole_tra403() {
+        <span class="cmt">// dùng @TestSecurity hoặc token giả role ADMIN cho endpoint chỉ cho USER</span>
+        given().auth().oauth2(tokenWithRole(<span class="str">"ADMIN"</span>))
+            .when().get(<span class="str">"/admin-only"</span>).then().statusCode(<span class="num">403</span>);
+    }
+}</code></pre>
+<p class="small muted">Trong CI, dùng <code>quarkus-test-oidc-server</code> (Keycloak giả) hoặc <code>@TestSecurity</code> để không cần Keycloak thật. Học khái niệm trước; tinh chỉnh sau.</p>
+
+<!-- TROUBLE -->
+<h2 id="trouble"><span class="lbl">Tham khảo nhanh</span>Bẫy thường gặp với Keycloak/OIDC</h2>
+<table>
+  <thead><tr><th>Triệu chứng</th><th>Nguyên nhân &amp; cách sửa</th></tr></thead>
+  <tbody>
+    <tr><td>401 dù token “trông đúng”</td><td><code>iss</code> không khớp <code>auth-server-url</code> (vd <code>localhost</code> vs <code>127.0.0.1</code>, thiếu <code>/realms/...</code>). Đồng bộ URL.</td></tr>
+    <tr><td>200 nhưng role rỗng → 403</td><td><code>role-claim-path</code> sai. Soi token thật trên jwt.io xem roles nằm ở claim nào (<code>realm_access.roles</code> vs <code>resource_access.&lt;client&gt;.roles</code>).</td></tr>
+    <tr><td><code>token expired</code> ngay sau khi lấy</td><td>Lệch đồng hồ máy/container. OIDC cho ≤30s skew; chỉnh giờ hệ thống.</td></tr>
+    <tr><td>SPA bị CORS khi gọi Keycloak</td><td>Thiếu <i>Web origins</i> cho client frontend. Thêm <code>http://localhost:5173</code>.</td></tr>
+    <tr><td>Lỡ commit client secret</td><td>Rotate secret ở Keycloak; đưa vào env; mở security note (<span class="tag-file">security.md §10</span>).</td></tr>
+  </tbody>
+</table>
+
+<!-- DOD -->
+<h2 id="dod"><span class="lbl">Chốt ngày</span>Definition of Done — Ngày 3 (cả Phần A &amp; B)</h2>
+<div class="panel"><ul class="dod">
+  <li><input type="checkbox"> <b>(A)</b> 3 endpoint wallet chạy &amp; thử được trên <code>/q/swagger-ui</code>.</li>
+  <li><input type="checkbox"> <b>(A)</b> <code>/q/health/ready</code> phản ánh đúng trạng thái DB (tắt DB → DOWN); timer <code>wallet_deposit</code> hiện ở <code>/q/metrics</code>.</li>
+  <li><input type="checkbox"> <b>(A)</b> Circuit breaker mở được &amp; fallback chạy (có test chứng minh).</li>
+  <li><input type="checkbox"> <b>(A)</b> Ownership check ở service; <code>amount &gt; 0</code> validate; <code>./mvnw verify</code> xanh, coverage service ≥ 80%.</li>
+  <li><input type="checkbox"> <b>(B)</b> Keycloak chạy; realm <code>digitalwallet</code> có 2 client + 2 role + user <code>alice</code>; đã export JSON.</li>
+  <li><input type="checkbox"> <b>(B)</b> Backend (profile keycloak) verify token Keycloak; map <code>realm_access.roles</code> → <code>@RolesAllowed</code>.</li>
+  <li><input type="checkbox"> <b>(B)</b> Lấy được access token, gọi <code>GET /wallets</code> trả 200; path ES256 cũ vẫn chạy khi không bật profile keycloak.</li>
+  <li><input type="checkbox"> <b>(B)</b> Test 401 (no token) &amp; 403 (wrong role) xanh; vẽ lại được luồng auth-code + PKCE (chuẩn bị Vue Ngày 4).</li>
+</ul></div>
+<div class="selfcheck"><h4>✔ Câu hỏi tự kiểm kiểu phỏng vấn (Phần B)</h4>
+  <ul class="small" style="margin:6px 0 0">
+    <li>ID token khác access token chỗ nào? Backend dùng cái nào?</li>
+    <li>JWKS giúp backend verify token mà không gọi lại Keycloak — bằng cơ chế nào?</li>
+    <li>Vì sao SPA dùng auth-code + PKCE thay vì password grant?</li>
+    <li>“alg confusion attack” là gì, phòng thế nào?</li>
+  </ul>
+</div>
+
+<h2><span class="lbl">Tài liệu</span>Nguồn học ngày 3</h2>
+<div class="grid g2">
+  <div class="panel"><h4 style="color:var(--d3)">Phần A — MicroProfile · Resilience</h4>
+    <ul class="src-list">
+      <li><a href="https://microprofile.io/">MicroProfile</a> <span class="d">· tổng quan các spec</span></li>
+      <li><a href="https://quarkus.io/guides/smallrye-health">Quarkus — SmallRye Health</a></li>
+      <li><a href="https://quarkus.io/guides/smallrye-fault-tolerance">Quarkus — SmallRye Fault Tolerance</a></li>
+      <li><a href="https://quarkus.io/guides/telemetry-micrometer">Quarkus — Micrometer metrics</a></li>
+      <li><a href="https://quarkus.io/guides/openapi-swaggerui">Quarkus — OpenAPI &amp; Swagger UI</a></li>
+      <li><a href="https://12factor.net/">The Twelve-Factor App</a> · <a href="https://martinfowler.com/bliki/CircuitBreaker.html">Fowler — CircuitBreaker</a></li>
+    </ul>
+  </div>
+  <div class="panel"><h4 style="color:var(--d3)">Phần B — Keycloak · OAuth2/OIDC</h4>
+    <ul class="src-list">
+      <li><a href="https://www.keycloak.org/getting-started/getting-started-docker">Keycloak — Getting started (Docker)</a></li>
+      <li><a href="https://www.keycloak.org/documentation">Keycloak — Documentation</a> <span class="d">· realm/client/role/mapper</span></li>
+      <li><a href="https://quarkus.io/guides/security-openid-connect">Quarkus — OIDC bảo vệ service apps</a></li>
+      <li><a href="https://quarkus.io/guides/security-oidc-bearer-token-authentication">Quarkus — OIDC Bearer token authentication</a></li>
+      <li><a href="https://aaronparecki.com/oauth-2-simplified/">Aaron Parecki — OAuth 2 Simplified</a> <span class="d">· dễ hiểu nhất về grant</span></li>
+      <li><a href="https://openid.net/developers/how-connect-works/">OpenID — How OIDC works</a> · <a href="https://datatracker.ietf.org/doc/html/rfc6749">RFC 6749 (OAuth2)</a></li>
+    </ul>
+  </div>
+</div>
 
 <div class="daynav">
   <a href="day-2-hexagonal.html"><div class="dir">⟵ Ngày trước</div><div class="ttl">Ngày 2 · Hexagonal + SOLID + DDD</div></a>
-  <a class="next" href="day-4-keycloak.html"><div class="dir">Ngày tiếp ⟶</div><div class="ttl">Ngày 4 · Keycloak (OAuth2/OIDC)</div></a>
+  <a class="next" href="day-4-vue-terraform.html"><div class="dir">Ngày tiếp ⟶</div><div class="ttl">Ngày 4 · VueJS + Terraform</div></a>
 </div>
 
-<footer>DigitalWallet — Hướng dẫn học chi tiết · Ngày 3/5. Deposit MVP là đồ chơi học tập (thiếu NFR1/2/3), không dùng cho production.</footer>
+<footer>DigitalWallet — Hướng dẫn học chi tiết · Ngày 3/4 (gộp MicroProfile + Keycloak — ngày dày nhất). Deposit MVP là phiên bản rút gọn để học (thiếu NFR1/2/3), không dùng cho production. Keycloak chạy theo profile, song song path ES256 (ADR 0001). Không commit secret; dùng env.</footer>
 
 </div>
 </body>

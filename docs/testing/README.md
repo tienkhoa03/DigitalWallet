@@ -6,10 +6,10 @@ This page documents how the DigitalWallet test suite is structured, what the cov
 
 | Layer | Framework | Notes |
 |---|---|---|
-| Backend unit | JUnit 5 + Mockito | Service-layer logic, value objects, exception mapping. Mock external collaborators; never mock the DB. |
+| Backend unit | JUnit 5 + Mockito | Application-service (use-case) logic, value objects, exception mapping. Mock external collaborators; never mock the DB. |
 | Backend integration | Testcontainers (Postgres 16 + Kafka + Redis 7) | Every public repository method and every Kafka consumer. Real containers — no embedded H2 or in-memory Kafka. |
-| Backend coverage | JaCoCo | Reported under `backend/target/site/jacoco/`; 80% gate on `com/digitalwallet/*/service/**`. CI gate fails the build below the floor. |
-| Frontend unit | Vitest + React Testing Library | Reducers, selectors, hooks with branching logic. |
+| Backend coverage | JaCoCo | Reported under `backend/target/site/jacoco/`; 80% gate on `com/digitalwallet/*/application/service/**` (= the use-case implementations). NOTE: the `pom.xml` include pattern moves with the Java code restructure (separate step); until then it still reads `*/service/**`. CI gate fails the build below the floor. |
+| Frontend unit | Vitest + @testing-library/vue | Pinia stores, composables, getters with branching logic. |
 | Frontend coverage | c8 (via Vitest) | — |
 | Frontend E2E | Playwright | One smoke per epic — see below. |
 
@@ -17,9 +17,9 @@ This page documents how the DigitalWallet test suite is structured, what the cov
 
 | Scope | Floor | Where enforced |
 |---|---|---|
-| Backend service layer (line) | ≥ 80 % (NFR4) | JaCoCo gate in GitHub Actions; CI fails below threshold. |
-| Backend repository / consumer (functional) | Every public method tested under Testcontainers. | Code review + integration suite. |
-| Frontend reducers / selectors / hooks | Every branching path. | c8 report + code review. |
+| Backend application service layer (line) | ≥ 80 % (NFR4) | JaCoCo gate in GitHub Actions; CI fails below threshold. |
+| Backend outbound persistence adapter / inbound messaging adapter (functional) | Every public method tested under Testcontainers. | Code review + integration suite. |
+| Frontend Pinia stores / getters / composables | Every branching path. | c8 report + code review. |
 | E2E smoke | One per epic. | Playwright suite. Suggested coverage: signup → transfer → see fraud alert; create budget → spend → see threshold alert (per [../../project-info.md §4.5](../../project-info.md#45-testing--quality)). |
 
 ## What NOT to test
@@ -27,7 +27,7 @@ This page documents how the DigitalWallet test suite is structured, what the cov
 - **Generated code.** OpenAPI client stubs, generated TypeScript types, JPA-emitted SQL.
 - **Framework wiring.** Quarkus DI graph correctness — that's covered by application startup.
 - **Trivial DTO accessors.** No `getX()`/`setX()` unit tests.
-- **Trivial mappers** with no branching — covered indirectly by the service tests that consume them.
+- **Trivial mappers** with no branching — covered indirectly by the application-service (use-case) tests that consume them.
 - **Tailwind utility CSS.** No visual regression tests in MVP `(verify)`.
 - **Migration files themselves.** Test the resulting schema state instead, via Testcontainers.
 - **Third-party libraries.** Trust them or replace them; don't re-test their contract.
@@ -51,7 +51,7 @@ Per [../../project-info.md §12](../../project-info.md#12-development-workflow),
 
 1. Compile (backend + frontend).
 2. Backend unit + integration tests (JUnit 5 + Testcontainers).
-3. JaCoCo coverage gate — fails under 80 % on the service layer (NFR4).
+3. JaCoCo coverage gate — fails under 80 % on the application service layer (NFR4).
 4. Frontend lint.
 5. Frontend tests (Vitest).
 

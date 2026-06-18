@@ -37,7 +37,7 @@ Apply the matrix from [testing.md §2.2](../../rules/testing.md):
 | Outbox poller | Mock the publisher; assert outbox state via the mocked repo. |
 | LLM client | Mock. |
 | External HTTP | Mock. |
-| `Clock` / `Instant.now()` | Inject a fixed `Clock`; the service code MUST receive a `Clock` per [testing.md §2.2](../../rules/testing.md). |
+| `Clock` / `Instant.now()` | Inject a fixed `Clock`; the application-service code MUST receive a `Clock` per [testing.md §2.2](../../rules/testing.md). |
 | Time-windowed fraud rules (FR2.1, FR2.2) | Inject a `Clock`; advance manually. |
 
 If the matrix says "mock the DB" but the class needs real SQL semantics to be meaningful, stop and recommend an integration test under [testing.md §2.4](../../rules/testing.md) instead.
@@ -54,7 +54,7 @@ Build the scenario list before writing any code:
    - Fraud velocity at threshold and at threshold + 1.
    - Fraud volume at threshold and at threshold + smallest unit.
    - `@ParameterizedTest` with `@ValueSource` / `@MethodSource` for value-driven cases.
-4. **Synchronous fraud pre-check** — for money-path services, assert the pre-check runs BEFORE the Redis lock and that a velocity / volume / suspension breach short-circuits without touching the wallet row: type + `errorKey` `fraud.velocity_exceeded` / `fraud.volume_exceeded` / `account.suspended`, plus a `transaction.blocked` outbox event and an `audit_log` row. Cover NFR9 per [backend_coding.md §3](../../rules/backend_coding.md) and [backend_coding.md §8](../../rules/backend_coding.md); reuse the boundary cases from §2.6 in [testing.md](../../rules/testing.md).
+4. **Synchronous fraud pre-check** — for money-path application services (use cases), assert the pre-check runs BEFORE the Redis lock and that a velocity / volume / suspension breach short-circuits without touching the wallet row: type + `errorKey` `fraud.velocity_exceeded` / `fraud.volume_exceeded` / `account.suspended`, plus a `transaction.blocked` outbox event and an `audit_log` row. Cover NFR9 per [backend_coding.md §3](../../rules/backend_coding.md) and [backend_coding.md §8](../../rules/backend_coding.md); reuse the boundary cases from §2.6 in [testing.md](../../rules/testing.md).
 5. **Concurrency / lock path** — when applicable, assert Redis lock acquired AFTER the fraud pre-check and BEFORE the DB call, and released in `finally`; assert `LockModeType.PESSIMISTIC_WRITE` is requested before the mutation. Cover NFR1 per [testing.md §2.9](../../rules/testing.md).
 6. **Idempotency replay** — for mutating money endpoints, assert same body + same key returns the original outcome; different body + same key returns `idempotency.replay_conflict`. Cover NFR3 per [testing.md §2.9](../../rules/testing.md).
 7. **Event-time correctness** — for PFM-class consumers, assert use of `transaction_timestamp` from the payload rather than `Clock.instant()` per [testing.md §2.9](../../rules/testing.md).
@@ -82,4 +82,4 @@ Report:
 - The scenarios generated and the scenarios deliberately skipped (with the cited reason from [testing.md §5](../../rules/testing.md)).
 - Any defect surfaced in the target class (e.g. direct `Instant.now()` use that blocks a `Clock`-based test — point at [testing.md §2.2](../../rules/testing.md)).
 - Whether the class needs an integration test in addition (Testcontainers per [testing.md §2.4](../../rules/testing.md)).
-- Suggested next step: run `backend-verify` to confirm the new tests compile and pass, and that the service-layer JaCoCo line floor in [testing.md §1](../../rules/testing.md) is still met.
+- Suggested next step: run `backend-verify` to confirm the new tests compile and pass, and that the application-service-layer JaCoCo line floor in [testing.md §1](../../rules/testing.md) is still met.

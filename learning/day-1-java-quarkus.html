@@ -10,7 +10,7 @@
 
 <header class="gh">
   <div class="wrap">
-    <div class="breadcrumb"><a href="5-day-tech-stack-plan.html">← Kế hoạch 5 ngày</a> &nbsp;/&nbsp; Ngày 1</div>
+    <div class="breadcrumb"><a href="4-day-tech-stack-plan.html">← Kế hoạch 4 ngày</a> &nbsp;/&nbsp; Ngày 1</div>
     <h1><span class="badge b1">1</span>Java 21 core + Quarkus cơ bản</h1>
     <p class="lead">Hôm nay là ngày “làm quen”: hiểu Quarkus chạy thế nào, nắm các viên gạch Java 21 mà repo dùng khắp nơi (record, sealed, BigDecimal…), đọc thông toàn bộ module <code>account</code> đã có sẵn, rồi tự tay viết 1 endpoint mới có test. Kết thúc ngày bạn phải <b>tự tin đọc &amp; sửa code backend</b>.</p>
     <div class="meta">
@@ -65,7 +65,7 @@ docker --version     <span class="cmt"># Docker Desktop đang chạy</span>
 cd backend
 ./mvnw -v            <span class="cmt"># Maven wrapper — KHÔNG cần cài Maven riêng</span></code></pre>
   <div class="callout info"><span class="tag">Tạo nhánh học trước tiên</span>
-    <p style="margin:4px 0 0">Mọi thứ hôm nay (và 4 ngày sau) làm trên nhánh riêng, không đụng <code>main</code>:</p>
+    <p style="margin:4px 0 0">Mọi thứ hôm nay (và 3 ngày sau) làm trên nhánh riêng, không đụng <code>main</code>:</p>
 <pre><code>git checkout -b learning/tech-stack-spike</code></pre>
   </div>
   <div class="pitfall"><b>Nếu <code>java -version</code> không phải 21:</b> tải Temurin 21 (adoptium.net) và đặt biến <code>JAVA_HOME</code> trỏ vào nó. Quarkus 3.33 cần Java 17+ nhưng repo này khoá Java 21 (virtual threads).</div>
@@ -293,7 +293,7 @@ docker compose -f backend/docker-compose.yml ps   <span class="cmt"># thấy cá
 <div class="checkpoint"><b>✅ Checkpoint:</b> bạn chỉ ra được chính xác dòng nào mở transaction, dòng nào hash mật khẩu, dòng nào chống email trùng (UNIQUE ở DB + check ở service).</div>
 
 <h2 id="p3"><span class="lbl">Thực hành · 3/4</span>Viết endpoint <code>GET /accounts/me</code> (≈ 90 phút)</h2>
-<p>Mục tiêu: lấy danh tính người gọi từ JWT, trả profile (ẩn <code>password_hash</code>). Đây là bài “đi hết slice” đầu tiên của bạn.</p>
+<p>Mục tiêu: lấy danh tính người gọi từ JWT, trả profile (ẩn <code>password_hash</code>). Đây là bài tập đi qua trọn vẹn một lát cắt (slice) đầu tiên của bạn.</p>
 
 <h4>3.1 — Tạo DTO response (record)</h4>
 <p>Tạo file <span class="tag-file">account/dto/AccountProfileResponse.java</span>:</p>
@@ -426,11 +426,11 @@ curl -i http://localhost:8080/accounts/me                                     <s
 </ul>
 
 <div class="daynav">
-  <a href="5-day-tech-stack-plan.html"><div class="dir">⟵ Quay lại</div><div class="ttl">Tổng quan kế hoạch 5 ngày</div></a>
+  <a href="4-day-tech-stack-plan.html"><div class="dir">⟵ Quay lại</div><div class="ttl">Tổng quan kế hoạch 4 ngày</div></a>
   <a class="next" href="day-2-hexagonal.html"><div class="dir">Ngày tiếp ⟶</div><div class="ttl">Ngày 2 · Hexagonal + SOLID + DDD</div></a>
 </div>
 
-<footer>DigitalWallet — Hướng dẫn học chi tiết · Ngày 1/5. Mọi đoạn code là <b>ví dụ minh hoạ để học</b>, gõ vào nhánh <code>learning/*</code>, không phải source production chính thức.</footer>
+<footer>DigitalWallet — Hướng dẫn học chi tiết · Ngày 1/4. Mọi đoạn code là <b>ví dụ minh hoạ để học</b>, gõ vào nhánh <code>learning/*</code>, không phải source production chính thức.</footer>
 
 </div>
 </body>

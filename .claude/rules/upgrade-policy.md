@@ -22,16 +22,16 @@ The mandated stack lives in [../../project-info.md §4](../../project-info.md#4-
 | Database | PostgreSQL 16 | Mandated | [../../project-info.md §4.3](../../project-info.md#43-persistence--data) |
 | Cache / locks | Redis 7 | Mandated | [../../project-info.md §4.3](../../project-info.md#43-persistence--data) |
 | Event backbone | Kafka | Mandated | [../../project-info.md §4.4](../../project-info.md#44-messaging--integration) |
-| Frontend framework | React 18.x | Mandated — ADR #8 | [../../project-info.md §4.2](../../project-info.md#42-frontend), [../../docs/decisions/0008-frontend-stack.md](../../docs/decisions/0008-frontend-stack.md) |
+| Frontend framework | Vue 3.x | Mandated — ADR #8 | [../../project-info.md §4.2](../../project-info.md#42-frontend), [../../docs/decisions/0008-frontend-stack.md](../../docs/decisions/0008-frontend-stack.md) |
 | Frontend language | TypeScript 5.x strict | Mandated — ADR #8 | [../../project-info.md §4.2](../../project-info.md#42-frontend) |
 | Styling | Tailwind CSS 3.x | Mandated — ADR #8 | [../../project-info.md §4.2](../../project-info.md#42-frontend) |
-| Frontend state | Redux Toolkit (incl. RTK Query) | Mandated — ADR #8 | [../../project-info.md §4.2](../../project-info.md#42-frontend) |
-| Frontend forms | React Hook Form + Zod | Mandated — ADR #8 | [../../project-info.md §4.2](../../project-info.md#42-frontend) |
+| Frontend state | Pinia (incl. TanStack Query / Vue Query) | Mandated — ADR #8 | [../../project-info.md §4.2](../../project-info.md#42-frontend) |
+| Frontend forms | VeeValidate + Zod | Mandated — ADR #8 | [../../project-info.md §4.2](../../project-info.md#42-frontend) |
 | Frontend package mgr | pnpm | Mandated — ADR #8 | [../../project-info.md §4.2](../../project-info.md#42-frontend) |
 | Backend test framework | JUnit 5 + Mockito | Mandated | [../../project-info.md §4.5](../../project-info.md#45-testing--quality) |
 | Backend integration test | Testcontainers (Postgres + Kafka + Redis) | Mandated | [../../project-info.md §4.5](../../project-info.md#45-testing--quality) |
 | Backend coverage | JaCoCo (≥ 80 % service layer) | Mandated — NFR4 | [../../project-info.md §6 NFR4](../../project-info.md#6-non-functional-requirements--invariants), [testing.md §1](testing.md#1-coverage-targets) |
-| Frontend test | Vitest + React Testing Library | Mandated | [../../project-info.md §4.5](../../project-info.md#45-testing--quality) |
+| Frontend test | Vitest + @testing-library/vue | Mandated | [../../project-info.md §4.5](../../project-info.md#45-testing--quality) |
 | Frontend coverage | c8 (via Vitest) | Mandated | [../../project-info.md §4.5](../../project-info.md#45-testing--quality) |
 | E2E | Playwright | Mandated (smoke per epic) | [../../project-info.md §4.5](../../project-info.md#45-testing--quality) |
 | Runtime | Docker + Docker Compose | Mandated | [../../project-info.md §4.6](../../project-info.md#46-deployment) |
@@ -40,18 +40,20 @@ The mandated stack lives in [../../project-info.md §4](../../project-info.md#4-
 
 ## 2. Migration posture
 
-Greenfield project. There is no legacy code to migrate from.
+The project is migrating off its original organising principle and frontend framework. The rows below record the patterns being migrated away from; new code follows §3 and §4 directly.
 
 | Legacy pattern | Reason it existed | New-code rule |
 |---|---|---|
-| _none_ — greenfield | — | All new code follows §3 and §4 below directly. |
+| Feature-based + layered backend (`api/` / `service/` / `persistence/` per module) | Original scaffolding before the architecture style was settled | Per-module hexagonal (ports & adapters): follow [backend_coding.md §1](backend_coding.md#1-project-structure) — dependencies point inward (`adapter` → `application` → `domain`); frameworks live only in `adapter/` packages. |
+| React frontend stack (React 18 + Redux Toolkit + RTK Query + React Hook Form + React Router) | Original frontend scaffolding before the framework was settled | Vue 3 stack: follow [frontend_coding.md](frontend_coding.md) — Vue 3 SFCs (`<script setup>`), Pinia, TanStack Query (Vue Query), VeeValidate + Zod, Vue Router. |
 
-When real legacy patterns surface (after the first major refactor or after merging an external contribution), append a new row here. Never edit `_none_` away silently.
+When further legacy patterns surface (after the next major refactor or after merging an external contribution), append a new row here. Never overwrite a migration row silently.
 
 ## 3. Backend upgrade guardrails for new code
 
 These idioms are the contract for every Java file landing in `backend/`. The `code-review` skill checks them.
 
+- **Hexagonal layering (ports & adapters).** Each feature module is a self-contained hexagon: `domain/` and `application/` are framework-free; dependencies point INWARD only (`adapter` → `application` → `domain`). JPA `<Name>Entity` classes and `jakarta.persistence` annotations live ONLY in `adapter/out/persistence` — `domain/` model types carry no persistence annotations. Application services depend on outbound ports (`application/port/out`), never on concrete adapters. `@Transactional` is applied at the **application service (use-case impl) method**, not the inbound web adapter or the outbound persistence adapter ([backend_coding.md §1](backend_coding.md#1-project-structure), [backend_coding.md §3](backend_coding.md#3-service-layer)).
 - **Records over Lombok.** Use Java `record` for DTOs and value objects. MUST NOT introduce Lombok in new code — records, `instanceof` patterns, and explicit constructors cover the same surface without bytecode magic.
 - **Sealed interfaces** are preferred over open inheritance for closed type hierarchies (e.g. `DomainException` permits a finite set of subclasses). Use `sealed` + `permits` to make the closure explicit.
 - **Pattern matching** (`switch` expressions, record patterns) over chained `if (x instanceof Y y)`.
@@ -71,20 +73,20 @@ These idioms are the contract for every Java file landing in `backend/`. The `co
 
 Stack mandated in [../../project-info.md §4.2](../../project-info.md#42-frontend) and [../../docs/decisions/0008-frontend-stack.md](../../docs/decisions/0008-frontend-stack.md).
 
-- **TypeScript strict.** `tsconfig.json` runs with `strict: true`, `noUncheckedIndexedAccess: true`, `noImplicitOverride: true`. Disabling a flag locally is forbidden — fix the type instead.
-- **React 18 idioms:**
-  - Functional components only; class components are forbidden in new code ([frontend_coding.md §1](frontend_coding.md#1-component-structure)).
-  - `useTransition` / `useDeferredValue` for non-urgent updates over manual debouncing.
-  - Concurrent-safe effects — `useEffect` MUST tolerate double-invocation under StrictMode (clean up subscriptions, idempotent setup).
-- **Redux Toolkit idioms:**
-  - `createSlice` over hand-written reducers.
-  - `createAsyncThunk` only when RTK Query is not a fit; default to RTK Query for server cache ([frontend_coding.md §2](frontend_coding.md#2-state-management)).
-  - `createSelector` for derived data — inline derivations in `useSelector` callbacks are a defect.
-- **React Hook Form + Zod:**
-  - `zodResolver` is the validation bridge — MUST NOT hand-roll a separate validator.
+- **TypeScript strict.** `tsconfig.json` runs with `strict: true`, `noUncheckedIndexedAccess: true`, `noImplicitOverride: true`. Disabling a flag locally is forbidden — fix the type instead. Type-check via `vue-tsc`.
+- **Vue 3 idioms:**
+  - Single-File Components with `<script setup lang="ts">`; the Options API is allowed but Composition API + `<script setup>` is the default for new code ([frontend_coding.md §1](frontend_coding.md#1-component-structure)).
+  - `watch` / `watchEffect` with explicit sources over manual debouncing for non-urgent updates; `onMounted` / `onUnmounted` for lifecycle.
+  - Idempotent effects — setup MUST tolerate Vue dev remount: clean up every subscription / timer in `onUnmounted` (or the watch stop handle).
+- **Pinia idioms:**
+  - `defineStore` (setup-style stores) over hand-written stores.
+  - Default to TanStack Query (Vue Query) for server cache; reach for a Pinia store action only when the server-cache client is not a fit ([frontend_coding.md §2](frontend_coding.md#2-state-management)).
+  - `computed` / Pinia getter for derived data — inline derivations that allocate new objects every render are a defect.
+- **VeeValidate + Zod:**
+  - `toTypedSchema` (`@vee-validate/zod`) is the validation bridge — MUST NOT hand-roll a separate validator.
   - One Zod schema per form lives in `<feature>/<form>.schema.ts` ([frontend_coding.md §4](frontend_coding.md#4-forms--validation)).
 - **Router idioms:**
-  - React Router v6+ data routers; functional guard components (`<RequireAuth>`, `<RequireRole>`); MUST NOT imperatively redirect inside page bodies ([frontend_coding.md §5](frontend_coding.md#5-routing--route-protection)).
+  - Vue Router v4; functional guards — a global `router.beforeEach` reading `to.meta` plus guard wrapper components (`<RequireAuth>`, `<RequireRole>`); MUST NOT imperatively `router.push` redirect inside page component bodies ([frontend_coding.md §5](frontend_coding.md#5-routing--route-protection)).
 - **WebSocket idioms:** one shared client per session ([frontend_coding.md §13](frontend_coding.md#13-domain-specific-conventions)). MUST NOT spawn a `new WebSocket(...)` per component.
 - **Module resolution:** absolute imports via `@/` alias; relative imports for same-folder siblings only ([frontend_coding.md §7](frontend_coding.md#7-import-ordering)).
 - **Package manager:** pnpm. MUST NOT commit `package-lock.json` or `yarn.lock` — only `pnpm-lock.yaml` ([../../docs/decisions/0008-frontend-stack.md](../../docs/decisions/0008-frontend-stack.md)).

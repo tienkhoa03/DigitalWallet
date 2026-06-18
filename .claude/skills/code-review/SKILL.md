@@ -33,8 +33,8 @@ For each changed file path, map to a rule file:
 | `backend/` `*.java` | [backend_coding.md](../../rules/backend_coding.md), [security.md](../../rules/security.md), [testing.md](../../rules/testing.md), [upgrade-policy.md §3](../../rules/upgrade-policy.md) |
 | `backend/**/test/**` | [testing.md §2](../../rules/testing.md), [testing.md §6](../../rules/testing.md), [security.md §11](../../rules/security.md) |
 | `backend/shared/db/migration/*.sql` | [backend_coding.md §13](../../rules/backend_coding.md), [docs/database/migrations.md](../../../docs/database/migrations.md) |
-| `frontend/src/**` `*.ts(x)` | [frontend_coding.md](../../rules/frontend_coding.md), [security.md](../../rules/security.md), [testing.md §3](../../rules/testing.md), [upgrade-policy.md §4](../../rules/upgrade-policy.md) |
-| `frontend/**/*.test.ts(x)` | [testing.md §3](../../rules/testing.md), [security.md §11](../../rules/security.md) |
+| `frontend/src/**` `*.vue` / `*.ts` | [frontend_coding.md](../../rules/frontend_coding.md), [security.md](../../rules/security.md), [testing.md §3](../../rules/testing.md), [upgrade-policy.md §4](../../rules/upgrade-policy.md) |
+| `frontend/**/*.test.ts` / `*.spec.ts` | [testing.md §3](../../rules/testing.md), [security.md §11](../../rules/security.md) |
 | `docs/decisions/*.md` | [upgrade-policy.md §5](../../rules/upgrade-policy.md), [upgrade-policy.md §6](../../rules/upgrade-policy.md) |
 | `docs/**` (other) | content review only — see Edge cases. |
 

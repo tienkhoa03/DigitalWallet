@@ -26,7 +26,7 @@ DigitalWallet's full product contract is in [../../project-info.md](../../projec
 - **Cut entirely:** Epic 2 (Fraud Detection — both sync NFR9 pre-check *and* async consumer + alerts), Epic 3 (Admin Dashboard), Epic 4 (PFM Budgets), Epic 5 (PFM Notifications), Epic 6 (AI Advisor).
 - **Kept (backend):** Epic 1 in full — signup, login, open wallet, deposit, withdraw, transfer, statement.
 - **Kept (frontend):** every Epic-1 user-facing flow — signup, login, wallet list, open wallet, deposit, withdraw, transfer, statement.
-- **Kept (security floor — not part of any epic):** rate limiting on `POST /transfers`, JWT auth, RBAC at controller AND service, idempotency, hybrid concurrency, outbox WRITE atomicity, CORS allow-list, security headers, sort whitelist. These are cross-cutting rules from [../../.claude/rules/security.md](../../.claude/rules/security.md) and are not optional even with no fraud / PFM / advisor.
+- **Kept (security floor — not part of any epic):** rate limiting on `POST /transfers`, JWT auth, RBAC at the inbound web adapter AND the application service (use case), idempotency, hybrid concurrency, outbox WRITE atomicity, CORS allow-list, security headers, sort whitelist. These are cross-cutting rules from [../../.claude/rules/security.md](../../.claude/rules/security.md) and are not optional even with no fraud / PFM / advisor.
 
 **Consequence — NFR9 is explicitly deferred.** [../../CLAUDE.md](../../CLAUDE.md) names NFR9 a "non-negotiable invariant": every wallet mutation MUST evaluate fraud velocity (FR2.1), volume (FR2.2), and `account.fraud_status` (FR2.4) on the request thread before opening the DB transaction. With Epic 2 cut, the slimmed MVP **does NOT honour NFR9**. This is a documented MVP limitation — the money path runs without fraud blocking. The omission MUST be closed by a Phase-X plan before any production-shaped milestone; the `account.fraud_status` column still ships in V1 of the `account` table so a post-MVP fraud module can be wired without a destructive migration.
 
@@ -39,7 +39,7 @@ DigitalWallet's full product contract is in [../../project-info.md](../../projec
 - **ADR 0002 (LLM provider) stays Open** — Epic 6 deferred.
 - **ADR 0011 (Observability Stack) is drafted Proposed alongside this plan** — Phase 8 needs it.
 
-**Desired end state.** A working multi-currency wallet platform on a single docker-compose host: signup/login → open multiple wallets per currency → deposit / withdraw / transfer (with idempotency, hybrid concurrency, rate limiting) → statement read → all reachable from a working React frontend with the Epic-1 user flows.
+**Desired end state.** A working multi-currency wallet platform on a single docker-compose host: signup/login → open multiple wallets per currency → deposit / withdraw / transfer (with idempotency, hybrid concurrency, rate limiting) → statement read → all reachable from a working Vue frontend with the Epic-1 user flows.
 
 ## 3. Scope
 
@@ -88,10 +88,10 @@ Status legend: **Unanswered (open)** | **Answered (closed)** | **Deferred (track
 
 The plan honours every applicable invariant in [../../CLAUDE.md](../../CLAUDE.md):
 
-- **Synchronous money path** — REST → Redis lock → DB `PESSIMISTIC_WRITE` → ledger + outbox row in one tx → return. *(Fraud pre-check step is omitted in MVP — NFR9 deferred.)*
+- **Synchronous money path** — inbound web adapter → Redis lock → DB `PESSIMISTIC_WRITE` → ledger + outbox row in one tx → return, orchestrated by the application service (use case). *(Fraud pre-check step is omitted in MVP — NFR9 deferred.)*
 - **Asynchronous stream** — *deferred to post-MVP.* The outbox table fills up; no poller drains it.
 - **Phases follow the dataflow direction:** identity → wallet state → money mutation primitives (deposit before withdraw before transfer) → read flows → observability → frontend.
-- **Each phase ends green.** `./mvnw verify` passes; JaCoCo ≥ 80% on whatever lives under `com/digitalwallet/*/service/**`.
+- **Each phase ends green.** `./mvnw verify` passes; JaCoCo ≥ 80% on whatever lives under the application-service layer (`com/digitalwallet/*/application/service/**`; the `pom.xml` include pattern moves with the Java code restructure in a separate step — until then it still reads `*/service/**`).
 - **Each phase brings only the infra it needs.** No big-bang bootstrap.
 
 ```mermaid
@@ -204,7 +204,7 @@ Phases are dependency-ordered. Each "Plan" item is the follow-up `/make-plan` ca
 
 ### Foundation
 
-- [ ] **Phase 0 — Layout reconcile.** Rename `digital-wallet-api/` → `backend/`, change root package `org.acme` → `com.digitalwallet`, delete the starter `GreetingResource` + its tests, add to `pom.xml`: JaCoCo (with the ≥ 80 % gate on `com/digitalwallet/*/service/**`), Testcontainers Postgres + JUnit Jupiter, Hibernate Validator, SmallRye JWT (REST only), Quarkus Micrometer + Prometheus. Set `quarkus.hibernate-orm.database.generation=none`. Bring the `application.properties` DB block from [../../docs/architecture/README.md §7](../../docs/architecture/README.md#7-config--profiles). Update `.github/workflows/ci.yml` to drop the `frontend` job (returns in Phase F1) and to point the `docker-images` job at the renamed `backend/Dockerfile` (placeholder shipped now). *No business code yet.* — `@backend-developer`, `Skill("backend-verify")`
+- [ ] **Phase 0 — Layout reconcile.** Rename `digital-wallet-api/` → `backend/`, change root package `org.acme` → `com.digitalwallet`, delete the starter `GreetingResource` + its tests, add to `pom.xml`: JaCoCo (with the ≥ 80 % gate on the application-service layer — the include pattern still reads `com/digitalwallet/*/service/**` until the Java code restructure moves it to `com/digitalwallet/*/application/service/**`), Testcontainers Postgres + JUnit Jupiter, Hibernate Validator, SmallRye JWT (REST only), Quarkus Micrometer + Prometheus. Set `quarkus.hibernate-orm.database.generation=none`. Bring the `application.properties` DB block from [../../docs/architecture/README.md §7](../../docs/architecture/README.md#7-config--profiles). Update `.github/workflows/ci.yml` to drop the `frontend` job (returns in Phase F1) and to point the `docker-images` job at the renamed `backend/Dockerfile` (placeholder shipped now). *No business code yet.* — `@backend-developer`, `Skill("backend-verify")`
   - [ ] Plan
   - [ ] Build
 
@@ -214,7 +214,7 @@ Phases are dependency-ordered. Each "Plan" item is the follow-up `/make-plan` ca
   - [ ] Plan
   - [ ] Build
 
-- [ ] **Phase 2 — Open wallet (FR1.1 wallet).** Add `wallet/` module with Flyway V2 (`wallet` table — UNIQUE `(account_id, label)`, NO UNIQUE on `currency_code` per [ADR 0006](../../docs/decisions/0006-multi-currency-model.md)). `POST /wallets`, `GET /wallets`. Controller + service RBAC (`USER` role, owner-scope check). — `@backend-developer`, `Skill("backend-create-rest-api")`
+- [ ] **Phase 2 — Open wallet (FR1.1 wallet).** Add `wallet/` module with Flyway V2 (`wallet` table — UNIQUE `(account_id, label)`, NO UNIQUE on `currency_code` per [ADR 0006](../../docs/decisions/0006-multi-currency-model.md)). `POST /wallets`, `GET /wallets`. Inbound web adapter + application service (use case) RBAC (`USER` role, owner-scope check). — `@backend-developer`, `Skill("backend-create-rest-api")`
   - [ ] Plan
   - [ ] Build
 
@@ -250,23 +250,23 @@ Phases are dependency-ordered. Each "Plan" item is the follow-up `/make-plan` ca
 
 ### Epic 1 frontend
 
-- [ ] **Phase F1 — Frontend bootstrap + shared.** Create `frontend/` with Vite 5 + React 18 + TypeScript 5 strict + Tailwind 3 + Redux Toolkit (incl. RTK Query) + React Hook Form + Zod + Vitest + React Testing Library + Playwright + pnpm 11. Add `Dockerfile`, `docker-compose.yml` (joins backend `dw-net`), `nginx.conf` (`/api` proxy + WS upgrade — the upgrade rule stays even though MVP has no WS endpoint, so the proxy doesn't need a re-roll later). Add `app/` provider stack, `routes/` with `<RequireAuth>` and `<RequireRole role="USER">`, `<ErrorBoundary>`, shared error reporter, `shared/money/format.ts` (Intl.NumberFormat against the decimal-string contract), `shared/idempotency/uuidv7.ts`, `shared/config.ts` (`VITE_API_BASE_URL`), RTK Query `baseQuery` with JWT injection + 401 → logout + redirect per [security.md §6](../../.claude/rules/security.md#6-sessions--token-handling-frontend), typed `ApiError` translation of `{ error_key, message }`, design tokens in `tailwind.config.ts`. Restore the `frontend` job in `.github/workflows/ci.yml`. — `@frontend-developer`, `Skill("frontend-implement-ui-component")`, `Skill("frontend-verify")`
+- [ ] **Phase F1 — Frontend bootstrap + shared.** Create `frontend/` with Vite 5 + Vue 3 + TypeScript 5 strict + Tailwind 3 + Pinia + TanStack Query (Vue Query) + VeeValidate + Zod + Vitest + `@testing-library/vue` + Playwright + pnpm 11. Add `Dockerfile`, `docker-compose.yml` (joins backend `dw-net`), `nginx.conf` (`/api` proxy + WS upgrade — the upgrade rule stays even though MVP has no WS endpoint, so the proxy doesn't need a re-roll later). Add `app/` provider stack (Pinia + Vue Query plugin wiring), `routes/` with `<RequireAuth>` and `<RequireRole role="USER">` plus the global `router.beforeEach` guard on `route.meta`, `<ErrorBoundary>` (via `onErrorCaptured`), shared error reporter, `shared/money/format.ts` (Intl.NumberFormat against the decimal-string contract), `shared/idempotency/uuidv7.ts`, `shared/config.ts` (`VITE_API_BASE_URL`), shared HTTP client (`shared/api/http.ts`) with JWT injection + 401 → logout + redirect per [security.md §6](../../.claude/rules/security.md#6-sessions--token-handling-frontend), typed `ApiError` translation of `{ error_key, message }`, design tokens in `tailwind.config.ts`. Restore the `frontend` job in `.github/workflows/ci.yml`. — `@frontend-developer`, `Skill("frontend-implement-ui-component")`, `Skill("frontend-verify")`
   - [ ] Plan
   - [ ] Build
 
-- [ ] **Phase F2 — Auth (signup + login).** `features/auth/auth.api.ts` (RTK Query — `POST /accounts`, `POST /auth/login`), `features/auth/auth.slice.ts` (JWT in-memory + opaque "remembered" flag in localStorage per [security.md §6](../../.claude/rules/security.md#6-sessions--token-handling-frontend)), `<LoginPage>`, `<SignupPage>` with React Hook Form + Zod schemas mirroring backend validation per [frontend_coding.md §4](../../.claude/rules/frontend_coding.md#4-forms--validation) (email, password, `base_currency` ISO 4217 immutable). Public routes `/login` + `/signup`. — `@frontend-developer`, `Skill("frontend-implement-ui-component")`
+- [ ] **Phase F2 — Auth (signup + login).** `features/auth/auth.api.ts` (Vue Query — `POST /accounts`, `POST /auth/login`), `features/auth/auth.store.ts` (Pinia — JWT in-memory + opaque "remembered" flag in localStorage per [security.md §6](../../.claude/rules/security.md#6-sessions--token-handling-frontend)), `<LoginPage>`, `<SignupPage>` with VeeValidate + Zod schemas (via `toTypedSchema`) mirroring backend validation per [frontend_coding.md §4](../../.claude/rules/frontend_coding.md#4-forms--validation) (email, password, `base_currency` ISO 4217 immutable). Public routes `/login` + `/signup`. — `@frontend-developer`, `Skill("frontend-implement-ui-component")`
   - [ ] Plan
   - [ ] Build
 
-- [ ] **Phase F3 — Wallets + deposit + withdraw.** `features/wallet/wallet.api.ts` (RTK Query — `GET /wallets`, `POST /wallets`, `POST /wallets/{id}/deposits`, `POST /wallets/{id}/withdrawals`), `<WalletsPage>` (list rendering both `label` AND `currency_code` per [frontend_coding.md §13](../../.claude/rules/frontend_coding.md#13-domain-specific-conventions) — wallets are never identified by currency alone), `<OpenWalletForm>` (unique-label client-side hint, ISO 4217 currency picker over the full supported list), `<DepositPage>` + `<WithdrawPage>` sharing the wallet-mutation form pattern (amount as decimal string, UUIDv7 `Idempotency-Key` generated at form mount and reused across resubmits, monetary display via `MoneyDisplay` only — never `Number.toFixed(2)`). Routes `/wallets`, `/wallets/new`, `/wallets/:id/deposit`, `/wallets/:id/withdraw` all behind `<RequireAuth>`. — `@frontend-developer`, `Skill("frontend-implement-ui-component")`
+- [ ] **Phase F3 — Wallets + deposit + withdraw.** `features/wallet/wallet.api.ts` (Vue Query — `GET /wallets`, `POST /wallets`, `POST /wallets/{id}/deposits`, `POST /wallets/{id}/withdrawals`), `<WalletsPage>` (list rendering both `label` AND `currency_code` per [frontend_coding.md §13](../../.claude/rules/frontend_coding.md#13-domain-specific-conventions) — wallets are never identified by currency alone), `<OpenWalletForm>` (unique-label client-side hint, ISO 4217 currency picker over the full supported list), `<DepositPage>` + `<WithdrawPage>` sharing the wallet-mutation form pattern (amount as decimal string, UUIDv7 `Idempotency-Key` generated at form mount and reused across resubmits, monetary display via `MoneyDisplay` only — never `Number.toFixed(2)`). Routes `/wallets`, `/wallets/new`, `/wallets/:id/deposit`, `/wallets/:id/withdraw` all behind `<RequireAuth>`. — `@frontend-developer`, `Skill("frontend-implement-ui-component")`
   - [ ] Plan
   - [ ] Build
 
-- [ ] **Phase F4 — Transfer + statement.** `features/transfer/transfer.api.ts` (RTK Query — `POST /transfers`), `<TransferPage>` (source-wallet picker rendering label+currency; recipient by `to_account_id`; amount + currency; FX preview note when source and destination currency differ; UUIDv7 `Idempotency-Key`; `Retry-After` countdown on 429 per [frontend_coding.md §13](../../.claude/rules/frontend_coding.md#13-domain-specific-conventions)). `features/statement/statement.api.ts` (RTK Query — `GET /wallets/{id}/statement` with paginated cache + filter args), `<StatementPage>` (virtualized table per [frontend_coding.md §16](../../.claude/rules/frontend_coding.md#16-list-rendering) — wallet statements pass the 200-row threshold quickly; `from`/`to` date filters; type filter; stable `transaction.id` keys). Routes `/transfers/new` and `/wallets/:id/statement`. — `@frontend-developer`, `Skill("frontend-implement-ui-component")`
+- [ ] **Phase F4 — Transfer + statement.** `features/transfer/transfer.api.ts` (Vue Query — `POST /transfers`), `<TransferPage>` (source-wallet picker rendering label+currency; recipient by `to_account_id`; amount + currency; FX preview note when source and destination currency differ; UUIDv7 `Idempotency-Key`; `Retry-After` countdown on 429 per [frontend_coding.md §13](../../.claude/rules/frontend_coding.md#13-domain-specific-conventions)). `features/statement/statement.api.ts` (Vue Query — `GET /wallets/{id}/statement` with paginated cache + filter args), `<StatementPage>` (virtualized table per [frontend_coding.md §16](../../.claude/rules/frontend_coding.md#16-list-rendering) — wallet statements pass the 200-row threshold quickly; `from`/`to` date filters; type filter; stable `transaction.id` keys). Routes `/transfers/new` and `/wallets/:id/statement`. — `@frontend-developer`, `Skill("frontend-implement-ui-component")`
   - [ ] Plan
   - [ ] Build
 
-- [ ] **Phase F5 — Frontend smoke + Playwright golden path.** Vitest specs per page covering: AAA layout, RTK Query mock at the `baseQuery` level (not raw `fetch`), `data-test` / `getByRole` query priority, money-formatter assertions on decimal strings (not `Number`), XSS regression — a `<script>` string in a free-form input renders as text. One Playwright `golden-path.spec.ts`: signup → login → open USD wallet → open EUR wallet → deposit USD → withdraw USD → transfer USD→USD → transfer USD→EUR → statement filtered by date + type. Mark MVP frontend complete; update `CLAUDE.md` "Project Status". — `@frontend-developer`, `Skill("frontend-verify")`, `Skill("code-review")`
+- [ ] **Phase F5 — Frontend smoke + Playwright golden path.** Vitest + `@testing-library/vue` specs per page covering: AAA layout, Vue Query mock at the shared HTTP client (`shared/api/http.ts`) level (not raw `fetch`), `data-test` / `getByRole` query priority, money-formatter assertions on decimal strings (not `Number`), XSS regression — a `<script>` string in a free-form input renders as text. One Playwright `golden-path.spec.ts`: signup → login → open USD wallet → open EUR wallet → deposit USD → withdraw USD → transfer USD→USD → transfer USD→EUR → statement filtered by date + type. Mark MVP frontend complete; update `CLAUDE.md` "Project Status". — `@frontend-developer`, `Skill("frontend-verify")`, `Skill("code-review")`
   - [ ] Plan
   - [ ] Build
 
@@ -282,7 +282,7 @@ The Epic-1-only MVP is **complete** when every checkbox below is green.
 - [ ] **NFR1** — a concurrent-mutation test on the same wallet exercises Redis lock + DB `PESSIMISTIC_WRITE`; one wins, the loser returns `wallet.locked` or retries cleanly.
 - [ ] **NFR2** — ledger + outbox commit atomically; a manual SQL check confirms `published_at IS NULL` rows accumulate as expected (poller deferred).
 - [ ] **NFR3** — replay coverage on deposit, withdraw, and transfer.
-- [ ] **NFR4** — JaCoCo ≥ 80 % on `com/digitalwallet/*/service/**`, every phase, fail-the-build gate in CI from Phase 1 onwards.
+- [ ] **NFR4** — JaCoCo ≥ 80 % on the application-service layer (`com/digitalwallet/*/application/service/**`; the pom include pattern still reads `com/digitalwallet/*/service/**` until the Java code restructure moves it), every phase, fail-the-build gate in CI from Phase 1 onwards.
 - [ ] **NFR5** — an integration assertion verifies the HTTP path does NO Kafka publish (trivially true — no Kafka client on the classpath in MVP).
 - [ ] Security tests ([security.md §11](../../.claude/rules/security.md#11-testing-security-sensitive-code)): unauthenticated, wrong-role, wrong-tenant, replay, boundary, rate-limit — each present for the protected endpoints.
 - [ ] [ADR 0001](../../docs/decisions/0001-jwt-signing-algorithm.md) flips to **Accepted** (Phase 1).
@@ -298,7 +298,7 @@ The Epic-1-only MVP is **complete** when every checkbox below is green.
 - [ ] Wallet picker (deposit / withdraw / transfer source) renders both `label` AND `currency_code` — wallets are never identified by currency alone.
 - [ ] `Idempotency-Key` (UUIDv7) generated at form mount and reused across resubmits of the same logical action.
 - [ ] On HTTP 429 `ratelimit.exceeded`, UI honours `Retry-After` to disable the submit button.
-- [ ] On HTTP 401, RTK Query `baseQuery` dispatches logout + redirects to `/login` — no silent retry.
+- [ ] On HTTP 401, the shared HTTP client (`shared/api/http.ts`) dispatches logout + redirects to `/login` — no silent retry.
 
 ### NFRs explicitly NOT covered in MVP (documented deferrals)
 
@@ -313,8 +313,8 @@ Per [../../.claude/rules/security.md](../../.claude/rules/security.md):
 
 - **§1 secrets & configuration** — Phase 1 introduces `JWT_PRIVATE_KEY` env var; no committed defaults for secrets. *(No `LLM_API_KEY`, no `KAFKA_BOOTSTRAP_SERVERS` in MVP.)*
 - **§2 authentication** — every endpoint except `POST /accounts` and `POST /auth/login` requires a JWT (Phases 1 onwards). ES256 only; `alg: none` rejected. 30-second clock skew tolerated. Password hashing Argon2id. *(WS upgrade JWT validation deferred — no WS endpoints in MVP.)*
-- **§3 authorization** — `@RolesAllowed` at the controller AND re-check in the service in every phase that exposes a path parameter. Ownership check on `{walletId}`, `{accountId}` (Phases 2, 3, 4, 5, 7). `FRAUD_ANALYST` deferred per [ADR 0009](../../docs/decisions/0009-rbac-roles.md).
-- **§4 input validation & injection** — `@Valid` on every body, `@CurrencyCode` custom validator (Phase 1), sort-key whitelist (Phase 7), no `dangerouslySetInnerHTML` (frontend). *(LLM prompt anonymisation N/A — Epic 6 cut.)*
+- **§3 authorization** — `@RolesAllowed` at the inbound web adapter AND re-check in the application service (use case) in every phase that exposes a path parameter. Ownership check on `{walletId}`, `{accountId}` (Phases 2, 3, 4, 5, 7). `FRAUD_ANALYST` deferred per [ADR 0009](../../docs/decisions/0009-rbac-roles.md).
+- **§4 input validation & injection** — `@Valid` on every body, `@CurrencyCode` custom validator (Phase 1), sort-key whitelist (Phase 7), no `v-html` on user input (frontend). *(LLM prompt anonymisation N/A — Epic 6 cut.)*
 - **§5 transport & CORS** — CORS allow-list non-`*` from Phase 1 onwards; HTTPS in prod; security headers (HSTS, CSP, X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy, Permissions-Policy) shipped in Phase 1. *(WebSocket origin check N/A — no WS.)*
 - **§6 frontend session handling** — JWT in-memory; `localStorage` holds only an opaque "remembered" flag (Phase F2).
 - **§7 sensitive data exposure** — response DTOs omit `password_hash`; logger redaction (no email/balance/full `Idempotency-Key`/full JWT) wired in Phase 3 + Phase 8.
@@ -330,8 +330,8 @@ Per [../../.claude/rules/testing.md](../../.claude/rules/testing.md):
 - **Integration (Testcontainers):** Postgres 16 from Phase 1; Redis 7 from Phase 3. **No Kafka container in MVP.** NO H2, NO embedded Redis ([testing.md §2.4](../../.claude/rules/testing.md#24-test-db-setup--testcontainers-vs-in-memory-policy)).
 - **NFR test contexts ([testing.md §2.9](../../.claude/rules/testing.md#29-required-nfr-test-contexts)):** NFR1 in Phase 3 + Phase 5, NFR2 (write-side only) in Phase 3, NFR3 in Phase 3. NFR5/6/7/8/9 N/A or deferred in MVP; the test classes do NOT need to be written.
 - **Security tests ([security.md §11](../../.claude/rules/security.md#11-testing-security-sensitive-code)):** one per protected endpoint per phase.
-- **Coverage floor:** ≥ 80 % line coverage on `com/digitalwallet/*/service/**` enforced by JaCoCo on every PR from Phase 1 onwards (NFR4).
-- **Frontend tests:** Vitest + React Testing Library per phase; XSS regression in Phase F5; Playwright golden-path spec in Phase F5.
+- **Coverage floor:** ≥ 80 % line coverage on the application-service layer (`com/digitalwallet/*/application/service/**`; the pom include pattern still reads `com/digitalwallet/*/service/**` until the Java code restructure moves it) enforced by JaCoCo on every PR from Phase 1 onwards (NFR4).
+- **Frontend tests:** Vitest + `@testing-library/vue` per phase; XSS regression in Phase F5; Playwright golden-path spec in Phase F5.
 
 ## 13. Reference Files
 
@@ -359,7 +359,7 @@ Implementers MUST read these before opening any per-phase plan:
 - **Phase 0 reconcile breaks CI for one PR.** Mitigation: do the rename, `pom.xml`, `application.properties`, and CI-path update in a single PR; verify locally with `Skill("backend-verify")` before pushing.
 - **NFR1 deadlock on two-leg transfer (Phase 5).** Mitigation: deterministic Redis-lock acquisition order by `wallet_id` UUID comparison; integration test exercises both directions concurrently.
 - **Performance budget includes a fraud step that won't be in MVP.** Mitigation: Phase 8 measures the fraud-free path P95 and notes the comparison context — measurements are not directly comparable to the §17.1 budget until Phase X wires fraud.
-- **Frontend / backend drift on the error envelope.** Mitigation: Phase F1 defines a typed `ApiError` translation in `baseQuery` derived directly from [../../docs/api/README.md](../../docs/api/README.md#error-response-shape).
+- **Frontend / backend drift on the error envelope.** Mitigation: Phase F1 defines a typed `ApiError` translation in the shared HTTP client (`shared/api/http.ts`) derived directly from [../../docs/api/README.md](../../docs/api/README.md#error-response-shape).
 - **No transfer rate-limit on the frontend before Phase 6 lands.** Mitigation: Phase 6 precedes Phase F4 by construction — the dependency arrow in §5 enforces this.
 
 ### Dependencies

@@ -40,9 +40,9 @@ Integration tests run via Testcontainers (Postgres 16 + Kafka + Redis 7) per [te
 
 ## Step 3 — Coverage reading
 
-After `verify` completes, parse `backend/target/site/jacoco/jacoco.csv`. For every row whose `PACKAGE` matches a feature module's `service` package (`*.service.*` per the layout in [backend_coding.md §1](../../rules/backend_coding.md)), compute line coverage as `(LINE_COVERED) / (LINE_COVERED + LINE_MISSED)`.
+After `verify` completes, parse `backend/target/site/jacoco/jacoco.csv`. For every row whose `PACKAGE` matches a feature module's application-service package (`*.application.service.*` in the target hexagonal layout per [backend_coding.md §1](../../rules/backend_coding.md); until the Java code restructure lands these packages are still `*.service.*`, which the `pom.xml` include pattern still targets), compute line coverage as `(LINE_COVERED) / (LINE_COVERED + LINE_MISSED)`.
 
-The service-layer line floor is **≥ 80 %** per [testing.md §1](../../rules/testing.md) and NFR4. If any service-package row is below the floor, mark this step `FAIL` with the offending package name and the actual percentage.
+The application-service-layer line floor is **≥ 80 %** per [testing.md §1](../../rules/testing.md) and NFR4. If any application-service-package row is below the floor, mark this step `FAIL` with the offending package name and the actual percentage.
 
 **Discipline:**
 

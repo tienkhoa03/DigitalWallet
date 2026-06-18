@@ -12,13 +12,13 @@ Coverage floors are derived from [../../project-info.md §4.5](../../project-inf
 
 | Scope | Floor | Tool | Where enforced |
 |---|---|---|---|
-| Backend service layer (line) | ≥ 80 % (NFR4) | JaCoCo | GitHub Actions; CI fails below threshold ([../../project-info.md §12](../../project-info.md#12-development-workflow)). |
+| Backend application-service layer (line) | ≥ 80 % (NFR4) | JaCoCo | GitHub Actions; CI fails below threshold ([../../project-info.md §12](../../project-info.md#12-development-workflow)). |
 | Backend repository / consumer | Every public method covered under Testcontainers | JUnit 5 + Testcontainers | Code review + integration suite. |
-| Frontend reducers / selectors / hooks | Every branching path | Vitest + c8 | c8 report + code review. |
-| Frontend components with logic | Smoke render + key interactions | Vitest + React Testing Library | Code review. |
+| Frontend Pinia stores / getters / composables | Every branching path | Vitest + c8 | c8 report + code review. |
+| Frontend components with logic | Smoke render + key interactions | Vitest + @testing-library/vue | Code review. |
 | E2E smoke | One per epic | Playwright | Nightly suite (non-blocking in MVP — see [../../docs/testing/README.md](../../docs/testing/README.md#ci-gate)). |
 
-A coverage drop on the service layer below 80% breaks the build — this is the NFR4 contract.
+A coverage drop on the application-service layer below 80% breaks the build — this is the NFR4 contract.
 
 ## 2. Backend testing
 
@@ -26,7 +26,7 @@ A coverage drop on the service layer below 80% breaks the build — this is the 
 
 - **Unit:** JUnit 5 + Mockito ([../../project-info.md §4.5](../../project-info.md#45-testing--quality)).
 - **Integration:** Testcontainers — Postgres 16, Kafka, Redis 7. Embedded H2 / in-memory Kafka are forbidden ([../../docs/testing/README.md](../../docs/testing/README.md#frameworks-per-layer)).
-- **Coverage:** JaCoCo. Report under `target/site/jacoco/`.
+- **Coverage:** JaCoCo. Report under `target/site/jacoco/`. The ≥ 80 % gate (NFR4) targets the application-service layer (use-case impls) — `com/digitalwallet/*/application/service/**`. *(The `pom.xml` include pattern moves with the Java code restructure, a separate step; until then it still reads `*/service/**`.)*
 - **HTTP integration:** RestAssured under `@QuarkusTest` `<!-- not-yet-adopted -->`.
 
 ### 2.2 Mocking decision matrix
@@ -39,7 +39,7 @@ A coverage drop on the service layer below 80% breaks the build — this is the 
 | Redis lock helper / rate limiter | Mock | Testcontainers Redis. |
 | Outbox poller | Mock the publisher; assert outbox state | Testcontainers Postgres + Kafka. |
 | LLM client | Mock | WireMock or recorded fixture; MUST NOT call the real LLM in CI. |
-| `Clock` / `Instant.now()` | Inject a fixed `Clock`; service code receives a `Clock` rather than calling `Instant.now()` directly. | Same. |
+| `Clock` / `Instant.now()` | Inject a fixed `Clock`; application-service code receives a `Clock` rather than calling `Instant.now()` directly. | Same. |
 | External HTTP | Mock | WireMock. |
 | Time-windowed fraud rules (FR2.1, FR2.2) | Inject a `Clock`; advance manually | Use a fixed `Clock` and verify with a deterministic record sequence. |
 
@@ -101,15 +101,15 @@ See [security.md §11](security.md#11-testing-security-sensitive-code) for the r
 
 See also [frontend_coding.md §11](frontend_coding.md#11-testing).
 
-- **Co-location:** test files live next to the unit under test (`deposit-form.tsx` + `deposit-form.test.tsx`).
+- **Co-location:** test files live next to the unit under test (`deposit-form.vue` + `deposit-form.test.ts`).
 - **AAA layout:** Arrange / Act / Assert sections separated by blank lines. Tests with no clear AAA structure are a code-review reject.
-- **Wrappers / providers:** tests render through a shared `renderWithProviders` helper that mounts the Redux store, Router, and RTK Query mock baseQuery. Tests MUST NOT manually wire each provider.
+- **Wrappers / providers:** tests render through a shared `renderWithProviders` helper that mounts Pinia, Vue Router, and a Vue Query client with a mock HTTP client. Tests MUST NOT manually wire each provider.
 - **Query priority:** prefer in this order — `data-test` attribute (`getByTestId`) → ARIA role / name (`getByRole`) → visible text (`getByText`). Class names and CSS selectors are NEVER acceptable as test queries.
-- **Network mocking:** mock at the RTK Query level (`msw` for HTTP, fake socket for WebSocket). MUST NOT stub global `fetch`.
-- **XSS regression:** every component that renders user-supplied free text MUST have a test asserting that a string containing `<script>` is rendered as text, not executed. See [security.md §11](security.md#11-testing-security-sensitive-code).
-- **Async assertions:** use `findBy*` / `waitFor` from React Testing Library; MUST NOT rely on `setTimeout` with hard-coded waits. Flaky tests caused by missing `await findBy*` are defects (see §6).
+- **Network mocking:** mock at the Vue Query level (`msw` for HTTP, fake socket for WebSocket). MUST NOT stub global `fetch`.
+- **XSS regression:** every component that renders user-supplied free text MUST have a test asserting that a string containing `<script>` is rendered as text (Vue text interpolation), not executed. See [security.md §11](security.md#11-testing-security-sensitive-code).
+- **Async assertions:** use `findBy*` / `waitFor` from `@testing-library/vue`; MUST NOT rely on `setTimeout` with hard-coded waits. Flaky tests caused by missing `await findBy*` are defects (see §6).
 - **Money formatting:** tests that assert on monetary values MUST compare on the decimal string emitted by the shared formatter, not on JS `Number` equality.
-- **Coverage:** Vitest's c8 report covers reducers, selectors, and hooks with branching logic ([../../docs/testing/README.md](../../docs/testing/README.md#coverage-targets)).
+- **Coverage:** Vitest's c8 report covers Pinia stores, getters, and composables with branching logic ([../../docs/testing/README.md](../../docs/testing/README.md#coverage-targets)).
 
 ## 4. Execution strategies
 
@@ -128,7 +128,7 @@ Per [../../project-info.md §12](../../project-info.md#12-development-workflow) 
 
 1. Compile (backend + frontend).
 2. Backend unit + integration tests (JUnit 5 + Testcontainers): `./mvnw -pl backend verify`.
-3. JaCoCo coverage gate — fails under 80 % on the service layer (NFR4).
+3. JaCoCo coverage gate — fails under 80 % on the application-service layer (NFR4).
 4. Frontend lint: `pnpm --dir frontend lint`.
 5. Frontend tests: `pnpm --dir frontend test`.
 
@@ -141,12 +141,12 @@ From [../../docs/testing/README.md](../../docs/testing/README.md#what-not-to-tes
 - **Generated code** — OpenAPI client stubs, generated TS types, JPA-emitted SQL.
 - **Framework wiring** — Quarkus DI graph correctness is covered by application startup.
 - **Trivial DTO accessors** — no `getX()` / `setX()` unit tests.
-- **Trivial mappers** with no branching — covered indirectly by service tests.
+- **Trivial mappers** with no branching — covered indirectly by application-service tests.
 - **Tailwind utility CSS** — no visual regression tests in MVP.
 - **Migration files themselves** — test the resulting schema state instead.
 - **Third-party libraries** — trust or replace; do not re-test their contract.
 - **Private methods** — test through the public surface; if a private method is hard to cover, the public API is mis-shaped.
-- **Framework behaviour** (Quarkus `@Transactional` semantics, React batching) — assumed correct; tests assert your behaviour, not theirs.
+- **Framework behaviour** (Quarkus `@Transactional` semantics, Vue's reactivity batching) — assumed correct; tests assert your behaviour, not theirs.
 
 ## 6. Test discipline
 

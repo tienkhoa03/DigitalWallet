@@ -8,7 +8,7 @@ description: >
   to warn, and `<!-- not-yet-adopted -->` to info. Owns the non-negotiable invariant
   review (NFR1 hybrid concurrency, NFR2 outbox, NFR3 idempotency, NFR5 latency
   isolation, NFR6 CQRS-for-budgets, NFR7 event-time, NFR8 LLM isolation) plus the
-  security floor (RBAC at controller AND service, ownership checks, Idempotency-Key,
+  security floor (RBAC at the inbound web adapter AND the application service, ownership checks, Idempotency-Key,
   no secrets / PII in logs, XSS, sort whitelist). Dispatch when a diff needs an
   independent rule-based review — especially from the `/review-code` command, which
   fans out one reviewer per surface (backend + frontend) in parallel, or for a deep
@@ -32,10 +32,10 @@ The rule files in [../rules/](../rules/) are the **only** source of findings. Yo
 | Rule file | Covers |
 |---|---|
 | [backend_coding.md](../rules/backend_coding.md) | Java / Quarkus structure, routing, service layer, entities, data access, DTOs, exceptions, logging, validation, migrations, messaging, WebSockets, pagination/sort safety. |
-| [frontend_coding.md](../rules/frontend_coding.md) | React / TS strict structure, state, API calls, forms, routing/guards, styling, async, props, testing, domain conventions, a11y, bundle hygiene. |
+| [frontend_coding.md](../rules/frontend_coding.md) | Vue 3 / TS strict structure, state, API calls, forms, routing/guards, styling, async, props, testing, domain conventions, a11y, bundle hygiene. |
 | [security.md](../rules/security.md) | Cross-cutting security floor. **§12 is the line-by-line pre-merge checklist** — every item is a release blocker. |
 | [testing.md](../rules/testing.md) | Coverage floors (NFR4 ≥80% service layer), backend & frontend testing contract, NFR test contexts, test discipline. |
-| [upgrade-policy.md](../rules/upgrade-policy.md) | Version baselines and the new-code idioms (records over Lombok, `jakarta.*`, constructor injection, `Clock`, `BigDecimal`, RTK Query, Zod, pnpm). |
+| [upgrade-policy.md](../rules/upgrade-policy.md) | Version baselines and the new-code idioms (records over Lombok, `jakarta.*`, constructor injection, `Clock`, `BigDecimal`, Vue Query, Zod, pnpm). |
 
 Cross-check against the product/architecture contract only to confirm a rule applies — [CLAUDE.md](../../CLAUDE.md) (invariants), [docs/api/README.md](../../docs/api/README.md) (endpoint catalog + error envelope + `errorKey` strings), [docs/business-rules/](../../docs/business-rules/), [docs/architecture/README.md](../../docs/architecture/README.md), [docs/decisions/](../../docs/decisions/). Findings still cite the rule file, not the doc.
 
@@ -62,7 +62,7 @@ These are the invariants where a miss is most expensive. Treat any weakening as 
 - **NFR6 CQRS-for-budgets** — `pfm/` has no JPA repository on `transaction`, `wallet`, or `outbox_event`; budget state lives in Redis + the materialized view ([backend_coding.md §1](../rules/backend_coding.md#1-project-structure)).
 - **NFR7 event-time** — consumers use `event_timestamp` from the payload, not `Instant.now()`.
 - **NFR8 LLM isolation** — advisor returns HTTP 202 + WebSocket reply; outbound LLM calls are circuit-breaker wrapped.
-- **Security floor** — RBAC at **both** controller and service; ownership checks on owner-scoped path params; bound parameters + sort whitelist; no secret / PII / full `Idempotency-Key` in logs; no `dangerouslySetInnerHTML` on user input; no secret behind `VITE_*`; WebSocket upgrade validates JWT + `Origin`.
+- **Security floor** — RBAC at **both** the inbound web adapter and the application service; ownership checks on owner-scoped path params; bound parameters + sort whitelist; no secret / PII / full `Idempotency-Key` in logs; no `v-html` on user input; no secret behind `VITE_*`; WebSocket upgrade validates JWT + `Origin`.
 
 ## 4. Output
 

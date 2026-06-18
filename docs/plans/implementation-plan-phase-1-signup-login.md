@@ -2,10 +2,10 @@
 
 - **Date:** 2026-05-25
 - **Ticket:** n/a (derived from [implementation-plan-mvp-master.md §9 Epic 1 backend](implementation-plan-mvp-master.md#epic-1-backend-fr11--fr14))
-- **Story points:** M — first vertical slice. Brings three cross-cutting `shared/*` packages, the first feature module (`account/`), the first Flyway migration, the first JaCoCo-gated service, and flips ADR 0001.
+- **Story points:** M — first vertical slice. Brings three cross-cutting `shared/*` packages, the first feature module (`account/`) as a hexagon, the first Flyway migration, the first JaCoCo-gated application service, and flips ADR 0001.
 - **Milestone:** MVP Epic 1 — Phase 1 (`POST /accounts`, `POST /auth/login`)
 - **Assignees:** unassigned
-- **Affected modules (backend):** `shared/exception`, `shared/security`, `shared/validation`, `account/` (api, service, persistence). No `wallet/`, `fraud/`, `pfm/`, `advisor/`, `dashboard/` code.
+- **Affected modules (backend):** `shared/exception`, `shared/security`, `shared/validation`, `account/` (the `account` hexagon: `adapter/in/web`, `application/service` + `application/port/in`, `adapter/out/persistence`, `domain`). No `wallet/`, `fraud/`, `pfm/`, `advisor/`, `dashboard/` code.
 - **Affected modules (frontend):** none (returns in Phase F2).
 - **Affected docs / ADRs:** [docs/decisions/0001-jwt-signing-algorithm.md](../decisions/0001-jwt-signing-algorithm.md) flips **Proposed → Accepted**; [CLAUDE.md](../../CLAUDE.md) "Project Status" updated to reflect that Phase 1 ships; this master plan's Phase 1 row gets its "Plan" checkbox ticked.
 - **Suggested branch name:** `feat/phase-1-signup-login`
@@ -14,7 +14,7 @@
 
 ## 2. Context / Problem Statement
 
-After Phase 0 lands [implementation-plan-phase-0-layout-reconcile.md](implementation-plan-phase-0-layout-reconcile.md), the repository has `backend/` at the right path, the LTS Quarkus version pinned, the JaCoCo gate scoped to `com/digitalwallet/*/service/**`, and the JWT / Hibernate-Validator / Testcontainers dependencies on the classpath — but no business code, no Flyway migrations, and `quarkus.smallrye-jwt.enabled=false`. The system has no identity yet; no user can sign up, log in, or receive a JWT.
+After Phase 0 lands [implementation-plan-phase-0-layout-reconcile.md](implementation-plan-phase-0-layout-reconcile.md), the repository has `backend/` at the right path, the LTS Quarkus version pinned, the JaCoCo gate scoped to the application-service layer (`com/digitalwallet/*/application/service/**`; the `pom.xml` include pattern moves with the Java code restructure in a separate step and until then still reads `*/service/**`), and the JWT / Hibernate-Validator / Testcontainers dependencies on the classpath — but no business code, no Flyway migrations, and `quarkus.smallrye-jwt.enabled=false`. The system has no identity yet; no user can sign up, log in, or receive a JWT.
 
 Phase 1 is the first vertical slice. Per [implementation-plan-mvp-master.md §9 Epic 1 backend](implementation-plan-mvp-master.md#epic-1-backend-fr11--fr14), this phase delivers FR1.1's identity half — signup + login — and the three cross-cutting `shared/*` packages that every later phase reuses:
 
@@ -35,7 +35,7 @@ The slice also brings:
 - A user can `POST /auth/login` and receive a signed ES256 JWT carrying `sub = account_id`, `groups = ["USER"]` (Quarkus SmallRye JWT convention for roles), `iss = digitalwallet`, `aud = digitalwallet-api`, `exp = iat + 3600`.
 - The JWT verifier is wired and **enabled** (`quarkus.smallrye-jwt.enabled=true`); a hand-crafted protected probe in tests confirms `@RolesAllowed("USER")` accepts a token signed by `JwtIssuer` and rejects an unsigned token, `alg: none`, an HS256 token, and an expired token (>30s skew).
 - The `DomainException` hierarchy + mapper produce the canonical envelope from [../api/README.md §Error response shape](../api/README.md#error-response-shape) for every failure path; Hibernate Validator failures map to `validation.invalid_payload` with a `details` array per [../../.claude/rules/backend_coding.md §8](../../.claude/rules/backend_coding.md#8-exception-handling).
-- `./mvnw -B verify` is green; JaCoCo on `com/digitalwallet/*/service/**` is ≥ 80 % (NFR4).
+- `./mvnw -B verify` is green; JaCoCo on the application-service layer (`com/digitalwallet/*/application/service/**`; the `pom.xml` include pattern still reads `*/service/**` until the Java code restructure moves it in a separate step) is ≥ 80 % (NFR4).
 - [docs/decisions/0001-jwt-signing-algorithm.md](../decisions/0001-jwt-signing-algorithm.md) reads **Accepted**.
 
 This phase does **not** open the wallet path, the money path, the outbox, the Redis lock, the rate-limit middleware, or any consumer.
@@ -47,9 +47,9 @@ This phase does **not** open the wallet path, the money path, the outbox, the Re
 - `shared/exception/` — `DomainException` sealed hierarchy, error envelope record, JAX-RS `ExceptionMapper<DomainException>`, `ExceptionMapper<ConstraintViolationException>` for Hibernate Validator failures.
 - `shared/security/` — `Argon2Hasher` (Bouncy Castle Argon2BytesGenerator), `JwtIssuer` (ES256 sign), `AccountRole` enum, `JwtSigningKeyProvider` that parses `JWT_PRIVATE_KEY` PEM at startup. JWT **verification** is provided by `quarkus-smallrye-jwt` (the existing dependency) — we do not roll our own verifier.
 - `shared/validation/` — `@CurrencyCode` annotation + `CurrencyCodeValidator` (checks against `java.util.Currency.getAvailableCurrencies()`; rejects empty / wrong-length / unknown codes).
-- `account/persistence/` — `AccountEntity` JPA entity mapped to `account`, `AccountRepository extends PanacheRepositoryBase<AccountEntity, UUID>` with `findByEmail(String)`.
-- `account/service/` — `AccountService.signup(CreateAccountRequest)` (validate currency, hash password, enforce email uniqueness, persist), `AuthService.login(LoginRequest)` (constant-time verify + token issue).
-- `account/api/` — `AccountResource` exposing `POST /accounts`; `AuthResource` exposing `POST /auth/login`. Both DTO sets as Java `record`s. Path constants per [../../.claude/rules/backend_coding.md §2](../../.claude/rules/backend_coding.md#2-routing--controllers).
+- `account/adapter/out/persistence/` — outbound persistence adapter: `AccountEntity` JPA entity mapped to `account`, `AccountRepository extends PanacheRepositoryBase<AccountEntity, UUID>` with `findByEmail(String)`, and an `AccountPersistenceAdapter` implementing the module's outbound port (load/save `Account`).
+- `account/application/service/` — application services (use-case implementations): `AccountService.signup(CreateAccountRequest)` (validate currency, hash password, enforce email uniqueness, persist) implementing the `CreateAccountUseCase` inbound port, `AuthService.login(LoginRequest)` (constant-time verify + token issue) implementing the `LoginUseCase` inbound port.
+- `account/adapter/in/web/` — inbound web adapter: `AccountResource` exposing `POST /accounts`; `AuthResource` exposing `POST /auth/login`. Both DTO sets as Java `record`s. The resources depend on the `application/port/in` use cases. Path constants per [../../.claude/rules/backend_coding.md §2](../../.claude/rules/backend_coding.md#2-routing--controllers).
 - Flyway V1 migration `V1__create_account_table.sql` under `src/main/resources/db/migration/`. Adds `quarkus-flyway` to `pom.xml`.
 - `application.properties` updates — enable `smallrye-jwt`, configure `mp.jwt.verify.publickey.location`, `mp.jwt.verify.issuer`, `mp.jwt.verify.audiences`, expose `app.jwt.*` for the issuer side, enable Flyway migrations on startup.
 - `src/main/resources/META-INF/jwt-public-key-dev.pem` — dev public key, committed (verifier key is non-secret per [../../.claude/rules/security.md §1](../../.claude/rules/security.md#1-secrets-and-configuration)).
@@ -95,7 +95,7 @@ Status legend: **Unanswered (open)** | **Answered (closed)** | **Deferred (track
 | 12 | Test JWT keypair — generated per test run or committed fixture? | Answered | **Committed fixture** under `src/test/resources/META-INF/jwt-public-key-test.pem` + `jwt-private-key-test.pem`. The test private key is committed because the test set never runs against real users. The test profile in `src/test/resources/application.properties` points `mp.jwt.verify.publickey.location` and the issuer's private-key provider at the test fixtures via `%test.` overrides. |
 | 13 | Should we add a `GET /me` introspection endpoint now to exercise the JWT verifier? | Answered | **No.** Master plan §9 lists exactly `POST /accounts` + `POST /auth/login` for Phase 1. The verifier wiring is exercised by an integration test (`JwtVerifierIT`) that mounts a throwaway `@Path("/_test/protected")` resource **only when the `test` profile is active**, and asserts both pass + fail paths. The resource is annotated `@io.quarkus.test.junit.QuarkusTest`-friendly via `quarkus.profile=test` guard and is never compiled into the production jar (placed under `src/test/java/`). |
 | 14 | Do we ship `quarkus-flyway` now or wait for V2 in Phase 2? | Answered | **Now.** V1 is the first migration; Flyway must run on startup so the entity / repository tests are non-trivial. Adding it later forces a re-test of the Phase 1 surface. |
-| 15 | RBAC at the service layer — does `AccountService.signup` need a guard? | Answered | **No.** Signup is a public endpoint (no JWT); the service can be called only by `AccountResource` and its test. RBAC guards land in Phase 2 (`WalletService.openWallet` is the first authenticated service). [../../.claude/rules/security.md §3](../../.claude/rules/security.md#3-authorization) "default-deny" applies from Phase 2 onwards. |
+| 15 | RBAC at the application-service layer — does `AccountService.signup` need a guard? | Answered | **No.** Signup is a public endpoint (no JWT); the application service can be reached only through the `AccountResource` inbound web adapter and its test. RBAC guards land in Phase 2 (`WalletService.openWallet` is the first authenticated application service / use case). [../../.claude/rules/security.md §3](../../.claude/rules/security.md#3-authorization) "default-deny" applies from Phase 2 onwards. |
 
 **Approval gate:** all rows Answered or explicitly Deferred. `/implement-plan docs/plans/implementation-plan-phase-1-signup-login.md` may run.
 
@@ -106,9 +106,9 @@ Phase 1 does **not** touch the synchronous money path described in [../../CLAUDE
 ### Signup flow (`POST /accounts`)
 
 ```
-JAX-RS resource (AccountResource)
+inbound web adapter — JAX-RS resource (AccountResource)
   └─ @Valid CreateAccountRequest    [Bean Validation: @Email, @Size, @CurrencyCode]
-  └─ AccountService.signup(req)     [@Transactional]
+  └─ AccountService.signup(req)     [application service / CreateAccountUseCase impl, @Transactional]
         ├─ normalise email → LOWER(email)
         ├─ AccountRepository.findByEmailLower(emailLower)
         │     └─ if present → throw ConflictException("account.email_taken")
@@ -126,9 +126,9 @@ The Bouncy Castle `Argon2BytesGenerator` produces a 32-byte hash; the stored val
 ### Login flow (`POST /auth/login`)
 
 ```
-AuthResource
+inbound web adapter — AuthResource
   └─ @Valid LoginRequest         [Bean Validation: @Email, @NotBlank password]
-  └─ AuthService.login(req)
+  └─ AuthService.login(req)      [application service / LoginUseCase impl]
         ├─ Optional<AccountEntity> = AccountRepository.findByEmailLower(email)
         ├─ if absent → Argon2Hasher.verify(req.password, SENTINEL_HASH); throw AuthInvalidCredentialsException
         ├─ if present:
@@ -182,11 +182,12 @@ The single `DomainExceptionMapper` produces the canonical envelope from [../api/
 
 ### Module boundaries
 
-Per [../../.claude/rules/backend_coding.md §1](../../.claude/rules/backend_coding.md#1-project-structure):
+Per [../../.claude/rules/backend_coding.md §1](../../.claude/rules/backend_coding.md#1-project-structure), the `account` hexagon's dependencies point inward only (`adapter` → `application` → `domain`):
 
-- `account/api/` may import `account/service/` + `shared/exception/` + `shared/security/AccountRole`.
-- `account/service/` may import `account/persistence/` + `shared/security/Argon2Hasher` + `shared/security/JwtIssuer` + `shared/exception/`.
-- `account/persistence/` is JPA-only; no JAX-RS, no `shared/security/`.
+- `account/adapter/in/web/` (inbound web adapter) may import the `account/application/port/in/` use cases + `shared/exception/` + `shared/security/AccountRole`. It depends on the inbound ports, not on the application-service classes directly.
+- `account/application/service/` (application services) may import the module's `application/port/out/` outbound ports + `account/domain/` + `shared/security/Argon2Hasher` + `shared/security/JwtIssuer` + `shared/exception/`. It never depends on concrete adapters.
+- `account/adapter/out/persistence/` (outbound persistence adapter) is JPA-only; it implements the outbound port and maps `AccountEntity` ↔ `account/domain` `Account`. No JAX-RS, no `shared/security/`.
+- `account/domain/` is framework-free — no JAX-RS, no Hibernate/Panache, no JPA annotations.
 - No `wallet/` / `fraud/` / `pfm/` / `advisor/` / `dashboard/` imports anywhere — none of those packages exist yet.
 
 No Mermaid diagram is needed: the slice does not cross HTTP ↔ Kafka or backend ↔ frontend boundaries.
@@ -195,11 +196,11 @@ No Mermaid diagram is needed: the slice does not cross HTTP ↔ Kafka or backend
 
 | Concern | Source |
 |---|---|
-| Module layout & feature-based + layered organisation | [../../.claude/rules/backend_coding.md §1](../../.claude/rules/backend_coding.md#1-project-structure) |
-| Resource conventions, path constants, DTO returns | [../../.claude/rules/backend_coding.md §2](../../.claude/rules/backend_coding.md#2-routing--controllers) |
-| Service layer: transaction boundary, RBAC, what must not run on the request thread | [../../.claude/rules/backend_coding.md §3](../../.claude/rules/backend_coding.md#3-service-layer) |
+| Module layout & per-module hexagonal (ports & adapters) organisation | [../../.claude/rules/backend_coding.md §1](../../.claude/rules/backend_coding.md#1-project-structure) |
+| Inbound web adapter conventions, path constants, DTO returns | [../../.claude/rules/backend_coding.md §2](../../.claude/rules/backend_coding.md#2-routing--controllers) |
+| Application service (use case): transaction boundary, RBAC, what must not run on the request thread | [../../.claude/rules/backend_coding.md §3](../../.claude/rules/backend_coding.md#3-service-layer) |
 | Data models: UUID PK, `Instant`, `Currency`, lazy relations | [../../.claude/rules/backend_coding.md §4](../../.claude/rules/backend_coding.md#4-data-models--entities) |
-| Repository style: Panache Repository pattern, `Optional` returns | [../../.claude/rules/backend_coding.md §5](../../.claude/rules/backend_coding.md#5-data-access) |
+| Outbound persistence adapter style: Panache Repository pattern, `Optional` returns | [../../.claude/rules/backend_coding.md §5](../../.claude/rules/backend_coding.md#5-data-access) |
 | DTO naming: `<Action><Noun>Request`, `<Noun>Response`, records | [../../.claude/rules/backend_coding.md §6](../../.claude/rules/backend_coding.md#6-dtos) |
 | Exception envelope + status-code mapping table | [../../.claude/rules/backend_coding.md §8](../../.claude/rules/backend_coding.md#8-exception-handling) |
 | Logging: SLF4J, placeholder syntax, forbidden content | [../../.claude/rules/backend_coding.md §11](../../.claude/rules/backend_coding.md#11-logging) |
@@ -211,7 +212,7 @@ No Mermaid diagram is needed: the slice does not cross HTTP ↔ Kafka or backend
 | Secrets: env-var only, no committed defaults for `JWT_PRIVATE_KEY` | [../../.claude/rules/security.md §1](../../.claude/rules/security.md#1-secrets-and-configuration) |
 | Sensitive data exposure: no `password_hash` in DTOs, no full JWT in logs | [../../.claude/rules/security.md §7](../../.claude/rules/security.md#7-sensitive-data-exposure) |
 | Test contract: JUnit 5 + Mockito, Testcontainers Postgres 16, naming, exception assertions | [../../.claude/rules/testing.md §2](../../.claude/rules/testing.md#2-backend-testing) |
-| Coverage gate: ≥ 80 % service-layer line (NFR4) | [../../.claude/rules/testing.md §1](../../.claude/rules/testing.md#1-coverage-targets), [../../CLAUDE.md](../../CLAUDE.md) Non-Negotiable Invariants |
+| Coverage gate: ≥ 80 % application-service-layer line (NFR4) | [../../.claude/rules/testing.md §1](../../.claude/rules/testing.md#1-coverage-targets), [../../CLAUDE.md](../../CLAUDE.md) Non-Negotiable Invariants |
 | Security tests: unauthenticated, wrong-role, boundary, replay | [../../.claude/rules/security.md §11](../../.claude/rules/security.md#11-testing-security-sensitive-code) |
 | ADR template + status flip procedure | [../decisions/template.md](../decisions/template.md), [../decisions/README.md](../decisions/README.md) |
 | Backend vertical-slice scaffolding | `Skill("backend-create-rest-api")` |
@@ -261,23 +262,39 @@ backend/
     │   │   │   │   └── package-info.java
     │   │   │   └── package-info.java                              # placeholder, may exist
     │   │   ├── account/
-    │   │   │   ├── api/
-    │   │   │   │   ├── AccountResource.java                          # POST /accounts
-    │   │   │   │   ├── AuthResource.java                          # POST /auth/login
-    │   │   │   │   ├── dto/
-    │   │   │   │   │   ├── CreateAccountRequest.java                 # record
-    │   │   │   │   │   ├── CreateAccountResponse.java                # record
-    │   │   │   │   │   ├── LoginRequest.java                      # record
-    │   │   │   │   │   ├── LoginResponse.java                     # record
+    │   │   │   ├── domain/                                        # framework-free model + rules
+    │   │   │   │   ├── Account.java                              # domain model (NO JPA annotations)
+    │   │   │   │   └── package-info.java
+    │   │   │   ├── application/
+    │   │   │   │   ├── port/in/
+    │   │   │   │   │   ├── CreateAccountUseCase.java             # inbound port
+    │   │   │   │   │   ├── LoginUseCase.java                     # inbound port
+    │   │   │   │   │   └── package-info.java
+    │   │   │   │   ├── port/out/
+    │   │   │   │   │   ├── LoadAccountPort.java                  # outbound port (SPI)
+    │   │   │   │   │   ├── SaveAccountPort.java                  # outbound port (SPI)
+    │   │   │   │   │   └── package-info.java
+    │   │   │   │   ├── service/
+    │   │   │   │   │   ├── AccountService.java                   # CreateAccountUseCase impl
+    │   │   │   │   │   ├── AuthService.java                      # LoginUseCase impl
     │   │   │   │   │   └── package-info.java
     │   │   │   │   └── package-info.java
-    │   │   │   ├── service/
-    │   │   │   │   ├── AccountService.java
-    │   │   │   │   ├── AuthService.java
-    │   │   │   │   └── package-info.java
-    │   │   │   ├── persistence/
-    │   │   │   │   ├── AccountEntity.java
-    │   │   │   │   ├── AccountRepository.java
+    │   │   │   ├── adapter/
+    │   │   │   │   ├── in/web/
+    │   │   │   │   │   ├── AccountResource.java                  # POST /accounts
+    │   │   │   │   │   ├── AuthResource.java                     # POST /auth/login
+    │   │   │   │   │   ├── dto/
+    │   │   │   │   │   │   ├── CreateAccountRequest.java         # record
+    │   │   │   │   │   │   ├── CreateAccountResponse.java        # record
+    │   │   │   │   │   │   ├── LoginRequest.java                 # record
+    │   │   │   │   │   │   ├── LoginResponse.java                # record
+    │   │   │   │   │   │   └── package-info.java
+    │   │   │   │   │   └── package-info.java
+    │   │   │   │   ├── out/persistence/
+    │   │   │   │   │   ├── AccountEntity.java
+    │   │   │   │   │   ├── AccountRepository.java
+    │   │   │   │   │   ├── AccountPersistenceAdapter.java        # implements out ports
+    │   │   │   │   │   └── package-info.java
     │   │   │   │   └── package-info.java
     │   │   │   └── package-info.java
     │   │   └── package-info.java
@@ -299,10 +316,10 @@ backend/
         │   │   └── validation/
         │   │       └── CurrencyCodeValidatorTest.java
         │   ├── account/
-        │   │   ├── service/
+        │   │   ├── application/service/
         │   │   │   ├── AccountServiceTest.java                        # JUnit 5 + Mockito (unit)
         │   │   │   └── AuthServiceTest.java
-        │   │   └── api/
+        │   │   └── adapter/in/web/
         │   │       ├── AccountResourceIT.java                         # @QuarkusTest + RestAssured + Testcontainers
         │   │       ├── AuthResourceIT.java
         │   │       └── JwtVerifierIT.java                          # protected /_test/protected
@@ -356,30 +373,41 @@ Files NOT touched in this plan are unchanged from Phase 0.
 | backend | `backend/src/main/java/com/digitalwallet/shared/validation/CurrencyCode.java` | Create | shared |
 | backend | `backend/src/main/java/com/digitalwallet/shared/validation/CurrencyCodeValidator.java` | Create | shared |
 | backend | `backend/src/main/java/com/digitalwallet/shared/validation/package-info.java` | Create | shared |
-| backend | `backend/src/main/java/com/digitalwallet/account/persistence/AccountEntity.java` | Create | persistence |
-| backend | `backend/src/main/java/com/digitalwallet/account/persistence/AccountRepository.java` | Create | persistence |
-| backend | `backend/src/main/java/com/digitalwallet/account/persistence/package-info.java` | Create | persistence |
-| backend | `backend/src/main/java/com/digitalwallet/account/service/AccountService.java` | Create | service |
-| backend | `backend/src/main/java/com/digitalwallet/account/service/AuthService.java` | Create | service |
-| backend | `backend/src/main/java/com/digitalwallet/account/service/package-info.java` | Create | service |
-| backend | `backend/src/main/java/com/digitalwallet/account/api/AccountResource.java` | Create | api |
-| backend | `backend/src/main/java/com/digitalwallet/account/api/AuthResource.java` | Create | api |
-| backend | `backend/src/main/java/com/digitalwallet/account/api/dto/CreateAccountRequest.java` | Create | api |
-| backend | `backend/src/main/java/com/digitalwallet/account/api/dto/CreateAccountResponse.java` | Create | api |
-| backend | `backend/src/main/java/com/digitalwallet/account/api/dto/LoginRequest.java` | Create | api |
-| backend | `backend/src/main/java/com/digitalwallet/account/api/dto/LoginResponse.java` | Create | api |
-| backend | `backend/src/main/java/com/digitalwallet/account/api/dto/package-info.java` | Create | api |
-| backend | `backend/src/main/java/com/digitalwallet/account/api/package-info.java` | Create | api |
+| backend | `backend/src/main/java/com/digitalwallet/account/domain/Account.java` | Create | domain |
+| backend | `backend/src/main/java/com/digitalwallet/account/domain/package-info.java` | Create | domain |
+| backend | `backend/src/main/java/com/digitalwallet/account/application/port/in/CreateAccountUseCase.java` | Create | application (port/in) |
+| backend | `backend/src/main/java/com/digitalwallet/account/application/port/in/LoginUseCase.java` | Create | application (port/in) |
+| backend | `backend/src/main/java/com/digitalwallet/account/application/port/in/package-info.java` | Create | application (port/in) |
+| backend | `backend/src/main/java/com/digitalwallet/account/application/port/out/LoadAccountPort.java` | Create | application (port/out) |
+| backend | `backend/src/main/java/com/digitalwallet/account/application/port/out/SaveAccountPort.java` | Create | application (port/out) |
+| backend | `backend/src/main/java/com/digitalwallet/account/application/port/out/package-info.java` | Create | application (port/out) |
+| backend | `backend/src/main/java/com/digitalwallet/account/adapter/out/persistence/AccountEntity.java` | Create | adapter (out/persistence) |
+| backend | `backend/src/main/java/com/digitalwallet/account/adapter/out/persistence/AccountRepository.java` | Create | adapter (out/persistence) |
+| backend | `backend/src/main/java/com/digitalwallet/account/adapter/out/persistence/AccountPersistenceAdapter.java` | Create | adapter (out/persistence) |
+| backend | `backend/src/main/java/com/digitalwallet/account/adapter/out/persistence/package-info.java` | Create | adapter (out/persistence) |
+| backend | `backend/src/main/java/com/digitalwallet/account/application/service/AccountService.java` | Create | application (service) |
+| backend | `backend/src/main/java/com/digitalwallet/account/application/service/AuthService.java` | Create | application (service) |
+| backend | `backend/src/main/java/com/digitalwallet/account/application/service/package-info.java` | Create | application (service) |
+| backend | `backend/src/main/java/com/digitalwallet/account/application/package-info.java` | Create | application |
+| backend | `backend/src/main/java/com/digitalwallet/account/adapter/in/web/AccountResource.java` | Create | adapter (in/web) |
+| backend | `backend/src/main/java/com/digitalwallet/account/adapter/in/web/AuthResource.java` | Create | adapter (in/web) |
+| backend | `backend/src/main/java/com/digitalwallet/account/adapter/in/web/dto/CreateAccountRequest.java` | Create | adapter (in/web) |
+| backend | `backend/src/main/java/com/digitalwallet/account/adapter/in/web/dto/CreateAccountResponse.java` | Create | adapter (in/web) |
+| backend | `backend/src/main/java/com/digitalwallet/account/adapter/in/web/dto/LoginRequest.java` | Create | adapter (in/web) |
+| backend | `backend/src/main/java/com/digitalwallet/account/adapter/in/web/dto/LoginResponse.java` | Create | adapter (in/web) |
+| backend | `backend/src/main/java/com/digitalwallet/account/adapter/in/web/dto/package-info.java` | Create | adapter (in/web) |
+| backend | `backend/src/main/java/com/digitalwallet/account/adapter/in/web/package-info.java` | Create | adapter (in/web) |
+| backend | `backend/src/main/java/com/digitalwallet/account/adapter/package-info.java` | Create | adapter |
 | backend | `backend/src/main/java/com/digitalwallet/account/package-info.java` | Create | shared |
 | backend tests | `backend/src/test/java/com/digitalwallet/shared/exception/DomainExceptionMapperTest.java` | Create | shared |
 | backend tests | `backend/src/test/java/com/digitalwallet/shared/security/Argon2HasherTest.java` | Create | shared |
 | backend tests | `backend/src/test/java/com/digitalwallet/shared/security/JwtIssuerTest.java` | Create | shared |
 | backend tests | `backend/src/test/java/com/digitalwallet/shared/validation/CurrencyCodeValidatorTest.java` | Create | shared |
-| backend tests | `backend/src/test/java/com/digitalwallet/account/service/AccountServiceTest.java` | Create | service |
-| backend tests | `backend/src/test/java/com/digitalwallet/account/service/AuthServiceTest.java` | Create | service |
-| backend tests | `backend/src/test/java/com/digitalwallet/account/api/AccountResourceIT.java` | Create | api |
-| backend tests | `backend/src/test/java/com/digitalwallet/account/api/AuthResourceIT.java` | Create | api |
-| backend tests | `backend/src/test/java/com/digitalwallet/account/api/JwtVerifierIT.java` | Create | api |
+| backend tests | `backend/src/test/java/com/digitalwallet/account/application/service/AccountServiceTest.java` | Create | application (service) |
+| backend tests | `backend/src/test/java/com/digitalwallet/account/application/service/AuthServiceTest.java` | Create | application (service) |
+| backend tests | `backend/src/test/java/com/digitalwallet/account/adapter/in/web/AccountResourceIT.java` | Create | adapter (in/web) |
+| backend tests | `backend/src/test/java/com/digitalwallet/account/adapter/in/web/AuthResourceIT.java` | Create | adapter (in/web) |
+| backend tests | `backend/src/test/java/com/digitalwallet/account/adapter/in/web/JwtVerifierIT.java` | Create | adapter (in/web) |
 | backend tests | `backend/src/test/java/com/digitalwallet/testsupport/PostgresTestResource.java` | Create | shared |
 | backend tests | `backend/src/test/java/com/digitalwallet/testsupport/TestProtectedResource.java` | Create | shared |
 | backend tests | `backend/src/test/resources/application.properties` | Create | shared |
@@ -407,13 +435,13 @@ Phases are dependency-ordered. Each step ends in a runnable green state.
 
 - [ ] **Step 5 — `shared/validation/`.** Write `@CurrencyCode` annotation + `CurrencyCodeValidator` (rejects null, empty, length ≠ 3, code not in `java.util.Currency.getAvailableCurrencies()`). Unit-test boundary cases (lowercase / mixed-case input rejected — ISO 4217 requires uppercase per [../../docs/api/README.md §Conventions](../api/README.md)). — `@backend-developer`, `Skill("backend-create-unit-test")`
 
-- [ ] **Step 6 — `account/persistence/`.** Write `AccountEntity` mapped to `account` via `@Table(name = "account")` (a plain identifier — no quoting needed), `AccountRepository extends PanacheRepositoryBase<AccountEntity, UUID>` with `Optional<AccountEntity> findByEmailLower(String)` using a named JPQL query that calls `LOWER(:email)`. No unit test (Panache repositories are integration-tested per [../../.claude/rules/testing.md §2.2](../../.claude/rules/testing.md#22-mocking-decision-matrix)). — `@backend-developer`
+- [ ] **Step 6 — `account/adapter/out/persistence/` (outbound persistence adapter).** Write `AccountEntity` mapped to `account` via `@Table(name = "account")` (a plain identifier — no quoting needed), `AccountRepository extends PanacheRepositoryBase<AccountEntity, UUID>` with `Optional<AccountEntity> findByEmailLower(String)` using a named JPQL query that calls `LOWER(:email)`, and `AccountPersistenceAdapter` implementing the module's `application/port/out` (`LoadAccountPort` / `SaveAccountPort`) and mapping `AccountEntity` ↔ `account/domain` `Account`. No unit test (Panache repositories are integration-tested per [../../.claude/rules/testing.md §2.2](../../.claude/rules/testing.md#22-mocking-decision-matrix)). — `@backend-developer`
 
-- [ ] **Step 7 — `account/service/AccountService`.** `@Transactional` `signup(CreateAccountRequest)` performing the flow in §5 above. Constructor injection only. Inject `Clock` (per [../../.claude/rules/upgrade-policy.md §3](../../.claude/rules/upgrade-policy.md#3-backend-upgrade-guardrails-for-new-code)) for `created_at`. Throw `ConflictException("account.email_taken", ...)` on duplicate. Unit-test happy path + duplicate email + invalid currency (the last bubbles up from `@Valid` before the service is reached, so the service-level test asserts the service trusts upstream validation). — `@backend-developer`, `Skill("backend-create-unit-test")`
+- [ ] **Step 7 — `account/application/service/AccountService` (application service, `CreateAccountUseCase` impl).** `@Transactional` `signup(CreateAccountRequest)` performing the flow in §5 above. Constructor injection only; depends on the `application/port/out` outbound ports, never on the concrete adapter. Inject `Clock` (per [../../.claude/rules/upgrade-policy.md §3](../../.claude/rules/upgrade-policy.md#3-backend-upgrade-guardrails-for-new-code)) for `created_at`. Throw `ConflictException("account.email_taken", ...)` on duplicate. Unit-test happy path + duplicate email + invalid currency (the last bubbles up from `@Valid` before the application service is reached, so the service-level test asserts the service trusts upstream validation). — `@backend-developer`, `Skill("backend-create-unit-test")`
 
-- [ ] **Step 8 — `account/service/AuthService`.** `login(LoginRequest)` performing the constant-time flow in §5 above. The sentinel hash is a `private static final String` computed in a `@Startup` method (so it is generated once with the active Argon2id parameters). Throw `AuthInvalidCredentialsException` on both branches with the **same** message. Unit-test: happy path, wrong password, unknown email, both negative branches return identical exception, total wall-clock for the two negative branches differs by ≤ 5 ms (a soft timing assertion — see Risks). — `@backend-developer`, `Skill("backend-create-unit-test")`
+- [ ] **Step 8 — `account/application/service/AuthService` (application service, `LoginUseCase` impl).** `login(LoginRequest)` performing the constant-time flow in §5 above. The sentinel hash is a `private static final String` computed in a `@Startup` method (so it is generated once with the active Argon2id parameters). Throw `AuthInvalidCredentialsException` on both branches with the **same** message. Unit-test: happy path, wrong password, unknown email, both negative branches return identical exception, total wall-clock for the two negative branches differs by ≤ 5 ms (a soft timing assertion — see Risks). — `@backend-developer`, `Skill("backend-create-unit-test")`
 
-- [ ] **Step 9 — `account/api/AccountResource` + `account/api/AuthResource`.** Path constants per [../../.claude/rules/backend_coding.md §2](../../.claude/rules/backend_coding.md#2-routing--controllers). `AccountResource.signup` returns `Response.status(201).entity(...)`; `AuthResource.login` returns `Response.ok(...)`. DTO records. Both endpoints are public — no `@RolesAllowed`, no `@PermitAll` (the latter is the Quarkus default for unauthenticated paths; the rest of the resources will need `@RolesAllowed` from Phase 2 onwards). — `@backend-developer`, `Skill("backend-create-rest-api")`
+- [ ] **Step 9 — `account/adapter/in/web/AccountResource` + `account/adapter/in/web/AuthResource` (inbound web adapter).** The resources depend on the `application/port/in` use cases (`CreateAccountUseCase` / `LoginUseCase`). Path constants per [../../.claude/rules/backend_coding.md §2](../../.claude/rules/backend_coding.md#2-routing--controllers). `AccountResource.signup` returns `Response.status(201).entity(...)`; `AuthResource.login` returns `Response.ok(...)`. DTO records. Both endpoints are public — no `@RolesAllowed`, no `@PermitAll` (the latter is the Quarkus default for unauthenticated paths; the rest of the inbound web adapters will need `@RolesAllowed` from Phase 2 onwards). — `@backend-developer`, `Skill("backend-create-rest-api")`
 
 - [ ] **Step 10 — `application.properties` rewire.** Add `quarkus.flyway.migrate-at-start=true` (dev/test/prod). Set `quarkus.smallrye-jwt.enabled=true` (flip from Phase 0). Set `mp.jwt.verify.publickey.location=META-INF/jwt-public-key-dev.pem`, `mp.jwt.verify.issuer=digitalwallet`, `mp.jwt.verify.audiences=digitalwallet-api`, `smallrye.jwt.expiration.grace=30`, `smallrye.jwt.require.named-principal=true`. Add the `app.jwt.*` block — `app.jwt.issuer=digitalwallet`, `app.jwt.audience=digitalwallet-api`, `app.jwt.ttl-seconds=3600`, `app.jwt.private-key=${JWT_PRIVATE_KEY:}` (empty default — fail-fast at startup if requested in `prod`). Set logger redactions for `password_hash` / `Authorization` / `Idempotency-Key` (Quarkus `%logger` filter — see [../../.claude/rules/backend_coding.md §11](../../.claude/rules/backend_coding.md#11-logging)). — `@backend-developer`
 
@@ -423,7 +451,7 @@ Phases are dependency-ordered. Each step ends in a runnable green state.
 
 - [ ] **Step 13 — Documentation.** Flip [docs/decisions/0001-jwt-signing-algorithm.md](../decisions/0001-jwt-signing-algorithm.md) **Proposed → Accepted** with decision text covering Open Q #10 of the master plan + Open Q #2–#5 of this plan. Update [CLAUDE.md](../../CLAUDE.md) "Project Status" line to record that Phase 1 ships, the JWT verifier is enabled, and ADR 0001 is Accepted. Tick Phase 1's **Plan** checkbox in [implementation-plan-mvp-master.md §9](implementation-plan-mvp-master.md#epic-1-backend-fr11--fr14). — `@backend-developer`
 
-- [ ] **Step 14 — Local verify + push.** `./mvnw -B verify` from `backend/`; confirm JaCoCo ≥ 80 % on `com/digitalwallet/*/service/**`; confirm Flyway logs `V1` applied; confirm `target/site/jacoco/jacoco.xml` includes the new service classes. Push; one-job CI (backend) must be green. — `@backend-developer`, `Skill("backend-verify")`
+- [ ] **Step 14 — Local verify + push.** `./mvnw -B verify` from `backend/`; confirm JaCoCo ≥ 80 % on the application-service layer (`com/digitalwallet/*/application/service/**`; the `pom.xml` include pattern still reads `*/service/**` until the Java code restructure moves it in a separate step); confirm Flyway logs `V1` applied; confirm `target/site/jacoco/jacoco.xml` includes the new application-service classes. Push; one-job CI (backend) must be green. — `@backend-developer`, `Skill("backend-verify")`
 
 - [ ] **Step 15 — `Skill("code-review")` against the diff.** Run the checklist in [../../.claude/rules/security.md §12](../../.claude/rules/security.md#12-code-review-checklist--critical); address any findings before merge. — orchestrator, `Skill("code-review")`
 
@@ -447,7 +475,7 @@ Every box must be true on the merged commit.
 - [ ] `password_hash` is a self-describing Argon2id string starting with `$argon2id$v=19$m=65536,t=3,p=1$`.
 - [ ] No response DTO returns `password_hash`, `fraud_status`, `role`, or `email` (signup response is `{ account_id, created_at }` only; login response is `{ access_token, token_type, expires_in }` only).
 - [ ] `quarkus.smallrye-jwt.enabled=true` is set in `application.properties` (no longer disabled from Phase 0).
-- [ ] JaCoCo line coverage on `com/digitalwallet/*/service/**` ≥ 80 % (NFR4); CI fails below the threshold.
+- [ ] JaCoCo line coverage on the application-service layer (`com/digitalwallet/*/application/service/**`; the `pom.xml` include pattern still reads `*/service/**` until the Java code restructure moves it in a separate step) ≥ 80 % (NFR4); CI fails below the threshold.
 - [ ] [docs/decisions/0001-jwt-signing-algorithm.md](../decisions/0001-jwt-signing-algorithm.md) Status field reads `Accepted`, the date matches the merge date, and the Decision section names ES256 + the operational specifics (public-key location, env-var private-key, 30 s skew, 3600 s TTL, `iss`/`aud` values).
 - [ ] [CLAUDE.md](../../CLAUDE.md) "Project Status" mentions Phase 1 complete + JWT verifier enabled + ADR 0001 Accepted.
 - [ ] Phase 1 row in [implementation-plan-mvp-master.md §9](implementation-plan-mvp-master.md#epic-1-backend-fr11--fr14) has its "Plan" checkbox ticked (the "Build" checkbox is ticked by `/implement-plan` when this phase merges).
@@ -462,8 +490,8 @@ Mapped against every applicable section of [../../.claude/rules/security.md](../
 
 - **§1 secrets and configuration.** `JWT_PRIVATE_KEY` is the only new secret; resolved exclusively from the env var. `backend/.env.example` adds the variable name with an empty value. The dev public key under `src/main/resources/META-INF/jwt-public-key-dev.pem` is **not** secret (verification key). The test private key under `src/test/resources/META-INF/` is committed because it never authenticates a real user. No `console.log` / `System.out.println` in production code. `gitleaks` runs on every commit.
 - **§2 authentication.** ES256, `alg=none` and HS256 explicitly rejected (Quarkus `smallrye.jwt.verify.algorithm=ES256`). 30-second clock skew (`smallrye.jwt.expiration.grace=30`). Argon2id with the parameters in Open Q #1. Enumeration-resistant login: identical envelope and constant-time path on both negative branches (`AuthService.login` runs Argon2id verify against a sentinel hash when the user is missing). Recovery flow is deferred. ADR 0001 Accepted. WS upgrade JWT validation deferred MVP-wide.
-- **§3 authorization.** Signup and login are the two public endpoints permitted by the §3 default-deny rule. No protected endpoints land in this phase; from Phase 2 onwards every endpoint will need `@RolesAllowed`. The `AccountRole` enum ships now so Phase 2 can use it directly. No role escalation path (signup hard-codes `role = USER`).
-- **§4 input validation & injection.** `@Valid` on `CreateAccountRequest` and `LoginRequest` (Bean Validation + `@Email` + `@Size` + `@CurrencyCode`). `AccountRepository.findByEmailLower` uses a named JPQL parameter (no concatenation). No sort / filter parameters (no list endpoint in Phase 1). No `dangerouslySetInnerHTML` (no frontend).
+- **§3 authorization.** Signup and login are the two public endpoints permitted by the §3 default-deny rule. No protected endpoints land in this phase; from Phase 2 onwards every inbound web adapter will need `@RolesAllowed` (and the application service re-checks RBAC). The `AccountRole` enum ships now so Phase 2 can use it directly. No role escalation path (signup hard-codes `role = USER`).
+- **§4 input validation & injection.** `@Valid` on `CreateAccountRequest` and `LoginRequest` (Bean Validation + `@Email` + `@Size` + `@CurrencyCode`). `AccountRepository.findByEmailLower` uses a named JPQL parameter (no concatenation). No sort / filter parameters (no list endpoint in Phase 1). No `v-html` on user input (no frontend).
 - **§5 transport & CORS.** No CORS allow-list / security headers in Phase 1 — see Open Q #6 (deferred to F1). MVP HTTPS termination is at the nginx tier in Phase F1 / Phase 3 docker-compose.
 - **§6 sessions & token handling (frontend).** N/A — no frontend.
 - **§7 sensitive data exposure.** `CreateAccountResponse` returns `{ account_id, created_at }` only; `LoginResponse` returns `{ access_token, token_type, expires_in }` only. `AccountResource` and `AuthResource` never log the email, password, or hash. Logger configuration in `application.properties` adds a deny-list pattern for `password_hash`, `Authorization`, `Idempotency-Key`. The full JWT is never logged; if a debug log of a token is needed, only the first 8 characters and a salted hash are permitted ([../../.claude/rules/backend_coding.md §11](../../.claude/rules/backend_coding.md#11-logging)).
@@ -490,7 +518,7 @@ Mapped against every applicable section of [../../.claude/rules/security.md](../
   - [ ] JPQL uses bound parameters (`findByEmailLower`).
   - [ ] No response DTO leaks `password_hash`, JWT secrets, internal counters, or stack traces.
   - [ ] Every error path returns a typed `error_key` from the table in [../../.claude/rules/backend_coding.md §8](../../.claude/rules/backend_coding.md#8-exception-handling).
-  - [ ] N/A — no `dangerouslySetInnerHTML`.
+  - [ ] N/A — no `v-html` on user input.
   - [ ] N/A — no `VITE_*` env variable.
   - [ ] N/A — no LLM prompt.
   - [ ] N/A — `audit_log` deferred.
@@ -514,7 +542,7 @@ Per [../../.claude/rules/testing.md](../../.claude/rules/testing.md).
 - **`AccountServiceTest`** — happy signup; duplicate email throws `ConflictException("account.email_taken")`; password is Argon2id-hashed (assert on the prefix); `created_at` uses the injected `Clock`; the repository is called with `findByEmailLower(emailLower)` (case-insensitive lookup).
 - **`AuthServiceTest`** — happy login returns a non-empty token; wrong password throws `AuthInvalidCredentialsException` with the fixed message; unknown email throws `AuthInvalidCredentialsException` with the **same** fixed message; the sentinel verify is invoked in the unknown-email path (asserted via spy); the elapsed-time difference between the two negative branches is `≤ 5 ms` on the test runner (asserted with a generous bound — see Risks).
 
-Coverage scope: `AccountService` + `AuthService` + `Argon2Hasher` (in `shared/`, but reachable via the same JaCoCo pattern `com/digitalwallet/*/service/**` only if we ship `shared/security/Argon2Hasher` — note the JaCoCo include pattern matches `com/digitalwallet/<module>/service/**` and `shared/security/` is **not** under a `service/` sub-package. This is intentional: NFR4's 80 % floor is the feature-module service layer, not shared helpers. JaCoCo will still measure `shared/security/` and report it, but it does not count toward the gate. `AccountService` and `AuthService` between them are the only two service-layer classes in Phase 1; both must clear ≥ 80 %).
+Coverage scope: `AccountService` + `AuthService` + `Argon2Hasher` (in `shared/`, but reachable via the same JaCoCo pattern `com/digitalwallet/*/application/service/**` only if we ship `shared/security/Argon2Hasher` — note the JaCoCo include pattern matches `com/digitalwallet/<module>/application/service/**` and `shared/security/` is **not** under an `application/service/` sub-package. The `pom.xml` include pattern moves from `*/service/**` to `*/application/service/**` with the Java code restructure in a separate step; until then it still reads `*/service/**`. This is intentional: NFR4's 80 % floor is the feature-module application-service layer (the use-case implementations), not shared helpers. JaCoCo will still measure `shared/security/` and report it, but it does not count toward the gate. `AccountService` and `AuthService` between them are the only two application-service classes in Phase 1; both must clear ≥ 80 %).
 
 ### Integration tests (`@QuarkusTest` + Testcontainers Postgres 16 + RestAssured)
 
@@ -535,11 +563,11 @@ Per [../../.claude/rules/testing.md §2.4](../../.claude/rules/testing.md#24-tes
 
 ### Coverage floor
 
-≥ 80 % line coverage on `com/digitalwallet/*/service/**` enforced by JaCoCo. Phase 1 introduces the first two service classes; both must individually clear 80 % or the cumulative bundle ≥ 80 %.
+≥ 80 % line coverage on the application-service layer (`com/digitalwallet/*/application/service/**`; the `pom.xml` include pattern still reads `*/service/**` until the Java code restructure moves it in a separate step) enforced by JaCoCo. Phase 1 introduces the first two application-service classes; both must individually clear 80 % or the cumulative bundle ≥ 80 %.
 
 ### Frontend tests
 
-N/A this phase. Phase F2 owns the auth UI + Vitest specs.
+N/A this phase. Phase F2 owns the Vue 3 auth UI (signup / login via Pinia + TanStack Query/Vue Query + VeeValidate + Zod + Vue Router) + the Vitest + `@testing-library/vue` specs.
 
 ## 13. Reference Files
 

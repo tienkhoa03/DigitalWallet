@@ -167,12 +167,12 @@ curl -s -X POST localhost:8080/auth/login -H 'Content-Type: application/json' \
       <li>BigDecimal/numeric(19,4), FX snapshot</li>
     </ul></div>
     <div class="card"><h4>Frontend / Chất lượng</h4><ul>
-      <li>React 18 + TS strict + Redux Toolkit/RTK Query</li>
-      <li>React Hook Form + Zod mirror validation backend</li>
+      <li>Vue 3 + TS strict + Pinia + TanStack Query (Vue Query)</li>
+      <li>VeeValidate + Zod mirror validation backend</li>
       <li>Tiền là decimal string — không mất độ chính xác</li>
       <li>Route guard, error boundary, XSS-safe</li>
-      <li>baseQuery: inject JWT + 401→logout + map error</li>
-      <li>Vitest/RTL + Playwright golden path</li>
+      <li>Shared HTTP client: inject JWT + 401→logout + map error</li>
+      <li>Vitest/@testing-library/vue + Playwright golden path</li>
     </ul></div>
   </div>
 
@@ -186,7 +186,7 @@ curl -s -X POST localhost:8080/auth/login -H 'Content-Type: application/json' \
     <tr><td><code>project-info.md</code></td><td>Toàn bộ FR/NFR, glossary, gaps</td><td>Tra định nghĩa</td></tr>
     <tr><td><code>CLAUDE.md</code></td><td>Bất biến + kiến trúc</td><td>Đọc kỹ 1 lần</td></tr>
     <tr><td><code>.claude/rules/{backend,frontend,security,testing,upgrade-policy}.md</code></td><td>Hợp đồng code — <code>code-review</code> soi theo đây</td><td>Tra khi viết từng loại code</td></tr>
-    <tr><td><code>docs/api/README.md</code></td><td>Catalog endpoint + error envelope</td><td>Trước khi viết resource / RTK Query</td></tr>
+    <tr><td><code>docs/api/README.md</code></td><td>Catalog endpoint + error envelope</td><td>Trước khi viết resource / Vue Query</td></tr>
     <tr><td><code>docs/database/README.md</code></td><td>Schema, naming, cột PII</td><td>Trước khi viết entity / migration</td></tr>
     <tr><td><code>docs/business-rules/core-wallet-management-rules.md</code></td><td>Luật nghiệp vụ Epic 1 (FR1.1–1.4)</td><td>Trước mỗi slice wallet</td></tr>
     <tr><td><code>docs/decisions/*.md</code> (ADR)</td><td>Lý do chọn (JWT, concurrency, multi-currency…)</td><td>Khi muốn hiểu "vì sao"</td></tr>
@@ -238,21 +238,22 @@ curl -s -X POST localhost:8080/auth/login -H 'Content-Type: application/json' \
   </div>
   <div class="callout why"><div class="t">💡 Vì sao tách 2 luồng + Outbox?</div>Nếu HTTP handler tự gọi Kafka → "dual write": DB commit OK nhưng publish fail = lệch dữ liệu. <strong>Transactional Outbox</strong>: ghi event vào <em>cùng transaction DB</em> với ledger; poller riêng mới publish. Request trả nhanh (NFR5) + không mất event (NFR2). Consumer phải <em>idempotent</em> (at-least-once). Pattern kinh điển event-driven.</div>
 
-  <h3>Cấu trúc module (feature-based + layered)</h3>
+  <h3>Cấu trúc module (per-module hexagonal — ports &amp; adapters)</h3>
   <pre><code>backend/src/main/java/com/digitalwallet/
 ├── shared/        # money, idempotency, outbox, lock, ratelimit, security, exception, validation
-├── user/          # FR1.1 — signup, login, role, base_currency
-│   ├── api/       #   JAX-RS resource + dto/ (record)
-│   ├── service/   #   @Transactional + RBAC + business logic
-│   └── persistence/ # @Entity + PanacheRepositoryBase
+├── account/       # FR1.1 — signup, login, role, base_currency (1 hexagon)
+│   ├── domain/        #   model thuần (KHÔNG annotation JPA) + rule nghiệp vụ
+│   ├── application/   #   port/in (use case) · port/out (SPI) · service (use-case impl, @Transactional + RBAC)
+│   └── adapter/       #   in/web (JAX-RS resource + dto record) · out/persistence (Entity + PanacheRepository)
 └── wallet/        # FR1.2–1.4 — open, deposit, withdraw, transfer, statement
-    └── api/ service/ persistence/ event/</code></pre>
-  <div class="callout warn"><div class="t">⚠️ Luật import cross-module (bị code-review chặn)</div>
+    └── domain/ application/ adapter/   # in/web · in/messaging · out/persistence · out/messaging</code></pre>
+  <div class="callout warn"><div class="t">⚠️ Luật phụ thuộc &amp; import (bị code-review chặn)</div>
     <ul style="margin:4px 0">
-      <li><code>api/</code> của module A KHÔNG import <code>service/</code>/<code>persistence/</code> module B.</li>
-      <li><code>persistence/</code> của A không bị import từ <code>api/</code>/<code>service/</code> của B.</li>
-      <li><code>pfm/</code> KHÔNG có repository trên <code>transaction</code>/<code>wallet</code>/<code>outbox_event</code> (NFR6).</li>
-      <li>Giao tiếp cross-module: qua Kafka topic hoặc interface trong <code>shared/</code>.</li>
+      <li>Dependency chỉ hướng <strong>vào trong</strong>: <code>adapter</code> → <code>application</code> → <code>domain</code>; framework chỉ nằm trong <code>adapter/</code>. <code>domain/</code> + <code>application/</code> không có annotation JPA/JAX-RS.</li>
+      <li><code>adapter/</code> của module A KHÔNG import <code>domain/</code>/<code>application/</code>/<code>adapter/</code> của module B.</li>
+      <li>Application service phụ thuộc <strong>outbound port</strong> (<code>application/port/out</code>), không phụ thuộc adapter cụ thể.</li>
+      <li><code>pfm/</code> KHÔNG có outbound persistence adapter trên <code>transaction</code>/<code>wallet</code>/<code>outbox_event</code> (NFR6).</li>
+      <li>Giao tiếp cross-module: qua Kafka topic hoặc port trong <code>shared/</code>.</li>
     </ul>
   </div>
 
@@ -622,15 +623,15 @@ cd backend &amp;&amp; ./mvnw -B verify &amp;&amp; /code-review</code></pre>
     <summary>Phase F1 · Bootstrap + shared <span class="chip green">Cần làm</span></summary>
     <div class="body">
       <h4>Bạn xây gì</h4>
-      <p>Tạo <code>frontend/</code>: Vite 5 + React 18 + TS strict + Tailwind 3 + Redux Toolkit/RTK Query + RHF + Zod + Vitest + RTL + Playwright + pnpm. Dockerfile, docker-compose (join <code>dw-net</code>), nginx (<code>/api</code> proxy + WS upgrade). Provider stack <code>app/</code>; <code>routes/</code> với <code>&lt;RequireAuth&gt;</code>/<code>&lt;RequireRole&gt;</code>; <code>&lt;ErrorBoundary&gt;</code>; error reporter; <code>shared/money/format.ts</code>; <code>shared/idempotency/uuidv7.ts</code>; <code>shared/config.ts</code>; RTK Query <code>baseQuery</code> (inject JWT + 401→logout+redirect + map <code>{error_key,message}</code>→<code>ApiError</code>).</p>
+      <p>Tạo <code>frontend/</code>: Vite 5 + Vue 3 + TS strict + Tailwind 3 + Pinia + TanStack Query (Vue Query) + VeeValidate + Zod + Vitest + @testing-library/vue + Playwright + pnpm. Dockerfile, docker-compose (join <code>dw-net</code>), nginx (<code>/api</code> proxy + WS upgrade). Provider stack <code>app/</code> (Pinia + Vue Query plugin); <code>routes/</code> với <code>&lt;RequireAuth&gt;</code>/<code>&lt;RequireRole&gt;</code>; <code>&lt;ErrorBoundary&gt;</code>; error reporter; <code>shared/money/format.ts</code>; <code>shared/idempotency/uuidv7.ts</code>; <code>shared/config.ts</code>; shared HTTP client <code>shared/api/http.ts</code> (inject JWT + 401→logout+redirect + map <code>{error_key,message}</code>→<code>ApiError</code>).</p>
       <h4>💡 Kiến thức</h4>
       <ul>
-        <li><strong>baseQuery tập trung:</strong> chỗ <em>duy nhất</em> gắn token, xử lý 401, chuẩn hoá lỗi — không lặp ở từng call.</li>
-        <li><strong>JWT in-memory (Redux):</strong> localStorage chỉ giữ cờ "remembered" (opaque), KHÔNG giữ token — chống XSS đọc token.</li>
+        <li><strong>HTTP client tập trung:</strong> chỗ <em>duy nhất</em> gắn token, xử lý 401, chuẩn hoá lỗi — không lặp ở từng call.</li>
+        <li><strong>JWT in-memory (Pinia):</strong> localStorage chỉ giữ cờ "remembered" (opaque), KHÔNG giữ token — chống XSS đọc token.</li>
         <li><strong>Money là decimal string:</strong> <code>Intl.NumberFormat</code> trên chuỗi; KHÔNG parse sang JS <code>number</code> (mất độ chính xác numeric(19,4)).</li>
         <li><strong>TS strict + noUncheckedIndexedAccess:</strong> cấm tắt flag; sửa type chứ không né.</li>
       </ul>
-      <div class="callout trap"><div class="t">🟣 Cạm bẫy</div>Hand-roll <code>fetch</code> trong component (bỏ qua cache/retry/error của RTK Query). Đọc <code>import.meta.env</code> trực tiếp trong component (phải qua <code>shared/config.ts</code>). Prefix secret bằng <code>VITE_</code> (mọi <code>VITE_*</code> là public!).</div>
+      <div class="callout trap"><div class="t">🟣 Cạm bẫy</div>Hand-roll <code>fetch</code> trong component (bỏ qua cache/retry/error của Vue Query). Đọc <code>import.meta.env</code> trực tiếp trong component (phải qua <code>shared/config.ts</code>). Prefix secret bằng <code>VITE_</code> (mọi <code>VITE_*</code> là public!).</div>
       <h4>Lệnh</h4><pre><code>/make-plan phase-f1-frontend-bootstrap
 /implement-plan docs/plans/implementation-plan-phase-f1-*.md
 cd frontend &amp;&amp; pnpm install &amp;&amp; pnpm dev
@@ -643,11 +644,11 @@ cd frontend &amp;&amp; pnpm install &amp;&amp; pnpm dev
     <summary>Phase F2 · Auth UI (signup + login) <span class="chip green">Cần làm</span></summary>
     <div class="body">
       <h4>Bạn xây gì</h4>
-      <p><code>features/auth/auth.api.ts</code> (RTK Query: POST /users, /auth/login), <code>auth.slice.ts</code> (JWT in-memory), <code>&lt;LoginPage&gt;</code>, <code>&lt;SignupPage&gt;</code> với Zod schema mirror backend: email valid, password min 12, <code>base_currency</code> ISO 4217 (3 chữ, immutable). Route public <code>/login</code>, <code>/signup</code>.</p>
+      <p><code>features/auth/auth.api.ts</code> (Vue Query: POST /users, /auth/login), <code>auth.store.ts</code> (Pinia, JWT in-memory), <code>&lt;LoginPage&gt;</code>, <code>&lt;SignupPage&gt;</code> với Zod schema mirror backend: email valid, password min 12, <code>base_currency</code> ISO 4217 (3 chữ, immutable). Route public <code>/login</code>, <code>/signup</code>.</p>
       <h4>💡 Kiến thức</h4>
       <ul><li><strong>Zod đồng bộ validation:</strong> schema FE phản chiếu rule BE — nhưng BE vẫn là lớp xác thực thật (FE chỉ là UX courtesy).</li>
-      <li><strong>RTK Query mutation</strong> tự cấp <code>isLoading</code>/<code>error</code>; component phải render loading rõ ràng.</li></ul>
-      <div class="callout trap"><div class="t">🟣 Cạm bẫy</div>Lưu form field vào Redux (re-render storm, mất focus) — dùng React Hook Form, chỉ promote lên Redux khi submit. Bắt mọi lỗi thành 1 toast generic — phải branch theo <code>error_key</code>.</div>
+      <li><strong>Vue Query mutation</strong> tự cấp <code>isPending</code>/<code>error</code>; component phải render loading rõ ràng.</li></ul>
+      <div class="callout trap"><div class="t">🟣 Cạm bẫy</div>Lưu form field vào Pinia (re-render storm, mất focus) — dùng VeeValidate, chỉ promote lên Pinia khi submit. Bắt mọi lỗi thành 1 toast generic — phải branch theo <code>error_key</code>.</div>
       <h4>DoD</h4><ul><li>Đăng ký → đăng nhập → JWT in-memory; lỗi hiển thị theo <code>error_key</code>.</li></ul>
     </div>
   </details>
@@ -686,11 +687,11 @@ cd frontend &amp;&amp; pnpm install &amp;&amp; pnpm dev
     <summary>Phase F5 · Smoke + Playwright golden path <span class="chip green">Cần làm</span></summary>
     <div class="body">
       <h4>Bạn xây gì</h4>
-      <p>Vitest specs từng page (AAA layout, mock ở tầng <code>baseQuery</code> bằng msw, query ưu tiên <code>data-test</code>→<code>getByRole</code>→<code>getByText</code>, assert tiền trên decimal string, <strong>XSS regression</strong>: chuỗi chứa <code>&lt;script&gt;</code> render thành text). 1 Playwright <code>golden-path.spec.ts</code>: signup → login → mở 2 ví → deposit → withdraw → transfer → transfer FX → statement filter.</p>
+      <p>Vitest specs từng page (AAA layout, mock ở tầng shared HTTP client (Vue Query) bằng msw, query ưu tiên <code>data-test</code>→<code>getByRole</code>→<code>getByText</code>, assert tiền trên decimal string, <strong>XSS regression</strong>: chuỗi chứa <code>&lt;script&gt;</code> render thành text). 1 Playwright <code>golden-path.spec.ts</code>: signup → login → mở 2 ví → deposit → withdraw → transfer → transfer FX → statement filter.</p>
       <h4>💡 Kiến thức</h4>
-      <ul><li><strong>XSS regression test:</strong> chứng minh React render user input là text, không execute (default React an toàn; test để chống regression do <code>dangerouslySetInnerHTML</code>).</li>
+      <ul><li><strong>XSS regression test:</strong> chứng minh Vue render user input là text, không execute (text-interpolation <code>{{ }}</code> mặc định an toàn; test để chống regression do <code>v-html</code>).</li>
       <li><strong>E2E golden path:</strong> 1 kịch bản phủ cả epic — bắt lỗi tích hợp mà unit không thấy.</li></ul>
-      <div class="callout trap"><div class="t">🟣 Cạm bẫy</div>Stub global <code>fetch</code> (phải mock ở RTK Query / msw). Dùng <code>setTimeout</code> chờ cứng (phải <code>findBy*</code>/<code>waitFor</code>) → test flaky.</div>
+      <div class="callout trap"><div class="t">🟣 Cạm bẫy</div>Stub global <code>fetch</code> (phải mock ở Vue Query / msw). Dùng <code>setTimeout</code> chờ cứng (phải <code>findBy*</code>/<code>waitFor</code>) → test flaky.</div>
       <h4>DoD</h4><ul><li>Playwright golden path pass; XSS test pass; cập nhật "Project Status" → frontend MVP xong.</li></ul>
     </div>
   </details>
@@ -723,7 +724,7 @@ cd frontend &amp;&amp; pnpm install &amp;&amp; pnpm dev
     <tr><td>BigDecimal / money</td><td>Vì sao không float, scale, RoundingMode, compareTo vs equals</td><td><code>shared/money/</code></td></tr>
     <tr><td>Multi-currency / FX</td><td>Snapshot per-event, không revalue balance, seed 2 chiều</td><td>ADR 0006 + bảng <code>fx_rate</code></td></tr>
     <tr><td>Testcontainers</td><td>Container thật trong test, <code>@QuarkusTestResource</code> lifecycle</td><td><code>testsupport/PostgresTestResource</code></td></tr>
-    <tr><td>RTK Query</td><td>Cache, tag invalidation, baseQuery, transformResponse</td><td><code>features/*/*.api.ts</code></td></tr>
+    <tr><td>Vue Query</td><td>Cache, query invalidation, shared HTTP client, select transform</td><td><code>features/*/*.api.ts</code></td></tr>
   </table>
 
   <!-- ============ 8 GIT ============ -->

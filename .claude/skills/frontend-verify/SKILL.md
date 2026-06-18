@@ -36,6 +36,7 @@ Run in order. Stop on the first failure and capture the tail of stderr/stdout fo
 | Step | Command | Source |
 |---|---|---|
 | Lint | `pnpm --dir frontend lint` | [testing.md §4.2](../../rules/testing.md) |
+| Type-check | `pnpm --dir frontend exec vue-tsc --noEmit` | [upgrade-policy.md §4](../../rules/upgrade-policy.md) (TS strict via `vue-tsc`) |
 | Build | `pnpm --dir frontend build` | [testing.md §4.1](../../rules/testing.md) (compile floor) |
 | Tests | `pnpm --dir frontend test -- --run` (Vitest non-watch) | [testing.md §4.1](../../rules/testing.md), [testing.md §4.2](../../rules/testing.md) |
 

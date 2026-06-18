@@ -3,15 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ngày 5 — VueJS + Terraform · Hướng dẫn chi tiết</title>
+<title>Ngày 4 — VueJS + Terraform · Hướng dẫn chi tiết</title>
 <link rel="stylesheet" href="assets/guide.css">
 </head>
 <body>
 
 <header class="gh">
   <div class="wrap">
-    <div class="breadcrumb"><a href="5-day-tech-stack-plan.html">← Kế hoạch 5 ngày</a> &nbsp;/&nbsp; Ngày 5</div>
-    <h1><span class="badge b5">5</span>VueJS (mini-app) + Terraform (IaC)</h1>
+    <div class="breadcrumb"><a href="4-day-tech-stack-plan.html">← Kế hoạch 4 ngày</a> &nbsp;/&nbsp; Ngày 4</div>
+    <h1><span class="badge b4">4</span>VueJS (mini-app) + Terraform (IaC)</h1>
     <p class="lead">Ngày cuối ráp mọi thứ lại. <b>Buổi sáng — Vue 3:</b> dựng một SPA nhỏ <code>frontend-vue/</code> đăng nhập qua Keycloak rồi gọi API <code>wallet</code> đã bảo vệ. <b>Buổi chiều — Terraform:</b> viết Infrastructure-as-Code dựng toàn bộ hạ tầng (Postgres/Redis/Kafka/Keycloak) bằng Docker provider, rồi demo end-to-end.</p>
     <div class="meta">
       <span class="chip">⏱ ~8 giờ (5h Vue · 3h Terraform)</span>
@@ -39,7 +39,7 @@
 <div class="wrap">
 
 <section id="outcome">
-  <h2><span class="lbl">Kết quả mong đợi</span>Hết ngày 5 bạn sẽ…</h2>
+  <h2><span class="lbl">Kết quả mong đợi</span>Hết ngày 4 bạn sẽ…</h2>
   <div class="panel"><ul>
     <li>Hiểu mô hình reactivity của Vue &amp; Composition API; ánh xạ được từ React sang Vue.</li>
     <li>Có app Vue: đăng nhập Keycloak → xem danh sách ví → mở ví → nạp tiền, gọi backend thật.</li>
@@ -49,7 +49,7 @@
 </section>
 
 <!-- ===== PART A: VUE ===== -->
-<h2 style="border-top-color:var(--d5);color:var(--d5)"><span class="lbl" style="color:var(--d5)">Phần A — VueJS</span>Frontend reactive trong 5 giờ</h2>
+<h2 style="border-top-color:var(--d4);color:var(--d4)"><span class="lbl" style="color:var(--d4)">Phần A — VueJS</span>Frontend reactive trong 5 giờ</h2>
 
 <h3 id="ta1">A · Lý thuyết 1 — SPA &amp; mô hình reactivity</h3>
 <p>Một <b>SPA</b> (Single Page Application) tải 1 lần, sau đó JS cập nhật DOM khi state đổi, không reload trang. Trái tim của Vue là <b>reactivity</b>: bạn khai báo state, Vue <i>tự</i> cập nhật phần giao diện phụ thuộc state đó khi nó thay đổi — bạn không tự sờ vào DOM.</p>
@@ -179,7 +179,7 @@ onMounted(() =&gt; store.fetchWallets())
 <div class="checkpoint"><b>✅ Checkpoint A:</b> đăng nhập → thấy ví → mở ví mới → nạp tiền → balance cập nhật, tất cả gọi backend đã bảo vệ bằng Keycloak.</div>
 
 <!-- ===== PART B: TERRAFORM ===== -->
-<h2 style="border-top-color:var(--d5);color:var(--d5)"><span class="lbl" style="color:var(--d5)">Phần B — Terraform</span>Infrastructure as Code trong 3 giờ</h2>
+<h2 style="border-top-color:var(--d4);color:var(--d4)"><span class="lbl" style="color:var(--d4)">Phần B — Terraform</span>Infrastructure as Code trong 3 giờ</h2>
 
 <h3 id="tb1">B · Lý thuyết 1 — IaC là gì &amp; vòng đời</h3>
 <p>Thay vì click chuột/gõ lệnh tạo hạ tầng (dễ quên, khó tái lập), bạn <b>mô tả hạ tầng bằng file</b>. Terraform đọc file, so với thực tế, rồi tạo/sửa/xoá để đạt <b>desired state</b>. Đặc tính quan trọng: <b>declarative</b> (mô tả “muốn gì”, không phải “làm từng bước”) &amp; <b>idempotent</b> (apply nhiều lần vẫn ra một kết quả).</p>
@@ -276,14 +276,14 @@ terraform output     <span class="cmt"># xem tên container + cổng</span></cod
 <div class="checkpoint"><b>✅ Checkpoint B:</b> một lệnh <code>apply</code> dựng cả hạ tầng, một lệnh <code>destroy</code> xoá sạch. Demo E2E chạy thông từ Vue → Keycloak → backend → DB.</div>
 
 <!-- DOD -->
-<h2 id="dod"><span class="lbl">Chốt ngày</span>Definition of Done — Ngày 5 (&amp; cả tuần)</h2>
+<h2 id="dod"><span class="lbl">Chốt ngày</span>Definition of Done — Ngày 4 (&amp; cả tuần)</h2>
 <div class="panel"><ul class="dod">
   <li><input type="checkbox"> App Vue đăng nhập qua Keycloak, token in-memory.</li>
   <li><input type="checkbox"> List ví + mở ví + nạp tiền chạy thật với backend đã bảo vệ.</li>
   <li><input type="checkbox"> Tiền hiển thị bằng <code>Intl.NumberFormat</code>; ví hiện label + currency.</li>
   <li><input type="checkbox"> Idempotency-Key sinh lúc mount, dùng lại khi resubmit.</li>
   <li><input type="checkbox"> <code>terraform apply</code> dựng đủ Postgres/Redis/Kafka/Keycloak; <code>destroy</code> sạch.</li>
-  <li><input type="checkbox"> Demo E2E thành công — quay lại 60s làm “bằng chứng học”.</li>
+  <li><input type="checkbox"> Demo E2E thành công — quay lại 60 giây làm tư liệu chứng minh kết quả học.</li>
 </ul></div>
 <div class="selfcheck"><h4>✔ Tự kiểm cuối tuần</h4>
   <ul class="small" style="margin:6px 0 0">
@@ -294,13 +294,13 @@ terraform output     <span class="cmt"># xem tên container + cổng</span></cod
   </ul>
 </div>
 
-<div class="callout ok"><span class="tag">Sau 5 ngày — bước tiếp</span>
-  <p style="margin:4px 0 0">Bạn đã chạm cả 6 stack. Giờ quay lại làm <b>đúng chuẩn production</b> trên nhánh feature thật: NFR1 (Redis lock + <code>PESSIMISTIC_WRITE</code>), NFR2 (Outbox + Kafka poller), NFR3 (idempotency_record), rồi fraud/PFM/advisor. Các pattern resilience (Ngày 3) &amp; security (Ngày 4) tái dùng trực tiếp. Muốn giữ Keycloak/Hexagonal/Vue/Terraform cho team → mở ADR theo <span class="tag-file">upgrade-policy.md §5</span>.</p>
+<div class="callout ok"><span class="tag">Sau 4 ngày — bước tiếp</span>
+  <p style="margin:4px 0 0">Bạn đã chạm cả 6 stack. Giờ quay lại làm <b>đúng chuẩn production</b> trên nhánh feature thật: NFR1 (Redis lock + <code>PESSIMISTIC_WRITE</code>), NFR2 (Outbox + Kafka poller), NFR3 (idempotency_record), rồi fraud/PFM/advisor. Các pattern resilience &amp; security học ở Ngày 3 tái dùng trực tiếp. Muốn giữ Keycloak/Hexagonal/Vue/Terraform cho team → mở ADR theo <span class="tag-file">upgrade-policy.md §5</span>.</p>
 </div>
 
 <h2><span class="lbl">Tài liệu</span>Nguồn học ngày 5</h2>
 <div class="grid g2">
-  <div class="panel"><h4 style="color:var(--d5)">Vue</h4>
+  <div class="panel"><h4 style="color:var(--d4)">Vue</h4>
     <ul class="src-list">
       <li><a href="https://vuejs.org/guide/introduction.html">Vue 3 — Guide</a> · <a href="https://vuejs.org/tutorial/">Tutorial tương tác</a></li>
       <li><a href="https://vuejs.org/guide/quick-start.html">Quick start (Vite)</a></li>
@@ -308,7 +308,7 @@ terraform output     <span class="cmt"># xem tên container + cổng</span></cod
       <li><a href="https://www.keycloak.org/securing-apps/javascript-adapter">Keycloak — JavaScript adapter</a></li>
     </ul>
   </div>
-  <div class="panel"><h4 style="color:var(--d5)">Terraform</h4>
+  <div class="panel"><h4 style="color:var(--d4)">Terraform</h4>
     <ul class="src-list">
       <li><a href="https://developer.hashicorp.com/terraform/tutorials/docker-get-started">Get started (Docker)</a></li>
       <li><a href="https://developer.hashicorp.com/terraform/intro">Intro</a> · <a href="https://developer.hashicorp.com/terraform/language">Language</a></li>
@@ -318,11 +318,11 @@ terraform output     <span class="cmt"># xem tên container + cổng</span></cod
 </div>
 
 <div class="daynav">
-  <a href="day-4-keycloak.html"><div class="dir">⟵ Ngày trước</div><div class="ttl">Ngày 4 · Keycloak (OAuth2/OIDC)</div></a>
-  <a class="next" href="5-day-tech-stack-plan.html"><div class="dir">Hoàn thành ✓</div><div class="ttl">Về tổng quan kế hoạch 5 ngày</div></a>
+  <a href="day-3-microprofile.html"><div class="dir">⟵ Ngày trước</div><div class="ttl">Ngày 3 · MicroProfile + Keycloak</div></a>
+  <a class="next" href="4-day-tech-stack-plan.html"><div class="dir">Hoàn thành ✓</div><div class="ttl">Về tổng quan kế hoạch 4 ngày</div></a>
 </div>
 
-<footer>DigitalWallet — Hướng dẫn học chi tiết · Ngày 5/5. App Vue &amp; Terraform là spike song song (không thay React/Compose của team). Không bao giờ để secret trong <code>VITE_*</code> hay file <code>.tf</code>.</footer>
+<footer>DigitalWallet — Hướng dẫn học chi tiết · Ngày 4/4. App Vue &amp; Terraform là spike song song (không thay React/Compose của team). Không bao giờ để secret trong <code>VITE_*</code> hay file <code>.tf</code>.</footer>
 
 </div>
 </body>

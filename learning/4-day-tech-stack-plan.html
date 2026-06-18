@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kế hoạch học 5 ngày — Quarkus · Hexagonal · MicroProfile · Keycloak · Vue · Terraform</title>
+<title>Kế hoạch học 4 ngày — Quarkus · Hexagonal · MicroProfile · Keycloak · Vue · Terraform</title>
 <style>
   :root{
     --bg:#0f1729; --panel:#161f36; --panel2:#1c2742; --ink:#e7ecf5; --muted:#9fb0cd;
@@ -74,7 +74,7 @@
   .day-n{flex:0 0 auto;width:52px;height:52px;border-radius:12px;display:grid;place-items:center;
     font-weight:800;font-size:20px;color:#0b1322}
   .day1 .day-n{background:var(--d1)} .day2 .day-n{background:var(--d2)}
-  .day3 .day-n{background:var(--d3)} .day4 .day-n{background:var(--d4)} .day5 .day-n{background:var(--d5)}
+  .day3 .day-n{background:var(--d3)} .day4 .day-n{background:var(--d4)}
   .day-h h3{margin:0;font-size:19px}
   .day-h .tl{color:var(--muted);font-size:13px;margin-top:2px}
   .day-h a.guide-link{display:inline-block;margin-top:8px;font-size:12.5px;font-weight:700;
@@ -119,15 +119,15 @@
 
 <header class="hero">
   <div class="wrap">
-    <h1>Kế hoạch học 5 ngày — vừa học <span class="grad">tech stack</span> vừa làm dự án DigitalWallet</h1>
-    <p class="sub">Lộ trình từ con số 0 cho: <b>Java 21 core</b> · <b>Quarkus</b> · <b>Hexagonal Architecture</b> · <b>Quarkus MicroProfile</b> · <b>Keycloak (OAuth2/OIDC)</b> · <b>VueJS</b> · <b>Terraform</b> — kèm lý thuyết nền tảng (OOP, SOLID, DDD, system design, security) và bài thực hành gắn trực tiếp vào repo này.</p>
+    <h1>Kế hoạch học 4 ngày — vừa học <span class="grad">tech stack</span> vừa làm dự án DigitalWallet</h1>
+    <p class="sub">Lộ trình từ con số 0 cho: <b>Java 21 core</b> · <b>Quarkus</b> · <b>Hexagonal Architecture</b> · <b>Quarkus MicroProfile</b> · <b>Keycloak (OAuth2/OIDC)</b> · <b>VueJS</b> · <b>Terraform</b> — kèm lý thuyết nền tảng (OOP, SOLID, DDD, system design, security) và bài thực hành gắn trực tiếp vào repo này. Bản 4 ngày này giữ nguyên toàn bộ khối lượng công việc của bản 5 ngày; phần dồn lại nằm ở Ngày 3 (dày hơn các ngày khác).</p>
     <div class="meta">
-      <span class="chip">⏱ <b>~8 giờ/ngày</b> (full-time)</span>
+      <span class="chip">⏱ <b>~8–10 giờ/ngày</b> (Ngày 3 dày nhất)</span>
       <span class="chip">🟢 Vue: <b>mini-app riêng</b> <code>frontend-vue/</code></span>
-      <span class="chip">🟢 Terraform: <b>Docker provider</b> (local, free)</span>
+      <span class="chip">🟢 Terraform: <b>Docker provider</b> (local, miễn phí)</span>
       <span class="chip">🌿 Mọi thay đổi trên nhánh <b>learning/*</b></span>
       <span class="chip">🎯 Phạm vi: <b>chỉ MVP để học</b></span>
-      <span class="chip num">📅 5 ngày · 6 stack · 1 spine</span>
+      <span class="chip num">📅 4 ngày · 6 stack · 1 mạch tính năng xuyên suốt</span>
     </div>
   </div>
 </header>
@@ -135,16 +135,15 @@
 <nav class="toc">
   <div class="wrap">
     <a href="#how">Cách dùng</a>
-    <a href="#context">Bối cảnh &amp; lệch stack</a>
+    <a href="#context">Bối cảnh &amp; khác biệt stack</a>
     <a href="#scope">Phạm vi MVP</a>
     <a href="#refactor">Plan refactor</a>
-    <a href="#map">Bản đồ 5 ngày</a>
+    <a href="#map">Bản đồ 4 ngày</a>
     <a href="#foundation">Lý thuyết nền tảng</a>
     <a href="#day1">Ngày 1</a>
     <a href="#day2">Ngày 2</a>
     <a href="#day3">Ngày 3</a>
     <a href="#day4">Ngày 4</a>
-    <a href="#day5">Ngày 5</a>
     <a href="#resources">Nguồn học</a>
     <a href="#risks">Rủi ro &amp; cắt giảm</a>
   </div>
@@ -156,13 +155,12 @@
 <section id="how">
   <h2>0 · Cách dùng plan này</h2>
   <div class="panel">
-    <p>Mỗi ngày có cùng một nhịp <b>“Lý thuyết → Thực hành ngay vào dự án → Definition of Done”</b>. Đừng học chay: học xong khối lý thuyết nào là áp ngay vào repo khối đó. <b>Spine của 5 ngày là một lát cắt tính năng <i>wallet</i></b> (mở ví → nạp tiền → liệt kê ví); mỗi ngày thêm một tech stack lên chính lát cắt đó, nên kiến thức chồng lớp chứ không rời rạc.</p>
+    <p>Mỗi ngày có cùng một nhịp <b>“Lý thuyết → Thực hành ngay vào dự án → Definition of Done”</b>. Đừng chỉ đọc lý thuyết suông: học xong khối lý thuyết nào là áp ngay vào repo khối đó. <b>Mạch tính năng xuyên suốt của 4 ngày là một lát cắt <i>wallet</i></b> (mở ví → nạp tiền → liệt kê ví); mỗi ngày thêm một tech stack lên chính lát cắt đó, nên kiến thức chồng lớp chứ không rời rạc.</p>
     <div class="legend" style="margin-top:6px">
       <span><span class="dot" style="background:var(--d1)"></span> Java/Quarkus</span>
       <span><span class="dot" style="background:var(--d2)"></span> Hexagonal/DDD</span>
-      <span><span class="dot" style="background:var(--d3)"></span> MicroProfile</span>
-      <span><span class="dot" style="background:var(--d4)"></span> Keycloak</span>
-      <span><span class="dot" style="background:var(--d5)"></span> Vue + Terraform</span>
+      <span><span class="dot" style="background:var(--d3)"></span> MicroProfile + Keycloak</span>
+      <span><span class="dot" style="background:var(--d4)"></span> Vue + Terraform</span>
     </div>
     <p style="margin-top:12px"><span class="pill theory">Lý thuyết</span> = đọc/xem + ghi chú. <span class="pill practice">Thực hành</span> = gõ code vào repo. Các ô <span style="color:var(--warn)">⚠ cảnh báo</span> đánh dấu chỗ <b>lệch với quyết định đã chốt của dự án</b> — đọc kỹ, vì nó quyết định bạn làm trên nhánh nào.</p>
   </div>
@@ -174,7 +172,7 @@
 
 <!-- ============================ CONTEXT ============================ -->
 <section id="context">
-  <h2>1 · Bối cảnh dự án &amp; các điểm “lệch stack” (đọc trước khi bắt đầu)</h2>
+  <h2>1 · Bối cảnh dự án &amp; các điểm khác với stack đã chốt (đọc trước khi bắt đầu)</h2>
   <p>Repo hiện tại đã có sẵn nền tảng để học, nhưng <b>4/6 thứ bạn muốn học lại khác với quyết định kiến trúc đã chốt</b>. Đây không phải lỗi — đây là lý do ta học trên nhánh riêng và (nếu sau này muốn áp dụng thật) phải viết ADR.</p>
   <table>
     <thead><tr><th>Thứ muốn học</th><th>Repo đang dùng gì</th><th>Hệ quả cho plan</th></tr></thead>
@@ -200,15 +198,15 @@
   <h2>2 · Giới hạn phạm vi MVP (làm gì &amp; KHÔNG làm gì)</h2>
   <div class="grid g2">
     <div class="panel">
-      <h4 style="color:var(--ok)">✓ TRONG phạm vi (spine để học)</h4>
+      <h4 style="color:var(--ok)">✓ TRONG phạm vi (mạch tính năng để học)</h4>
       <ul>
         <li><b>account</b> — đọc hiểu slice signup/login có sẵn + thêm <code>GET /accounts/me</code> (Ngày 1).</li>
         <li><b>account → hexagonal</b> — refactor sang ports &amp; adapters (Ngày 2).</li>
         <li><b>wallet (MVP)</b> — <code>POST /wallets</code>, <code>POST /wallets/{id}/deposits</code>, <code>GET /wallets</code> (Ngày 3, viết theo hexagonal).</li>
         <li><b>Observability/resilience</b> — health, metrics, OpenAPI/Swagger, demo circuit breaker (Ngày 3).</li>
-        <li><b>Keycloak</b> — bảo vệ endpoint wallet bằng OIDC (Ngày 4).</li>
-        <li><b>Vue mini-app</b> — login Keycloak + list ví + form nạp tiền (Ngày 5).</li>
-        <li><b>Terraform</b> — dựng Postgres/Redis/Kafka/Keycloak bằng Docker provider (Ngày 5).</li>
+        <li><b>Keycloak</b> — bảo vệ endpoint wallet bằng OIDC (Ngày 3, ghép cùng wallet).</li>
+        <li><b>Vue mini-app</b> — login Keycloak + list ví + form nạp tiền (Ngày 4).</li>
+        <li><b>Terraform</b> — dựng Postgres/Redis/Kafka/Keycloak bằng Docker provider (Ngày 4).</li>
       </ul>
     </div>
     <div class="panel">
@@ -225,7 +223,7 @@
   </div>
   <div class="callout warn">
     <span class="tag">Lưu ý đúng đắn</span>
-    <p style="margin:4px 0 0">Lát cắt <b>deposit MVP</b> ở trên <b>không đúng chuẩn production</b> của repo (thiếu NFR1/2/3). Nó là <i>đồ chơi để học tech stack</i>. Đừng nhầm nó với money-path thật; phần đó là nhiều ngày làm riêng sau khi đã nắm stack.</p>
+    <p style="margin:4px 0 0">Lát cắt <b>deposit MVP</b> ở trên <b>không đúng chuẩn production</b> của repo (thiếu NFR1/2/3). Nó là một lát cắt rút gọn, chỉ nhằm mục đích học tech stack, chưa phải money-path đạt chuẩn production. Đừng nhầm nó với money-path thật; phần đó là nhiều ngày làm riêng sau khi đã nắm stack.</p>
   </div>
 </section>
 
@@ -239,10 +237,10 @@
       <tr><td>R1</td><td>Module <b>account</b> sang Hexagonal</td><td><code>api/service/persistence</code> → <code>domain / application(port in,out) / adapter(in web, out persistence, out security)</code></td><td>2</td><td>Giữ nguyên hành vi; test cũ phải xanh.</td></tr>
       <tr><td>R2</td><td>Thay health tự viết bằng <b>SmallRye Health</b></td><td><span class="tag-file">health/HealthResource.java</span> → <code>@Liveness/@Readiness</code> + <code>/q/health</code></td><td>3</td><td>Endpoint chuẩn hoá, không đổi nghiệp vụ.</td></tr>
       <tr><td>R3</td><td>Thêm <b>OpenAPI/Swagger</b> + <b>Fault Tolerance</b></td><td>(chưa có) → <code>/q/swagger-ui</code>, <code>@CircuitBreaker/@Retry/@Fallback</code></td><td>3</td><td>Thêm mới, không phá cũ.</td></tr>
-      <tr><td>R4</td><td><b>wallet MVP</b> viết-mới theo hexagonal</td><td>(trống) → vertical slice mới + Flyway <code>V2</code></td><td>3</td><td>“Refactor by example” — code mới chuẩn mẫu R1.</td></tr>
-      <tr><td>R5</td><td><b>Keycloak/OIDC</b> path song song</td><td>ES256 tự ký → thêm <code>quarkus-oidc</code> theo profile <code>%keycloak</code></td><td>4</td><td>Không xoá path cũ (ADR 0001 back-compat).</td></tr>
-      <tr><td>R6</td><td><b>Infra → Terraform</b></td><td>compose chạy tay → <code>infra/terraform/</code> (Docker provider)</td><td>5</td><td>Spike song song compose của team.</td></tr>
-      <tr><td>R7</td><td><b>Frontend Vue</b> song song</td><td>(React mới scaffold) → <code>frontend-vue/</code> độc lập</td><td>5</td><td>Không đụng <code>frontend/</code>.</td></tr>
+      <tr><td>R4</td><td><b>wallet MVP</b> viết-mới theo hexagonal</td><td>(trống) → vertical slice mới + Flyway <code>V2</code></td><td>3</td><td>Học qua ví dụ (refactor by example) — code mới viết đúng theo mẫu R1.</td></tr>
+      <tr><td>R5</td><td><b>Keycloak/OIDC</b> path song song</td><td>ES256 tự ký → thêm <code>quarkus-oidc</code> theo profile <code>%keycloak</code></td><td>3</td><td>Không xoá path cũ (ADR 0001 back-compat).</td></tr>
+      <tr><td>R6</td><td><b>Infra → Terraform</b></td><td>compose chạy tay → <code>infra/terraform/</code> (Docker provider)</td><td>4</td><td>Spike song song compose của team.</td></tr>
+      <tr><td>R7</td><td><b>Frontend Vue</b> song song</td><td>(React mới scaffold) → <code>frontend-vue/</code> độc lập</td><td>4</td><td>Không đụng <code>frontend/</code>.</td></tr>
     </tbody>
   </table>
   <div class="callout info">
@@ -253,24 +251,22 @@
 
 <!-- ============================ 5-DAY MAP ============================ -->
 <section id="map">
-  <h2>4 · Bản đồ 5 ngày (overview)</h2>
+  <h2>4 · Bản đồ 4 ngày (tổng quan)</h2>
   <div class="callout ok">
     <span class="tag">📖 Mỗi ngày đã có hướng dẫn chi tiết riêng</span>
     <p style="margin:4px 0 0">File này là <b>bản đồ tổng</b>. Mỗi ngày có một trang hướng dẫn <b>step-by-step đầy đủ lý thuyết + code mẫu</b>:
       <a href="day-1-java-quarkus.html">Ngày 1</a> ·
       <a href="day-2-hexagonal.html">Ngày 2</a> ·
       <a href="day-3-microprofile.html">Ngày 3</a> ·
-      <a href="day-4-keycloak.html">Ngày 4</a> ·
-      <a href="day-5-vue-terraform.html">Ngày 5</a>. Bấm nút “📖 Mở hướng dẫn chi tiết” ở mỗi mục bên dưới.</p>
+      <a href="day-4-vue-terraform.html">Ngày 4</a>. Bấm nút “📖 Mở hướng dẫn chi tiết” ở mỗi mục bên dưới.</p>
   </div>
   <table>
     <thead><tr><th>Ngày</th><th>Tech stack chính</th><th>Lý thuyết nền tảng ghép kèm</th><th>Sản phẩm cuối ngày</th></tr></thead>
     <tbody>
       <tr><td><b style="color:var(--d1)">1</b></td><td>Java 21 core + Quarkus cơ bản</td><td>OOP, Clean Code, CDI/DI, virtual threads</td><td>Stack chạy local; đọc thông slice account; thêm <code>GET /accounts/me</code> + unit test.</td></tr>
       <tr><td><b style="color:var(--d2)">2</b></td><td>Hexagonal Architecture</td><td>SOLID, DDD tactical, dependency rule</td><td>Module account chuyển sang ports &amp; adapters, test xanh.</td></tr>
-      <tr><td><b style="color:var(--d3)">3</b></td><td>Quarkus MicroProfile</td><td>12-factor, resilience patterns, observability</td><td>wallet MVP slice + health/metrics/Swagger/circuit-breaker.</td></tr>
-      <tr><td><b style="color:var(--d4)">4</b></td><td>Keycloak (OAuth2/OIDC)</td><td>AuthN/AuthZ, OAuth2 grants, OIDC, JWT/JWKS</td><td>wallet được bảo vệ bằng Keycloak; lấy token gọi API; test 401/403.</td></tr>
-      <tr><td><b style="color:var(--d5)">5</b></td><td>VueJS + Terraform</td><td>SPA/reactivity model; IaC concepts</td><td>Vue mini-app (login + ví) + Terraform dựng toàn bộ infra; demo E2E.</td></tr>
+      <tr><td><b style="color:var(--d3)">3</b></td><td>Quarkus MicroProfile <b>+ Keycloak</b> <span class="muted">(ngày dày nhất)</span></td><td>12-factor, resilience, observability · AuthN/AuthZ, OAuth2 grants, OIDC, JWT/JWKS</td><td>wallet MVP slice + health/metrics/Swagger/circuit-breaker; rồi Keycloak bảo vệ wallet, lấy token gọi API, test 401/403.</td></tr>
+      <tr><td><b style="color:var(--d4)">4</b></td><td>VueJS + Terraform</td><td>SPA/reactivity model; IaC concepts</td><td>Vue mini-app (login + ví) + Terraform dựng toàn bộ infra; demo E2E.</td></tr>
     </tbody>
   </table>
 </section>
@@ -278,19 +274,19 @@
 <!-- ============================ FOUNDATION ============================ -->
 <section id="foundation">
   <h2>5 · Lý thuyết nền tảng xuyên suốt (học rải theo ngày)</h2>
-  <p>Đây là các chủ đề “không gắn 1 stack” nhưng quyết định bạn code có “sạch” không. Mỗi mục được nhúng vào ngày tương ứng, đây là bản đồ tổng để bạn không bỏ sót.</p>
+  <p>Đây là các chủ đề nền tảng áp dụng cho nhiều stack chứ không riêng một stack cụ thể, nhưng lại quyết định code của bạn có gọn gàng, dễ đọc và dễ bảo trì hay không. Mỗi mục được nhúng vào ngày tương ứng; đây là bản đồ tổng để bạn không bỏ sót.</p>
   <div class="twocol">
     <ul>
       <li><b>Java core (Ngày 1):</b> record, sealed class/interface, pattern matching (switch + record pattern), text block, <code>var</code>, <code>Optional</code>, Stream, generics, <code>Comparable</code>/equality, <code>BigDecimal</code> cho tiền.</li>
       <li><b>Concurrency cơ bản (Ngày 1):</b> thread vs virtual thread (Project Loom), vì sao Java 21, blocking I/O trên virtual thread.</li>
       <li><b>OOP &amp; Clean Code (Ngày 1–2):</b> encapsulation, composition over inheritance, đặt tên, hàm nhỏ, tránh primitive obsession (→ value object).</li>
-      <li><b>SOLID (Ngày 2):</b> SRP, OCP, LSP, ISP, DIP — đặc biệt DIP là “xương sống” của hexagonal.</li>
+      <li><b>SOLID (Ngày 2):</b> SRP, OCP, LSP, ISP, DIP — đặc biệt DIP là nguyên lý cốt lõi của hexagonal.</li>
       <li><b>DDD tactical (Ngày 2):</b> entity, value object, aggregate, repository, domain service vs application service, ubiquitous language (repo đã có glossary: Account, Wallet, Transfer…).</li>
       <li><b>Kiến trúc (Ngày 2):</b> layered → onion → hexagonal; “dependency rule” (domain không phụ thuộc ai).</li>
       <li><b>Distributed systems &amp; resilience (Ngày 3):</b> timeout, retry, circuit breaker, bulkhead, fallback, idempotency, at-least-once, health liveness/readiness, metrics RED/USE.</li>
       <li><b>12-factor &amp; observability (Ngày 3):</b> config qua env, logs là stream, backing services, 3 trụ observability (metrics/logs/traces).</li>
-      <li><b>Security (Ngày 4):</b> AuthN vs AuthZ, RBAC, OAuth2 roles &amp; grants, OIDC, cấu trúc JWT, JWKS, validate token, password hashing (repo dùng Argon2).</li>
-      <li><b>Frontend &amp; IaC (Ngày 5):</b> SPA, component model, reactivity (ref/reactive), declarative UI; IaC: desired state, plan/apply, state file, provider/resource.</li>
+      <li><b>Security (Ngày 3):</b> AuthN vs AuthZ, RBAC, OAuth2 roles &amp; grants, OIDC, cấu trúc JWT, JWKS, validate token, password hashing (repo dùng Argon2).</li>
+      <li><b>Frontend &amp; IaC (Ngày 4):</b> SPA, component model, reactivity (ref/reactive), declarative UI; IaC: desired state, plan/apply, state file, provider/resource.</li>
     </ul>
   </div>
 </section>
@@ -375,7 +371,7 @@
       <!-- PRACTICE 2 -->
       <div class="block">
         <span class="pill practice">Thực hành 1.B</span> <b>Tự thêm endpoint <code>GET /accounts/me</code></b>
-        <p class="small">Đây là bài “đi hết slice” đầu tiên, dùng JWT có sẵn (extension <code>smallrye-jwt</code> đã bật) để lấy danh tính.</p>
+        <p class="small">Đây là bài tập đi qua trọn vẹn một lát cắt (slice) đầu tiên, dùng JWT có sẵn (extension <code>smallrye-jwt</code> đã bật) để lấy danh tính.</p>
         <ol class="steps">
           <li>Tạo record <code>AccountProfileResponse</code> trong <code>account/dto/</code> (id, email, baseCurrency, role) — KHÔNG lộ <code>password_hash</code> (<span class="tag-file">security.md §7</span>).</li>
           <li>Trong <code>AccountResource</code>: thêm method <code>@GET @Path("/me") @RolesAllowed("USER")</code>, inject <code>JsonWebToken jwt</code>, lấy <code>jwt.getSubject()</code> làm accountId.</li>
@@ -526,19 +522,24 @@
 <section id="day3">
   <div class="day day3">
     <div class="day-h"><div class="day-n">3</div><div>
-      <h3>Quarkus MicroProfile — wallet MVP + observability + resilience</h3>
-      <div class="tl">Mục tiêu: nắm bộ spec MicroProfile qua việc dựng lát cắt wallet và gắn health/metrics/OpenAPI/circuit-breaker.</div>
+      <h3>Quarkus MicroProfile + Keycloak — wallet MVP, observability &amp; bảo vệ bằng OIDC</h3>
+      <div class="tl">Mục tiêu: dựng lát cắt wallet và gắn health/metrics/OpenAPI/circuit-breaker (MicroProfile), rồi để Keycloak (OAuth2/OIDC) bảo vệ chính endpoint wallet vừa dựng. Đây là ngày dày nhất — gộp phần MicroProfile (Phần A) và phần Keycloak (Phần B).</div>
       <a class="guide-link" href="day-3-microprofile.html">📖 Mở hướng dẫn chi tiết ngày 3 →</a>
     </div></div>
     <div class="day-b">
 
-      <h4>Phân bổ thời gian (8h)</h4>
+      <h4>Phân bổ thời gian — ngày dày nhất (Phần A ~8h + Phần B ~8h)</h4>
       <table>
-        <tr><th>Khối</th><th>Thời lượng</th><th>Nội dung</th></tr>
-        <tr><td>Lý thuyết</td><td>2.5h</td><td>12-factor + resilience patterns (1h) · MicroProfile/SmallRye (Health, Fault Tolerance, OpenAPI, Metrics) (1.5h)</td></tr>
-        <tr><td>Thực hành</td><td>5.0h</td><td>wallet slice + V2 migration (2.5h) · health/metrics/OpenAPI (1h) · circuit-breaker demo (0.75h) · test (0.75h)</td></tr>
-        <tr><td>Tổng kết</td><td>0.5h</td><td>Xem <code>/q/swagger-ui</code>, <code>/q/health</code>, <code>/q/metrics</code></td></tr>
+        <tr><th>Phần</th><th>Thời lượng</th><th>Nội dung</th></tr>
+        <tr><td><b>A — MicroProfile + wallet</b></td><td>~8h</td><td>Lý thuyết 12-factor + resilience + MicroProfile/SmallRye (2.5h) · wallet slice + V2 migration (2.5h) · health/metrics/OpenAPI (1h) · circuit-breaker demo (0.75h) · test (0.75h)</td></tr>
+        <tr><td><b>B — Keycloak (OIDC)</b></td><td>~8h</td><td>Lý thuyết AuthN/AuthZ + OAuth2 grants + OIDC + JWT/JWKS (2.5h) · dựng Keycloak + realm (1.5h) · Quarkus OIDC bảo vệ wallet (2h) · lấy token + test 401/403 (1.5h)</td></tr>
       </table>
+      <div class="callout warn">
+        <span class="tag">Ngày 3 nặng gấp đôi — chủ động cắt nếu trễ</span>
+        <p style="margin:4px 0 0">Bản 4 ngày dồn cả MicroProfile lẫn Keycloak vào đây để giữ đủ khối lượng công việc. Nếu một ngày không kham hết, hãy ưu tiên Phần A chạy được trước, rồi cắt theo <a href="#risks">§ Rủi ro &amp; cắt giảm</a> (bỏ circuit-breaker demo ở Phần A; chỉ 1 client + role <code>USER</code> ở Phần B). Có thể cho Phần B tràn sang buổi tối hoặc đầu Ngày 4.</p>
+      </div>
+
+      <h3 style="color:var(--d3)">Phần A — MicroProfile + wallet MVP</h3>
 
       <div class="block">
         <span class="pill theory">Lý thuyết 3.1</span> <b>12-factor + resilience patterns</b>
@@ -547,7 +548,7 @@
           <li>Circuit Breaker — Martin Fowler: <a href="https://martinfowler.com/bliki/CircuitBreaker.html">martinfowler.com/bliki/CircuitBreaker.html</a></li>
           <li>Khái niệm: timeout, retry (+ exponential backoff), bulkhead, fallback, idempotency, at-least-once.</li>
         </ul>
-        <p class="why"><b>Vì sao:</b> NFR8 của repo yêu cầu circuit breaker bọc LLM; NFR5 yêu cầu cô lập latency. Hôm nay bạn làm “bản nháp” của chính các pattern đó.</p>
+        <p class="why"><b>Vì sao:</b> NFR8 của repo yêu cầu circuit breaker bọc LLM; NFR5 yêu cầu cô lập latency. Hôm nay bạn làm một phiên bản thu nhỏ của chính các pattern đó.</p>
       </div>
 
       <div class="block">
@@ -578,7 +579,7 @@
           </li>
           <li><b>Ownership ở service:</b> account lấy từ JWT phải sở hữu ví (<span class="tag-file">security.md §3</span>). Deposit chỉ <code>@Transactional</code> đơn giản (KHÔNG Redis lock — descoped).</li>
         </ol>
-        <div class="callout danger"><span class="tag">⚠ Đây là deposit “đồ chơi”</span><p style="margin:3px 0 0">Thiếu NFR1/2/3 nên KHÔNG dùng cho production. Mục tiêu là học REST + Panache + transaction + MicroProfile, không phải money-path thật.</p></div>
+        <div class="callout danger"><span class="tag">⚠ Deposit ở đây là phiên bản rút gọn để học</span><p style="margin:3px 0 0">Thiếu NFR1/2/3 nên KHÔNG dùng cho production. Mục tiêu là học REST + Panache + transaction + MicroProfile, không phải money-path thật.</p></div>
       </div>
 
       <div class="block">
@@ -610,50 +611,23 @@
         </ul>
       </div>
 
-      <h4>Definition of Done — Ngày 3</h4>
-      <ul class="dod">
-        <li><input type="checkbox"> 3 endpoint wallet hoạt động, thử được trên <code>/q/swagger-ui</code>.</li>
-        <li><input type="checkbox"> <code>/q/health/ready</code> phản ánh trạng thái DB; timer deposit hiện ở <code>/q/metrics</code>.</li>
-        <li><input type="checkbox"> Circuit breaker mở được &amp; fallback chạy (có test chứng minh).</li>
-        <li><input type="checkbox"> <code>./mvnw verify</code> xanh, coverage service ≥ 80%.</li>
-      </ul>
-      <p class="small muted"><b>Tự kiểm:</b> liveness khác readiness ở đâu? Khi nào nên retry vs khi nào mở breaker? Vì sao metrics phải là pull (<code>/q/metrics</code>) cho Prometheus?</p>
-    </div>
-  </div>
-</section>
+      <p class="small muted"><b>Tự kiểm Phần A:</b> liveness khác readiness ở đâu? Khi nào nên retry vs khi nào mở breaker? Vì sao metrics phải là pull (<code>/q/metrics</code>) cho Prometheus?</p>
 
-<!-- ============================================================= -->
-<!-- DAY 4 -->
-<!-- ============================================================= -->
-<section id="day4">
-  <div class="day day4">
-    <div class="day-h"><div class="day-n">4</div><div>
-      <h3>Keycloak — OAuth2/OIDC bảo vệ API wallet</h3>
-      <div class="tl">Mục tiêu: hiểu OAuth2/OIDC và để Keycloak phát hành token, Quarkus OIDC verify, map role → RBAC.</div>
-      <a class="guide-link" href="day-4-keycloak.html">📖 Mở hướng dẫn chi tiết ngày 4 →</a>
-    </div></div>
-    <div class="day-b">
-
-      <h4>Phân bổ thời gian (8h)</h4>
-      <table>
-        <tr><th>Khối</th><th>Thời lượng</th><th>Nội dung</th></tr>
-        <tr><td>Lý thuyết</td><td>2.5h</td><td>AuthN/AuthZ + OAuth2 grants + OIDC + JWT/JWKS (1.5h) · Keycloak realm/client/role (1h)</td></tr>
-        <tr><td>Thực hành</td><td>5.0h</td><td>Dựng Keycloak + realm (1.5h) · Quarkus OIDC + bảo vệ wallet (2h) · lấy token &amp; gọi API (1h) · auth tests (0.5h)</td></tr>
-        <tr><td>Tổng kết</td><td>0.5h</td><td>Sơ đồ luồng authorization-code + bearer token</td></tr>
-      </table>
+      <h3 style="color:var(--d3)">Phần B — Keycloak (OAuth2/OIDC) bảo vệ API wallet</h3>
+      <p class="small muted" style="margin-top:2px">Để một Identity Provider (Keycloak) lo việc đăng nhập &amp; phát token; backend chỉ <b>verify</b> token và map role. Bảo vệ chính endpoint wallet vừa dựng ở Phần A.</p>
 
       <div class="block">
-        <span class="pill theory">Lý thuyết 4.1</span> <b>OAuth2 &amp; OIDC &amp; JWT</b>
+        <span class="pill theory">Lý thuyết 3.5</span> <b>OAuth2 &amp; OIDC &amp; JWT</b>
         <ul class="src-list">
           <li>OAuth 2 Simplified (Aaron Parecki): <a href="https://aaronparecki.com/oauth-2-simplified/">aaronparecki.com/oauth-2-simplified</a></li>
           <li>How OIDC works: <a href="https://openid.net/developers/how-connect-works/">openid.net/developers/how-connect-works</a></li>
           <li>RFC 6749 (tra cứu grant types): <a href="https://datatracker.ietf.org/doc/html/rfc6749">datatracker.ietf.org/doc/html/rfc6749</a></li>
         </ul>
-        <p class="why"><b>Nắm chốt:</b> 4 vai (resource owner, client, authorization server, resource server); grant <i>authorization code + PKCE</i> (cho SPA Vue) vs <i>client credentials</i> (server-server); OIDC thêm <b>ID token</b> bên cạnh access token; access token là JWT verify bằng <b>JWKS</b> của Keycloak.</p>
+        <p class="why"><b>Nắm chốt:</b> 4 vai (resource owner, client, authorization server, resource server); grant <i>authorization code + PKCE</i> (cho SPA Vue ở Ngày 4) vs <i>client credentials</i> (server-server); OIDC thêm <b>ID token</b> bên cạnh access token; access token là JWT verify bằng <b>JWKS</b> của Keycloak.</p>
       </div>
 
       <div class="block">
-        <span class="pill theory">Lý thuyết 4.2</span> <b>Keycloak concepts + Quarkus OIDC</b>
+        <span class="pill theory">Lý thuyết 3.6</span> <b>Keycloak concepts + Quarkus OIDC</b>
         <ul class="src-list">
           <li>Keycloak getting started (Docker): <a href="https://www.keycloak.org/getting-started/getting-started-docker">keycloak.org/getting-started/getting-started-docker</a></li>
           <li>Quarkus — OIDC bảo vệ service: <a href="https://quarkus.io/guides/security-openid-connect">quarkus.io/guides/security-openid-connect</a></li>
@@ -664,19 +638,19 @@
       </div>
 
       <div class="block">
-        <span class="pill practice">Thực hành 4.A</span> <b>Dựng Keycloak + realm <code>digitalwallet</code></b>
+        <span class="pill practice">Thực hành 3.E</span> <b>Dựng Keycloak + realm <code>digitalwallet</code></b>
         <ol class="steps">
-          <li>Thêm service <code>keycloak</code> (dev mode) vào <code>backend/docker-compose.yml</code> (tạm để học; Ngày 5 chuyển sang Terraform). Map cổng <code>8081:8080</code>, admin <code>admin/admin</code>.</li>
+          <li>Thêm service <code>keycloak</code> (dev mode) vào <code>backend/docker-compose.yml</code> (tạm để học; Ngày 4 chuyển sang Terraform). Map cổng <code>8081:8080</code>, admin <code>admin/admin</code>.</li>
           <li>Vào console, tạo realm <code>digitalwallet</code>.</li>
           <li>Tạo role <b>realm</b>: <code>USER</code>, <code>ADMIN</code>.</li>
-          <li>Tạo client <code>digitalwallet-backend</code> (confidential, dùng để verify) và <code>digitalwallet-frontend</code> (public, Standard Flow bật — dành cho Vue Ngày 5; redirect URI <code>http://localhost:5173/*</code>).</li>
+          <li>Tạo client <code>digitalwallet-backend</code> (confidential, dùng để verify) và <code>digitalwallet-frontend</code> (public, Standard Flow bật — dành cho Vue ở Ngày 4; redirect URI <code>http://localhost:5173/*</code>).</li>
           <li>Tạo user test (vd <code>alice</code>), đặt password, gán role <code>USER</code>.</li>
           <li>Export realm ra <code>infra/keycloak/realm-export.json</code> để tái lập (và import bằng Terraform sau).</li>
         </ol>
       </div>
 
       <div class="block">
-        <span class="pill practice">Thực hành 4.B</span> <b>Quarkus OIDC bảo vệ wallet (R5, theo profile)</b>
+        <span class="pill practice">Thực hành 3.F</span> <b>Quarkus OIDC bảo vệ wallet (R5, theo profile)</b>
         <ol class="steps">
           <li>Thêm extension: <code>./mvnw quarkus:add-extension -Dextensions="oidc"</code>.</li>
           <li>Cấu hình profile <code>%keycloak</code> trong <a href="../backend/src/main/resources/application.properties">application.properties</a>:
@@ -691,7 +665,7 @@
       </div>
 
       <div class="block">
-        <span class="pill practice">Thực hành 4.C</span> <b>Lấy token &amp; kiểm thử bảo mật</b>
+        <span class="pill practice">Thực hành 3.G</span> <b>Lấy token &amp; kiểm thử bảo mật</b>
         <ol class="steps">
           <li>Lấy access token qua token endpoint (password grant cho mục đích test):
 <pre><code>curl -X POST \
@@ -704,28 +678,31 @@
         </ol>
       </div>
 
-      <h4>Definition of Done — Ngày 4</h4>
+      <h4>Definition of Done — Ngày 3 (cả Phần A &amp; B)</h4>
       <ul class="dod">
-        <li><input type="checkbox"> Keycloak chạy; realm <code>digitalwallet</code> có client + role + user, đã export JSON.</li>
-        <li><input type="checkbox"> Backend (profile keycloak) verify được token Keycloak; map role → RBAC.</li>
-        <li><input type="checkbox"> Lấy được access token và gọi <code>/wallets</code> thành công.</li>
-        <li><input type="checkbox"> Test 401/403 xanh; path ES256 cũ vẫn nguyên.</li>
-        <li><input type="checkbox"> Vẽ được luồng auth-code + PKCE (chuẩn bị cho Vue).</li>
+        <li><input type="checkbox"> <b>(A)</b> 3 endpoint wallet hoạt động, thử được trên <code>/q/swagger-ui</code>.</li>
+        <li><input type="checkbox"> <b>(A)</b> <code>/q/health/ready</code> phản ánh trạng thái DB; timer deposit hiện ở <code>/q/metrics</code>.</li>
+        <li><input type="checkbox"> <b>(A)</b> Circuit breaker mở được &amp; fallback chạy (có test chứng minh).</li>
+        <li><input type="checkbox"> <b>(A)</b> <code>./mvnw verify</code> xanh, coverage service ≥ 80%.</li>
+        <li><input type="checkbox"> <b>(B)</b> Keycloak chạy; realm <code>digitalwallet</code> có client + role + user, đã export JSON.</li>
+        <li><input type="checkbox"> <b>(B)</b> Backend (profile keycloak) verify được token Keycloak; map role → RBAC.</li>
+        <li><input type="checkbox"> <b>(B)</b> Lấy được access token Keycloak, gọi <code>/wallets</code> thành công; path ES256 cũ vẫn nguyên.</li>
+        <li><input type="checkbox"> <b>(B)</b> Test 401/403 xanh; vẽ được luồng auth-code + PKCE (chuẩn bị cho Vue Ngày 4).</li>
       </ul>
-      <p class="small muted"><b>Tự kiểm:</b> ID token khác access token ở đâu? Vì sao SPA dùng auth-code+PKCE chứ không password grant? JWKS giúp verify token không cần gọi lại Keycloak mỗi request thế nào?</p>
+      <p class="small muted"><b>Tự kiểm Phần B:</b> ID token khác access token ở đâu? Vì sao SPA dùng auth-code+PKCE chứ không password grant? JWKS giúp verify token không cần gọi lại Keycloak mỗi request thế nào?</p>
     </div>
   </div>
 </section>
 
 <!-- ============================================================= -->
-<!-- DAY 5 -->
+<!-- DAY 4 -->
 <!-- ============================================================= -->
-<section id="day5">
-  <div class="day day5">
-    <div class="day-h"><div class="day-n">5</div><div>
+<section id="day4">
+  <div class="day day4">
+    <div class="day-h"><div class="day-n">4</div><div>
       <h3>VueJS (mini-app) + Terraform (Docker provider) — ráp E2E</h3>
       <div class="tl">Mục tiêu: làm SPA Vue login qua Keycloak gọi API wallet; viết Terraform dựng toàn bộ hạ tầng; demo end-to-end.</div>
-      <a class="guide-link" href="day-5-vue-terraform.html">📖 Mở hướng dẫn chi tiết ngày 5 →</a>
+      <a class="guide-link" href="day-4-vue-terraform.html">📖 Mở hướng dẫn chi tiết ngày 4 →</a>
     </div></div>
     <div class="day-b">
 
@@ -737,9 +714,9 @@
         <tr><td>Tổng kết</td><td>0.5h</td><td>Demo: terraform apply → backend → Vue login → thấy ví</td></tr>
       </table>
 
-      <h3 style="color:var(--d5)">Phần A — VueJS</h3>
+      <h3 style="color:var(--d4)">Phần A — VueJS</h3>
       <div class="block">
-        <span class="pill theory">Lý thuyết 5.1</span> <b>Vue 3 core (Composition API)</b>
+        <span class="pill theory">Lý thuyết 4.1</span> <b>Vue 3 core (Composition API)</b>
         <ul class="src-list">
           <li>Vue guide: <a href="https://vuejs.org/guide/introduction.html">vuejs.org/guide/introduction</a> · Tutorial tương tác: <a href="https://vuejs.org/tutorial/">vuejs.org/tutorial</a></li>
           <li>Quick start (Vite): <a href="https://vuejs.org/guide/quick-start.html">vuejs.org/guide/quick-start</a></li>
@@ -750,7 +727,7 @@
       </div>
 
       <div class="block">
-        <span class="pill practice">Thực hành 5.A</span> <b>Scaffold app Vue + login Keycloak</b>
+        <span class="pill practice">Thực hành 4.A</span> <b>Scaffold app Vue + login Keycloak</b>
         <ol class="steps">
           <li>Tạo app tách biệt: <code>pnpm create vue@latest frontend-vue</code> (bật TypeScript, Router, Pinia). KHÔNG đụng <code>frontend/</code> (React).</li>
           <li>Cài <code>keycloak-js</code>; khởi tạo với client public <code>digitalwallet-frontend</code> (auth-code + PKCE) trỏ realm <code>digitalwallet</code>.</li>
@@ -760,7 +737,7 @@
       </div>
 
       <div class="block">
-        <span class="pill practice">Thực hành 5.B</span> <b>Màn hình ví (gọi API đã bảo vệ)</b>
+        <span class="pill practice">Thực hành 4.B</span> <b>Màn hình ví (gọi API đã bảo vệ)</b>
         <ol class="steps">
           <li>Pinia <code>wallet.store</code>: action <code>fetchWallets()</code> gọi <code>GET /wallets</code> kèm <code>Authorization: Bearer</code> từ auth store.</li>
           <li>Trang <code>WalletList.vue</code>: hiện <b>label + currency_code + balance</b> cùng nhau (không định danh ví bằng currency — mirror rule frontend repo). Format tiền bằng <code>Intl.NumberFormat</code>, KHÔNG <code>toFixed</code> trên số (giữ chính xác <code>numeric(19,4)</code>).</li>
@@ -769,9 +746,9 @@
         </ol>
       </div>
 
-      <h3 style="color:var(--d5)">Phần B — Terraform</h3>
+      <h3 style="color:var(--d4)">Phần B — Terraform</h3>
       <div class="block">
-        <span class="pill theory">Lý thuyết 5.2</span> <b>IaC &amp; Terraform cơ bản</b>
+        <span class="pill theory">Lý thuyết 4.2</span> <b>IaC &amp; Terraform cơ bản</b>
         <ul class="src-list">
           <li>Get Started (Docker): <a href="https://developer.hashicorp.com/terraform/tutorials/docker-get-started">developer.hashicorp.com/terraform/tutorials/docker-get-started</a></li>
           <li>Intro: <a href="https://developer.hashicorp.com/terraform/intro">terraform/intro</a> · Language: <a href="https://developer.hashicorp.com/terraform/language">terraform/language</a></li>
@@ -781,7 +758,7 @@
       </div>
 
       <div class="block">
-        <span class="pill practice">Thực hành 5.C</span> <b>Terraform dựng hạ tầng local (R6)</b>
+        <span class="pill practice">Thực hành 4.C</span> <b>Terraform dựng hạ tầng local (R6)</b>
         <p class="small">Tạo <code>infra/terraform/</code> tái lập đúng stack đang chạy tay trong <code>backend/docker-compose.yml</code>, nhưng bằng resource Terraform.</p>
         <ol class="steps">
           <li><code>main.tf</code>: provider <code>kreuzwerker/docker</code>; network <code>dw-net</code>; <code>docker_image</code> + <code>docker_container</code> cho Postgres 16, Redis 7, Kafka (KRaft), Keycloak.</li>
@@ -793,16 +770,16 @@
       </div>
 
       <div class="block">
-        <span class="pill practice">Thực hành 5.D</span> <b>Demo End-to-End</b>
+        <span class="pill practice">Thực hành 4.D</span> <b>Demo End-to-End</b>
         <ol class="steps">
           <li><code>terraform apply</code> → hạ tầng (gồm Keycloak) lên.</li>
           <li>Chạy backend <code>./mvnw quarkus:dev -Dquarkus.profile=keycloak</code>.</li>
           <li><code>pnpm --dir frontend-vue dev</code> → mở <code>http://localhost:5173</code> → login qua Keycloak → thấy danh sách ví → nạp tiền → balance cập nhật.</li>
-          <li>Quay video/screenshot 60 giây làm “bằng chứng học”.</li>
+          <li>Quay video/screenshot 60 giây làm tư liệu chứng minh kết quả học.</li>
         </ol>
       </div>
 
-      <h4>Definition of Done — Ngày 5</h4>
+      <h4>Definition of Done — Ngày 4</h4>
       <ul class="dod">
         <li><input type="checkbox"> Vue app login qua Keycloak, token in-memory.</li>
         <li><input type="checkbox"> List ví + open + deposit chạy thật với backend đã bảo vệ.</li>
@@ -853,7 +830,7 @@
       </ul>
     </div>
     <div class="panel">
-      <h4 style="color:var(--d4)">Keycloak · OAuth2/OIDC</h4>
+      <h4 style="color:var(--d3)">Keycloak · OAuth2/OIDC</h4>
       <ul class="src-list">
         <li>Keycloak GS (Docker): <a href="https://www.keycloak.org/getting-started/getting-started-docker">getting-started-docker</a></li>
         <li>Keycloak docs: <a href="https://www.keycloak.org/documentation">documentation</a></li>
@@ -864,7 +841,7 @@
       </ul>
     </div>
     <div class="panel">
-      <h4 style="color:var(--d5)">VueJS</h4>
+      <h4 style="color:var(--d4)">VueJS</h4>
       <ul class="src-list">
         <li>Guide: <a href="https://vuejs.org/guide/introduction.html">vuejs.org/guide</a></li>
         <li>Tutorial: <a href="https://vuejs.org/tutorial/">vuejs.org/tutorial</a></li>
@@ -874,7 +851,7 @@
       </ul>
     </div>
     <div class="panel">
-      <h4 style="color:var(--d5)">Terraform</h4>
+      <h4 style="color:var(--d4)">Terraform</h4>
       <ul class="src-list">
         <li>Get started (Docker): <a href="https://developer.hashicorp.com/terraform/tutorials/docker-get-started">docker-get-started</a></li>
         <li>Intro: <a href="https://developer.hashicorp.com/terraform/intro">intro</a></li>
@@ -891,21 +868,21 @@
   <table>
     <thead><tr><th>Rủi ro</th><th>Dấu hiệu</th><th>Cắt giảm</th></tr></thead>
     <tbody>
-      <tr><td>Refactor hexagonal sa lầy mapping</td><td>Ngày 2 quá 17:00 chưa xanh test</td><td>Chỉ refactor luồng <b>register</b> (bỏ authenticate); để authenticate ở dạng layered cũ, ghi chú “TODO”.</td></tr>
-      <tr><td>MicroProfile ôm đồm</td><td>Ngày 3 chưa xong wallet slice</td><td>Bỏ circuit-breaker demo (3.C) trước; giữ wallet + health + Swagger là đủ học.</td></tr>
-      <tr><td>Keycloak cấu hình rối</td><td>Ngày 4 không lấy được token</td><td>Dùng realm-export mẫu, chỉ làm 1 client + 1 role <code>USER</code>; bỏ ADMIN.</td></tr>
-      <tr><td>Vue + Terraform dồn Ngày 5</td><td>Quá tải buổi chiều</td><td>Ưu tiên Vue chạy được (A); Terraform rút còn <b>chỉ Postgres + Keycloak</b> (2 resource) để nắm <code>plan/apply</code>.</td></tr>
+      <tr><td>Refactor hexagonal bị kẹt ở phần mapping</td><td>Ngày 2 quá 17:00 chưa xanh test</td><td>Chỉ refactor luồng <b>register</b> (bỏ authenticate); để authenticate ở dạng layered cũ, ghi chú “TODO”.</td></tr>
+      <tr><td>Ngày 3 quá tải (gộp cả MicroProfile lẫn Keycloak)</td><td>Hết ngày chưa xong Phần A</td><td>Ưu tiên wallet + health + Swagger chạy được; bỏ circuit-breaker demo (3.C) trước; đẩy Phần B (Keycloak) sang buổi tối hoặc đầu Ngày 4.</td></tr>
+      <tr><td>Keycloak cấu hình rối</td><td>Ngày 3 (Phần B) không lấy được token</td><td>Dùng realm-export mẫu, chỉ làm 1 client + 1 role <code>USER</code>; bỏ ADMIN.</td></tr>
+      <tr><td>Vue + Terraform dồn Ngày 4</td><td>Quá tải buổi chiều</td><td>Ưu tiên Vue chạy được (Phần A); Terraform rút còn <b>chỉ Postgres + Keycloak</b> (2 resource) để nắm <code>plan/apply</code>.</td></tr>
       <tr><td>Coverage gate đỏ</td><td><code>./mvnw verify</code> fail JaCoCo</td><td>Thêm vài unit test boundary cho service mới; gate chỉ tính <code>service/**</code> nên tập trung ở đó.</td></tr>
     </tbody>
   </table>
   <div class="callout ok">
-    <span class="tag">Sau 5 ngày — bước tiếp</span>
-    <p style="margin:4px 0 0">Khi đã nắm 6 stack, quay lại làm <b>đúng chuẩn production</b> trên nhánh feature thật: NFR1 (Redis lock + <code>PESSIMISTIC_WRITE</code>), NFR2 (Outbox + Kafka poller), NFR3 (idempotency_record), rồi fraud/PFM/advisor. Lúc đó các pattern resilience/security học ở Ngày 3–4 sẽ tái dùng trực tiếp. Nếu muốn giữ Keycloak/Hexagonal/Vue/Terraform cho team → mở ADR theo <span class="tag-file">upgrade-policy.md §5</span>.</p>
+    <span class="tag">Sau 4 ngày — bước tiếp</span>
+    <p style="margin:4px 0 0">Khi đã nắm 6 stack, quay lại làm <b>đúng chuẩn production</b> trên nhánh feature thật: NFR1 (Redis lock + <code>PESSIMISTIC_WRITE</code>), NFR2 (Outbox + Kafka poller), NFR3 (idempotency_record), rồi fraud/PFM/advisor. Lúc đó các pattern resilience và security học ở Ngày 3 sẽ tái dùng trực tiếp. Nếu muốn giữ Keycloak/Hexagonal/Vue/Terraform cho team → mở ADR theo <span class="tag-file">upgrade-policy.md §5</span>.</p>
   </div>
 </section>
 
 <footer>
-  <p>Kế hoạch học tập 5 ngày cho repo <b>DigitalWallet</b> — tạo ngày 2026-06-16. Giả định: ~8h/ngày, Vue mini-app riêng, Terraform Docker provider local. Mọi thực hành nằm trên nhánh <code>learning/tech-stack-spike</code>, không merge vào <code>main</code>. Đây là tài liệu học tập cá nhân, không phải deliverable chính thức của dự án.</p>
+  <p>Kế hoạch học tập 4 ngày cho repo <b>DigitalWallet</b> — tạo ngày 2026-06-16, điều chỉnh từ bản 5 ngày sang 4 ngày ngày 2026-06-18 (giữ nguyên khối lượng, dồn Keycloak vào Ngày 3). Giả định: ~8h/ngày (riêng Ngày 3 dày gần gấp đôi vì gộp MicroProfile + Keycloak), Vue mini-app riêng, Terraform Docker provider local. Mọi thực hành nằm trên nhánh <code>learning/tech-stack-spike</code>, không merge vào <code>main</code>. Đây là tài liệu học tập cá nhân, không phải deliverable chính thức của dự án.</p>
 </footer>
 
 </div>

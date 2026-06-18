@@ -39,7 +39,7 @@
 
 ## §3 Architecture style
 
-- **High-level shape:** Modular monolith with **two-stream architecture** — a synchronous transactional core and one or more asynchronous Kafka consumers (Fraud, PFM, Dashboard).
+- **High-level shape:** Modular monolith with a **two-stream architecture**, organised internally as **per-module hexagonal (ports & adapters)** — a synchronous transactional core and one or more asynchronous Kafka consumers (Fraud, PFM, Dashboard).
 - **Synchronous vs. asynchronous boundaries:**
   - Sync: account/wallet CRUD, deposit/withdraw, P2P transfer (the request thread MUST commit the ledger row and return).
   - Async (Kafka consumers, separate thread pools):
@@ -48,7 +48,7 @@
     - Admin dashboard live-metrics aggregator (pushed to clients via WebSocket).
     - LLM-backed PFM advisor (async request-reply: HTTP 202 → result via WebSocket).
 - **Major streams / paths:**
-  1. **Money path** — REST → idempotency check → rate limit → **synchronous fraud pre-check** (Redis sliding-window counters for velocity + volume, plus `account.fraud_status` lookup) → service (Redis wallet lock + ACID DB transaction with `PESSIMISTIC_WRITE`) → ledger row + outbox row committed atomically → return. A breach of velocity / volume rejects the transaction inline (HTTP 422 `fraud.velocity_exceeded` / `fraud.volume_exceeded`); a suspended user is rejected with `account.suspended` (error key kept for backward-compat with the API contract). Blocked attempts emit a `transaction.blocked` event via the outbox so the async stream retains a full record. *(MVP: `audit_log` is deferred — see §8.)*
+  1. **Money path** — REST → idempotency check → rate limit → **synchronous fraud pre-check** (Redis sliding-window counters for velocity + volume, plus `account.fraud_status` lookup) → application service (use case) (Redis wallet lock + ACID DB transaction with `PESSIMISTIC_WRITE`) → ledger row + outbox row committed atomically → return. A breach of velocity / volume rejects the transaction inline (HTTP 422 `fraud.velocity_exceeded` / `fraud.volume_exceeded`); a suspended user is rejected with `account.suspended` (error key kept for backward-compat with the API contract). Blocked attempts emit a `transaction.blocked` event via the outbox so the async stream retains a full record. *(MVP: `audit_log` is deferred — see §8.)*
   2. **Fraud path** — Kafka `transaction-events` → asynchronous fraud engine (cross-event analysis, repeat-breach detection, **user-suspension policy** — flipping `account.fraud_status` to `SUSPENDED`) → Kafka `fraud-alerts` → WebSocket fan-out to admin. The async path owns alerting and suspension state changes; immediate per-transaction blocking lives in the sync pre-check.
   3. **PFM path** — Kafka `transaction-events` → budget updater (event-time) → Redis/MV → threshold checker → WebSocket / Push.
   4. **AI advisor path** — month-end aggregator → LLM (circuit-breaker wrapped) → result topic → WebSocket reply to user.
@@ -64,27 +64,29 @@ DigitalWallet/
 │   ├── docker-compose.yml         # Postgres 16 + Kafka KRaft + Redis 7 + (--profile app) backend
 │   ├── env.template               # backend + infra env (DB / Kafka / Redis / JWT / LLM / fraud)
 │   ├── postgres/init/             # init scripts (test DB bootstrap)
-│   ├── account/                      # FR1.1 (signup, role, base_currency, fraud_status)
-│   │   ├── api/  service/  persistence/
+│   ├── account/                   # FR1.1 — one hexagon (signup, role, base_currency, fraud_status)
+│   │   ├── domain/                #   framework-free model + rules
+│   │   ├── application/           #   port/in (use cases) · port/out (SPIs) · service (use-case impls)
+│   │   └── adapter/               #   in/web · in/messaging · out/persistence
 │   ├── wallet/                    # FR1.2, FR1.3, FR1.4
-│   │   ├── api/  service/  persistence/  event/
-│   ├── fraud/                     # FR2.1, FR2.2, FR2.3
-│   │   ├── consumer/  service/  event/
+│   │   ├── domain/  application/  adapter/   # in/web · out/persistence · out/messaging
+│   ├── fraud/                     # FR2.1, FR2.2, FR2.3, FR2.4, FR2.5
+│   │   ├── domain/  application/  adapter/   # in/messaging · out/redis · out/messaging
 │   ├── pfm/                       # FR4.x, FR5.x
-│   │   ├── api/  service/  consumer/  persistence/
+│   │   ├── domain/  application/  adapter/   # in/web · in/messaging · out/redis (NO ledger persistence — NFR6)
 │   ├── advisor/                   # FR6.x — LLM integration
-│   │   ├── api/  service/  client/
+│   │   ├── domain/  application/  adapter/   # in/web · in/messaging · out/llm
 │   ├── dashboard/                 # FR3.x
-│   │   ├── api/  ws/  consumer/
-│   └── shared/                    # money, idempotency, outbox, security
-└── frontend/                      # React app (user app + admin dashboard) + its deploy tier
+│   │   ├── domain/  application/  adapter/   # in/web · in/messaging (WebSocket) 
+│   └── shared/                    # domain kernel + cross-cutting adapters: money, idempotency, outbox poller, rate-limit, lock, security, exception mapper
+└── frontend/                      # Vue 3 app (user app + admin dashboard) + its deploy tier
     ├── Dockerfile                 # multi-stage Node 20 build → nginx 1.27
     ├── docker-compose.yml         # nginx serving dist/, joins backend's dw-net
     ├── nginx.conf                 # static + /api reverse-proxy + WebSocket upgrade
     └── env.template               # public-only config (no secrets — VITE_* is readable in the browser)
 ```
 
-**Organising principle:** Feature-based + layered. Group code by feature module under `backend/`, separate the standard layers (`api/`, `service/`, `persistence/`, plus `consumer/` and `event/` where applicable) inside each module. The `shared/` module holds cross-cutting concerns (money type, idempotency middleware, outbox poller, security).
+**Organising principle:** Per-module hexagonal (ports & adapters) within a modular monolith. Each feature module under `backend/` is its own hexagon: a framework-free `domain/`, an `application/` layer holding inbound ports (use cases), outbound ports (SPIs), and the use-case implementations (application services), and an `adapter/` layer split into inbound adapters (`in/web` JAX-RS, `in/messaging` Kafka) and outbound adapters (`out/persistence` JPA, `out/redis`, `out/messaging`, `out/llm`). Dependencies point inward only; frameworks live in adapters. The `shared/` module holds the domain kernel (money type), the exception/security/validation infrastructure, and the cross-cutting outbound adapters (idempotency, outbox poller, rate-limit, Redis lock).
 
 ---
 
@@ -109,11 +111,13 @@ DigitalWallet/
 
 | Concern | Choice | Version target | Reason / constraint |
 |---|---|---|---|
-| Framework | React | 18.x | Wide ecosystem; suits live dashboard + user app |
+| Framework | Vue | 3.x | Composition API + SFCs; suits live dashboard + user app |
 | Language | TypeScript | 5.x strict | Type-safety required given API surface size |
 | Styling | Tailwind CSS | 3.x | Utility-first, fast iteration on the admin dashboard |
-| State mgmt | Redux Toolkit (incl. RTK Query) | latest | Battle-tested; RTK Query handles REST caching + WebSocket subscriptions consistently |
-| Forms | React Hook Form + Zod | latest | Performant uncontrolled forms with type-safe schema validation |
+| State mgmt | Pinia | latest | Official Vue store; setup-style stores, typed getters |
+| Server cache | TanStack Query (Vue Query) | latest | REST caching/invalidation + loading/error state; the RTK-Query-equivalent data layer |
+| Forms | VeeValidate + Zod | latest | Schema-validated forms with `toTypedSchema`; type-safe |
+| Routing | Vue Router | 4.x | Functional guards on `route.meta`; nested routes for the shell |
 | Realtime client | Native WebSocket API | — | Required for FR3.2 alert toasts, FR5.1 budget alerts, and the async LLM reply (NFR8) |
 | Package mgr | pnpm | latest | Faster installs, content-addressable store |
 
@@ -138,9 +142,9 @@ DigitalWallet/
 
 | Layer | Tool | Floor |
 |---|---|---|
-| Unit (backend) | JUnit 5 + Mockito | ≥80% service-layer line coverage (NFR4) |
+| Unit (backend) | JUnit 5 + Mockito | ≥80% application-service-layer line coverage (NFR4) |
 | Integration | Testcontainers (Postgres + Kafka + Redis) | Every public repository method + every Kafka consumer |
-| Unit (frontend) | Vitest + React Testing Library | Every reducer / selector / hook with branching logic |
+| Unit (frontend) | Vitest + @testing-library/vue | Every Pinia store / composable / getter with branching logic |
 | E2E | Playwright | Smoke per epic (signup → transfer → see fraud alert; create budget → spend → see threshold alert) |
 | Coverage tool | JaCoCo (backend); c8 via Vitest (frontend) | — |
 
@@ -200,15 +204,15 @@ DigitalWallet/
 
 | ID | Invariant | Why it matters | Enforcement layer |
 |---|---|---|---|
-| NFR1 | **Hybrid concurrency**: Redis distributed lock keyed on `wallet_id` is acquired first (short TTL, fences out concurrent retries / spam clicks); the inner DB transaction then uses `SELECT … FOR UPDATE` via JPA `PESSIMISTIC_WRITE` to lock the ledger row. The Redis lock fails fast; the DB lock is authoritative | Prevent race conditions on the ledger AND prevent hot-row pile-up by rejecting duplicate retries at the edge | Service layer + Redis lock helper + repository |
-| NFR2 | ACID-strict writes via `@Transactional`; cross-system consistency via the **Transactional Outbox Pattern** — the DB row and the outbox row are committed in the same transaction, and a Quarkus `@Scheduled` poller drains the outbox into Kafka with at-least-once delivery semantics (consumers are idempotent) | Money cannot be created or destroyed; events cannot be lost or duplicated relative to DB state | Service layer + scheduled outbox poller |
+| NFR1 | **Hybrid concurrency**: Redis distributed lock keyed on `wallet_id` is acquired first (short TTL, fences out concurrent retries / spam clicks); the inner DB transaction then uses `SELECT … FOR UPDATE` via JPA `PESSIMISTIC_WRITE` to lock the ledger row. The Redis lock fails fast; the DB lock is authoritative | Prevent race conditions on the ledger AND prevent hot-row pile-up by rejecting duplicate retries at the edge | Application service (use case) + Redis lock helper + outbound persistence adapter |
+| NFR2 | ACID-strict writes via `@Transactional`; cross-system consistency via the **Transactional Outbox Pattern** — the DB row and the outbox row are committed in the same transaction, and a Quarkus `@Scheduled` poller drains the outbox into Kafka with at-least-once delivery semantics (consumers are idempotent) | Money cannot be created or destroyed; events cannot be lost or duplicated relative to DB state | Application service (use case) + scheduled outbox poller |
 | NFR3 | Transfer endpoints require an `Idempotency-Key` HTTP header; replays return the original outcome | Retry safety against network flakiness or spam clicks | Idempotency middleware (shared module) |
-| NFR4 | ≥80% line coverage on service layer with JUnit 5 + Mockito | Regression safety | JaCoCo gate in CI |
+| NFR4 | ≥80% line coverage on the application service layer (use-case implementations) with JUnit 5 + Mockito | Regression safety | JaCoCo gate in CI |
 | NFR5 | The HTTP path MAY perform fast, bounded Redis-counter pre-checks (fraud velocity / volume per FR2.1–FR2.2, plus `account.fraud_status` lookup per FR2.4) but MUST NOT run heavy fraud / PFM / dashboard analytics inline. Cross-event fraud analysis, alert fan-out, suspension policy, PFM aggregation, and dashboard aggregation MUST run in separate Kafka-consumer threads | Block visibly fraudulent activity at the edge without coupling the request thread to heavy analytics | Architecture review + module boundaries |
-| NFR6 | Budget state MUST NOT be maintained by direct `UPDATE`s against core tables. **CQRS dual read-model**: Redis hashes are the hot path (updated by the Kafka consumer in real time); a Postgres materialized view is refreshed periodically as the durable backup and is the source of truth for rebuilding Redis after a cache loss | Prevent row-locks on Core Banking tables; scale reads independently; survive Redis flushes without data loss | Service layer + PFM consumer + scheduled MV refresh + Redis rebuild job |
-| NFR7 | PFM calculations use `event_timestamp` from the Kafka payload (event time), not consumer wall-clock. Late-arriving events MUST be handled without corrupting accounting reports | Distributed-system correctness | Consumer logic with watermarks / reconciliation job |
+| NFR6 | Budget state MUST NOT be maintained by direct `UPDATE`s against core tables. **CQRS dual read-model**: Redis hashes are the hot path (updated by the Kafka consumer in real time); a Postgres materialized view is refreshed periodically as the durable backup and is the source of truth for rebuilding Redis after a cache loss | Prevent row-locks on Core Banking tables; scale reads independently; survive Redis flushes without data loss | Application service (use case) + PFM inbound messaging adapter + scheduled MV refresh + Redis rebuild job |
+| NFR7 | PFM calculations use `event_timestamp` from the Kafka payload (event time), not consumer wall-clock. Late-arriving events MUST be handled without corrupting accounting reports | Distributed-system correctness | Inbound messaging adapter logic with watermarks / reconciliation job |
 | NFR8 | Outbound LLM calls are wrapped in a Circuit Breaker. The PFM Advisor endpoint follows Asynchronous Request-Reply (return HTTP 202 immediately, deliver the result over WebSocket) | LLM calls are slow and expensive — must never block HTTP threads | SmallRye Fault Tolerance + WebSocket reply channel |
-| NFR9 | **Synchronous fraud blocking**: the sync money path MUST evaluate velocity (FR2.1), volume (FR2.2), and `account.fraud_status` (FR2.4) before opening the DB transaction. Counters live in Redis (sliding window); suspension state lives in Postgres. Async fraud analytics, alert fan-out (FR2.5), and the suspension-policy decision (when to flip a user to `SUSPENDED`) remain on the Kafka consumer | Fraud is prevented at the edge — suspicious activity never reaches the ledger — without coupling the request thread to heavy analytics | Service layer + Redis counters + Postgres `account.fraud_status` + fraud consumer for policy/alerting |
+| NFR9 | **Synchronous fraud blocking**: the sync money path MUST evaluate velocity (FR2.1), volume (FR2.2), and `account.fraud_status` (FR2.4) before opening the DB transaction. Counters live in Redis (sliding window); suspension state lives in Postgres. Async fraud analytics, alert fan-out (FR2.5), and the suspension-policy decision (when to flip a user to `SUSPENDED`) remain on the Kafka consumer | Fraud is prevented at the edge — suspicious activity never reaches the ledger — without coupling the request thread to heavy analytics | Application service (use case) + Redis counters + Postgres `account.fraud_status` + fraud inbound messaging adapter for policy/alerting |
 
 ---
 
@@ -227,7 +231,7 @@ DigitalWallet/
 - **Auth scheme:** JWT (stateless), signed with **ES256** (ECDSA P-256). Smaller tokens and keys than RS256, faster signing on the wallet path.
 - **Authorization model:** Role-based with two roles in MVP: `USER`, `ADMIN` (see §2.2). One role per account, stored as `account.role`. The `FRAUD_ANALYST` role and multi-role-per-account are deferred and will return via ADR when manual unsuspend / analyst workflows ship.
 - **PII handled:** email, wallet balance, transaction history, category labels. No card / bank credentials are stored (deposits are simulated).
-- **Compliance constraints (MVP partial):** **SOC 2 alignment is a directional goal, deferred in MVP.** What MVP commits to: (a) RBAC enforced at the service layer (not only in the controller), (b) change-management traceability via Conventional Commits + PR review, (c) no PII in logs. What MVP defers: an immutable `audit_log` table covering all money mutations and admin actions (returns when manual unsuspend, role grants UI, or admin PII reads ship), formal access-review tooling.
+- **Compliance constraints (MVP partial):** **SOC 2 alignment is a directional goal, deferred in MVP.** What MVP commits to: (a) RBAC enforced at the application service (use case) layer (not only in the inbound web adapter), (b) change-management traceability via Conventional Commits + PR review, (c) no PII in logs. What MVP defers: an immutable `audit_log` table covering all money mutations and admin actions (returns when manual unsuspend, role grants UI, or admin PII reads ship), formal access-review tooling.
 - **Rate limiting:** applied to sensitive endpoints only via a Redis token bucket:
   - `POST /transfers` — 10 req / minute / user.
   - `POST /advisor/*` — 5 req / hour / user (LLM cost control on top of the circuit breaker in NFR8).
@@ -278,9 +282,10 @@ DigitalWallet/
 | 5 | Outbox publisher | Transactional outbox + Quarkus `@Scheduled` poller (no Debezium) | ✅ Decided — write ADR |
 | 6 | Multi-currency model | Multiple wallets per account, each scoped to a single currency; an account MAY own several wallets in the same currency. Cross-currency transfers convert at transfer time using a cached FX rate. Each account has an immutable `base_currency` chosen at signup that scopes budget reporting | ✅ Decided — write ADR |
 | 7 | Build tool | Maven | ✅ Decided — write ADR |
-| 8 | Frontend stack | React 18 + TypeScript strict + Tailwind + Redux Toolkit + React Hook Form + Zod + pnpm + Vitest + Playwright | ✅ Decided — write ADR |
+| 8 | Frontend stack | Vue 3 + TypeScript strict + Tailwind + Pinia + TanStack Query (Vue Query) + VeeValidate + Zod + Vue Router + pnpm + Vitest + @testing-library/vue + Playwright | ✅ Decided — write ADR |
 | 9 | RBAC roles (MVP) | `USER`, `ADMIN` (two roles, stored on `account.role`). `FRAUD_ANALYST` and multi-role-per-account are deferred — see ADR #9 MVP scope notes | ✅ Decided — write ADR |
 | 10 | Fraud enforcement model | Hybrid: synchronous Redis-counter pre-check + `account.fraud_status` lookup on the money path (blocks the user); async Kafka consumer for alerts and the auto-suspension policy decision. Manual unsuspend deferred in MVP | ✅ Decided — write ADR |
+| 11 | Architecture style | Per-module hexagonal (ports & adapters): each feature module is its own hexagon (framework-free `domain/`, `application/` ports + use-case impls, `adapter/` in/out) within the modular monolith — ADR 0012 | ✅ Decided — write ADR |
 
 ---
 
@@ -301,20 +306,20 @@ DigitalWallet/
 - **Default branch:** `main`.
 - **PR / MR style:** GitHub pull requests.
 - **Commit convention:** Conventional Commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`).
-- **Code review:** at least one reviewer required; blocking checks in CI = compile + unit tests + integration tests (Testcontainers) + JaCoCo coverage gate (≥80% service layer) + frontend lint + frontend tests.
+- **Code review:** at least one reviewer required; blocking checks in CI = compile + unit tests + integration tests (Testcontainers) + JaCoCo coverage gate (≥80% application service layer) + frontend lint + frontend tests.
 - **Pre-commit hooks:** gitleaks (secret scan), formatter (Spotless on backend, Prettier on frontend), and a fast lint pass.
-- **Coverage gate in CI:** yes — fail under 80% on the service layer (NFR4).
+- **Coverage gate in CI:** yes — fail under 80% on the application service layer (NFR4).
 
 ---
 
 ## §13 Coding conventions (highest-level, project-wide)
 
-- **Naming:** Java classes PascalCase, methods/fields camelCase, constants UPPER_SNAKE; TypeScript files kebab-case, components PascalCase; SQL identifiers snake_case.
+- **Naming:** Java classes PascalCase, methods/fields camelCase, constants UPPER_SNAKE; TypeScript files kebab-case, Vue single-file components (`.vue`) kebab-case filenames with PascalCase component names; SQL identifiers snake_case.
 - **DI / IoC style:** Constructor injection only on the backend; no field injection.
 - **Error model:** Typed exception hierarchy rooted at a project-level `DomainException` carrying an `error_key` + human message; mapped to HTTP responses by a single JAX-RS exception mapper.
 - **Logging library:** SLF4J via JBoss Logging (Quarkus default). Levels: `INFO` for business events, `WARN` for recoverable degradations, `ERROR` for unrecovered failures, `DEBUG` for traceable execution detail. No PII in logs.
 - **DTOs:** DTOs are separate from JPA entities. Entities are never serialised over the API.
-- **Documentation:** OpenAPI generated by the Quarkus SmallRye OpenAPI extension; hand-maintained at the resource layer.
+- **Documentation:** OpenAPI generated by the Quarkus SmallRye OpenAPI extension; hand-maintained at the inbound web adapter.
 - **Money / currency:** `BigDecimal` in Java, `numeric(19,4)` in Postgres, currency code as ISO 4217 (`USD`, `EUR`, …). Never `double`/`float` for money.
 - **Timestamps:** UTC everywhere, stored as `timestamptz`, serialised as ISO-8601.
 
@@ -365,11 +370,11 @@ DigitalWallet/
 | 5 | Outbox publisher? | ✅ Answered | Transactional outbox + Quarkus scheduled poller — ADR #5 |
 | 6 | Multi-currency model? | ✅ Answered | Multiple wallets per account, each scoped to a single currency; an account MAY own several wallets in the same currency. FX at transfer time via cached rate. Each account has an immutable `base_currency` chosen at signup — ADR #6 |
 | 7 | Build tool? | ✅ Answered | Maven — ADR #7 |
-| 8 | Frontend stack? | ✅ Answered | React + TS strict + Tailwind + RTK + RHF/Zod + pnpm + Vitest + Playwright — ADR #8 |
+| 8 | Frontend stack? | ✅ Answered | Vue 3 + TS strict + Tailwind + Pinia + TanStack Query (Vue Query) + VeeValidate/Zod + Vue Router + pnpm + Vitest + @testing-library/vue + Playwright — ADR #8 |
 | 9 | RBAC roles in MVP? | ✅ Answered | Two roles in MVP: `USER`, `ADMIN`, stored as a column on the `account` row. `FRAUD_ANALYST` and multi-role-per-account deferred — see ADR #9 |
 | 10 | Repo remote + CI? | ✅ Answered | GitHub + GitHub Actions |
 | 11 | License? | ✅ Answered | Proprietary |
-| 12 | Compliance constraints? | ✅ Answered (partial) | SOC 2 directional goal; MVP commits to RBAC at service layer + no PII in logs. Immutable `audit_log` table and formal access review deferred — see §8 |
+| 12 | Compliance constraints? | ✅ Answered (partial) | SOC 2 directional goal; MVP commits to RBAC at the application service layer + no PII in logs. Immutable `audit_log` table and formal access review deferred — see §8 |
 | 13 | Rate-limiting policy? | ✅ Answered | Token bucket on `/transfers` (10/min/user) and `/advisor/*` (5/hour/user) |
 | 14 | FX rate source? | ✅ Answered | Static seed in DB table `fx_rate` (loaded via Flyway migration); no external FX provider in MVP. Cached in Redis with TTL on read. |
 | 15 | LLM payload retention / training opt-out (provider-dependent)? | ❓ Unanswered | Resolve together with ADR #2 |

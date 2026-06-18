@@ -10,9 +10,10 @@ DigitalWallet is a multi-currency internal wallet platform with real-time fraud 
 
 ```
             +-----------------------------+
-            |  React 18 + TS strict       |
-            |  Redux Toolkit + RTK Query  |
-            |  Tailwind 3 + RHF + Zod     |
+            |  Vue 3 + TS strict          |
+            |  Pinia + Vue Query          |
+            |  Tailwind 3 + VeeValidate   |
+            |  + Zod                      |
             +--------------+--------------+
                            |
               REST (HTTPS) | WebSocket
@@ -71,40 +72,44 @@ DigitalWallet/
 ├── backend/                       # Quarkus application + its deploy tier
 │   ├── Dockerfile                 # multi-stage JVM (eclipse-temurin:21-jre)
 │   ├── docker-compose.yml         # Postgres 16 + Kafka KRaft + Redis 7 + (--profile app) backend
-│   ├── env.template               # backend + infra env template
+│   ├── env.template               # backend + infra env (DB / Kafka / Redis / JWT / LLM / fraud)
 │   ├── postgres/init/             # init scripts (test DB bootstrap)
-│   ├── account/                      # FR1.1 (signup, role, base_currency, fraud_status)
-│   │   ├── api/  service/  persistence/
+│   ├── account/                   # FR1.1 — one hexagon (signup, role, base_currency, fraud_status)
+│   │   ├── domain/                #   framework-free model + rules
+│   │   ├── application/           #   port/in (use cases) · port/out (SPIs) · service (use-case impls)
+│   │   └── adapter/               #   in/web · in/messaging · out/persistence
 │   ├── wallet/                    # FR1.2, FR1.3, FR1.4
-│   │   ├── api/  service/  persistence/  event/
+│   │   ├── domain/  application/  adapter/   # in/web · out/persistence · out/messaging
 │   ├── fraud/                     # FR2.1, FR2.2, FR2.3, FR2.4, FR2.5
-│   │   ├── consumer/  service/  event/
+│   │   ├── domain/  application/  adapter/   # in/messaging · out/redis · out/messaging
 │   ├── pfm/                       # FR4.x, FR5.x
-│   │   ├── api/  service/  consumer/  persistence/
+│   │   ├── domain/  application/  adapter/   # in/web · in/messaging · out/redis (NO ledger persistence — NFR6)
 │   ├── advisor/                   # FR6.x — LLM integration
-│   │   ├── api/  service/  client/
+│   │   ├── domain/  application/  adapter/   # in/web · in/messaging · out/llm
 │   ├── dashboard/                 # FR3.x
-│   │   ├── api/  ws/  consumer/
-│   └── shared/                    # money, idempotency, outbox, security
-└── frontend/                      # React app (user app + admin dashboard) + its deploy tier
+│   │   ├── domain/  application/  adapter/   # in/web · in/messaging (WebSocket) 
+│   └── shared/                    # domain kernel + cross-cutting adapters: money, idempotency, outbox poller, rate-limit, lock, security, exception mapper
+└── frontend/                      # Vue 3 app (user app + admin dashboard) + its deploy tier
     ├── Dockerfile                 # multi-stage Node 20 build → nginx 1.27
     ├── docker-compose.yml         # nginx serving dist/, joins the backend's dw-net
     ├── nginx.conf                 # static + /api reverse-proxy + WebSocket upgrade
     └── env.template               # public-only config (VITE_* is readable in the browser)
 ```
 
-**Organising principle:** Feature-based + layered. Group code by feature module under `backend/`; inside each module the standard layers `api/`, `service/`, `persistence/` (plus `consumer/` and `event/` where applicable) are kept separate. The `shared/` module holds cross-cutting concerns (money type, idempotency middleware, outbox poller, security).
+**Organising principle:** Per-module hexagonal (ports & adapters) within a modular monolith. Each feature module under `backend/` is its own hexagon: a framework-free `domain/`, an `application/` layer holding inbound ports (use cases), outbound ports (SPIs), and the use-case implementations (application services), and an `adapter/` layer split into inbound adapters (`in/web` JAX-RS, `in/messaging` Kafka) and outbound adapters (`out/persistence` JPA, `out/redis`, `out/messaging`, `out/llm`). Dependencies point inward only; frameworks live in adapters. The `shared/` module holds the domain kernel (money type), the exception/security/validation infrastructure, and the cross-cutting outbound adapters (idempotency, outbox poller, rate-limit, Redis lock).
+
+**Dependency rule:** dependencies point INWARD only — `adapter` → `application` → `domain`. `domain/` depends on nothing; `application/` depends only on `domain/` and its own ports; `adapter/` depends on `application/` (ports) and `domain/`. Frameworks (JAX-RS, Hibernate/Panache, SmallRye Kafka, the Redis client, MicroProfile config, SmallRye Fault Tolerance) appear ONLY in `adapter/` packages — `domain/` and `application/` are framework-free. Application services depend on outbound ports (`port/out`), never on concrete adapters; the outbound adapter `implements` the port.
 
 ## 4. Frontend layering
 
-Frontend scaffolded under `frontend/src/` (Phase A–E): `app/` (routed shell + store wiring), `features/` (per-module folders), `routes/` (route table + guards), `shared/` (UI primitives, WebSocket client, money helpers). Per [../../project-info.md §3.1](../../project-info.md#31-module--package-organization), a single React app serves both end users and the admin dashboard. The frontend stack is mandated in [../../project-info.md §4.2](../../project-info.md#42-frontend) and recorded in [../decisions/0008-frontend-stack.md](../decisions/0008-frontend-stack.md).
+Frontend scaffolded under `frontend/src/` (Phase A–E): `app/` (`App.vue` routed shell + Pinia store wiring + Vue Query plugin), `features/` (per-module folders), `routes/` (route table + guards), `shared/` (UI primitives, WebSocket client, money helpers). Per [../../project-info.md §3.1](../../project-info.md#31-module--package-organization), a single Vue 3 app serves both end users and the admin dashboard. The frontend stack is mandated in [../../project-info.md §4.2](../../project-info.md#42-frontend) and recorded in [../decisions/0008-frontend-stack.md](../decisions/0008-frontend-stack.md).
 
 Once the internal split lands, it is expected to reflect at minimum:
 
-- a routed shell that hosts both the user-facing app and the admin dashboard,
-- RTK Query API slices per backend module,
+- a routed shell (`App.vue`) that mounts the router and wires the Pinia store and the Vue Query plugin, hosting both the user-facing app and the admin dashboard,
+- Vue Query API clients per backend module,
 - a WebSocket client wrapper consumed by both the alert stream (FR3.2) and the advisor reply channel (NFR8),
-- shared form primitives wired to React Hook Form + Zod.
+- shared form primitives wired to VeeValidate + Zod.
 
 ## 5. How modules connect
 
@@ -113,7 +118,7 @@ Once the internal split lands, it is expected to reflect at minimum:
 | API base URL | REST over HTTPS in production; HTTP allowed inside the docker-compose network. Path conventions to be set in [../api/README.md](../api/README.md). | [../../project-info.md §8](../../project-info.md#8-security-baseline) |
 | Wire format | JSON; OpenAPI generated by Quarkus SmallRye OpenAPI extension. | [../../project-info.md §13](../../project-info.md#13-coding-conventions-highest-level-project-wide) |
 | Auth scheme | Stateless JWT signed with ES256. See §6 below. | [../../project-info.md §8](../../project-info.md#8-security-baseline), [../decisions/0001-jwt-signing-algorithm.md](../decisions/0001-jwt-signing-algorithm.md) |
-| Authorization | RBAC enforced at the service layer (not only in the controller). Two roles in MVP: `USER`, `ADMIN`, stored on `account.role`. `FRAUD_ANALYST` and multi-role-per-account are deferred — see ADR #9. | [../../project-info.md §2.2](../../project-info.md#22-roles-in-the-system), [../decisions/0009-rbac-roles.md](../decisions/0009-rbac-roles.md) |
+| Authorization | RBAC enforced in the application service (use case), not only in the inbound web adapter. Two roles in MVP: `USER`, `ADMIN`, stored on `account.role`. `FRAUD_ANALYST` and multi-role-per-account are deferred — see ADR #9. | [../../project-info.md §2.2](../../project-info.md#22-roles-in-the-system), [../decisions/0009-rbac-roles.md](../decisions/0009-rbac-roles.md) |
 | Idempotency | `Idempotency-Key` HTTP header on every mutating transfer/deposit/withdraw endpoint; replays return the original outcome. | [../../project-info.md §6 NFR3](../../project-info.md#6-non-functional-requirements--invariants) |
 | Real-time channel | Native WebSocket — fraud alerts (FR3.2), budget alerts (FR5.1), advisor async reply (NFR8). | [../../project-info.md §3](../../project-info.md#3-architecture-style), [../../project-info.md §4.2](../../project-info.md#42-frontend) |
 | Money path → analytics | Transactional Outbox Pattern: the ledger row and the outbox row commit in the same DB transaction; a Quarkus `@Scheduled` poller drains the outbox into `transaction-events`. The HTTP handler does not publish to Kafka. | [../../project-info.md §6 NFR2/NFR5](../../project-info.md#6-non-functional-requirements--invariants), [../decisions/0005-outbox-publisher.md](../decisions/0005-outbox-publisher.md) |
@@ -127,8 +132,8 @@ Once the internal split lands, it is expected to reflect at minimum:
 `(spec — not yet implemented)` — implementation pending; the spec already commits the scheme.
 
 - **Token format:** JWT (RFC 7519), signed with **ES256** (ECDSA P-256). See [../decisions/0001-jwt-signing-algorithm.md](../decisions/0001-jwt-signing-algorithm.md).
-- **Authorization model:** role-based. Two roles in MVP — `USER`, `ADMIN` — stored on `account.role` ([../decisions/0009-rbac-roles.md](../decisions/0009-rbac-roles.md)). RBAC is enforced at the service layer to align with SOC 2. `FRAUD_ANALYST` and multi-role-per-account are deferred and will return via ADR when manual unsuspend / analyst workflows ship.
-- **Audit log:** the immutable `audit_log` table is **deferred in MVP** ([../../project-info.md §8](../../project-info.md#8-security-baseline)). MVP commits to RBAC at the service layer + no PII in logs; durable justification for privileged actions returns when manual unsuspend, role grants UI, or admin PII reads ship.
+- **Authorization model:** role-based. Two roles in MVP — `USER`, `ADMIN` — stored on `account.role` ([../decisions/0009-rbac-roles.md](../decisions/0009-rbac-roles.md)). RBAC is enforced in the application service (use case) to align with SOC 2. `FRAUD_ANALYST` and multi-role-per-account are deferred and will return via ADR when manual unsuspend / analyst workflows ship.
+- **Audit log:** the immutable `audit_log` table is **deferred in MVP** ([../../project-info.md §8](../../project-info.md#8-security-baseline)). MVP commits to RBAC in the application service (use case) + no PII in logs; durable justification for privileged actions returns when manual unsuspend, role grants UI, or admin PII reads ship.
 - **LLM payload sanitisation:** advisor prompts contain only aggregated amounts and category labels — no user identifiers ([../../project-info.md §8](../../project-info.md#8-security-baseline)).
 
 ## 7. Config & profiles
@@ -167,4 +172,4 @@ The stack is packaged as Docker containers and orchestrated via Docker Compose o
 
 Start order is fixed: bring up the backend compose first so `dw-net` exists, then the frontend compose joins it. Local development runs the Quarkus backend via `./mvnw quarkus:dev` against just the infra services (no profile flag) for hot reload; the containerised backend (`--profile app`) is reserved for production-like smoke runs.
 
-No Kubernetes target is in scope for MVP. CI/CD is GitHub Actions: build, unit + integration tests via Testcontainers, JaCoCo coverage gate (≥80% service-layer line coverage), and frontend lint + tests ([../../project-info.md §4.6](../../project-info.md#46-deployment)).
+No Kubernetes target is in scope for MVP. CI/CD is GitHub Actions: build, unit + integration tests via Testcontainers, JaCoCo coverage gate (≥80% application-service-layer line coverage), and frontend lint + tests ([../../project-info.md §4.6](../../project-info.md#46-deployment)).

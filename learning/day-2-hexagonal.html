@@ -10,7 +10,7 @@
 
 <header class="gh">
   <div class="wrap">
-    <div class="breadcrumb"><a href="5-day-tech-stack-plan.html">← Kế hoạch 5 ngày</a> &nbsp;/&nbsp; Ngày 2</div>
+    <div class="breadcrumb"><a href="4-day-tech-stack-plan.html">← Kế hoạch 4 ngày</a> &nbsp;/&nbsp; Ngày 2</div>
     <h1><span class="badge b2">2</span>Hexagonal Architecture + SOLID + DDD</h1>
     <p class="lead">Hôm nay bạn học cách <b>tách nghiệp vụ khỏi framework</b>. Lý thuyết: SOLID (đặc biệt DIP), DDD tactical (entity / value object / aggregate), và kiến trúc Hexagonal (ports &amp; adapters). Thực hành: refactor module <code>account</code> đã có sẵn từ kiểu “layered” sang ports &amp; adapters — giữ nguyên hành vi, test cũ vẫn xanh.</p>
     <div class="meta">
@@ -44,7 +44,7 @@
 <section id="outcome">
   <h2><span class="lbl">Kết quả mong đợi</span>Hết ngày 2 bạn sẽ…</h2>
   <div class="panel"><ul>
-    <li>Phát biểu được 5 nguyên lý SOLID và chỉ ra <b>DIP</b> chính là “linh hồn” của hexagonal.</li>
+    <li>Phát biểu được 5 nguyên lý SOLID và chỉ ra <b>DIP</b> chính là nguyên lý cốt lõi của hexagonal.</li>
     <li>Phân biệt entity vs value object, biết aggregate giữ invariant thế nào.</li>
     <li>Vẽ được hình lục giác: inbound/outbound port &amp; adapter, và “mũi tên phụ thuộc luôn trỏ vào domain”.</li>
     <li>Refactor xong module <code>account</code>: <code>domain</code> không import jakarta/quarkus, resource chỉ gọi use-case, application service chỉ gọi out-port; test cũ xanh.</li>
@@ -55,7 +55,7 @@
   <h2><span class="lbl">Bước 0</span>Chuẩn bị (≈ 10 phút)</h2>
   <ul>
     <li>Đang ở nhánh <code>learning/tech-stack-spike</code>, slice account của Ngày 1 chạy được.</li>
-    <li>Mở sẵn 4 file để “bê” logic: <a href="../backend/src/main/java/com/digitalwallet/account/service/AccountService.java">AccountService</a>, <a href="../backend/src/main/java/com/digitalwallet/account/service/AuthService.java">AuthService</a>, <a href="../backend/src/main/java/com/digitalwallet/account/persistence/AccountEntity.java">AccountEntity</a>, <a href="../backend/src/main/java/com/digitalwallet/account/persistence/AccountRepository.java">AccountRepository</a>.</li>
+    <li>Mở sẵn 4 file để chuyển logic: <a href="../backend/src/main/java/com/digitalwallet/account/service/AccountService.java">AccountService</a>, <a href="../backend/src/main/java/com/digitalwallet/account/service/AuthService.java">AuthService</a>, <a href="../backend/src/main/java/com/digitalwallet/account/persistence/AccountEntity.java">AccountEntity</a>, <a href="../backend/src/main/java/com/digitalwallet/account/persistence/AccountRepository.java">AccountRepository</a>.</li>
   </ul>
   <div class="callout warn"><span class="tag">Nhớ vì sao là spike</span><p style="margin:4px 0 0">Repo mandate “feature + layered” (<span class="tag-file">backend_coding.md §1</span>). Hexagonal hôm nay là <b>bài học</b>, không phải đổi chuẩn team. Giữ trong nhánh learning; muốn áp dụng thật phải có ADR.</p></div>
 </section>
@@ -196,7 +196,7 @@ CÓ DIP:        Service ──phụ thuộc──► «interface» TokenIssuerPo
     <span class="kw">private final</span> <span class="ty">AccountRole</span> role;
     <span class="cmt">// constructor + getter; bất biến; KHÔNG import jakarta/quarkus ở file này</span>
 }</code></pre>
-<div class="checkpoint"><b>✅ Checkpoint:</b> mở <code>Account.java</code>, <code>Email.java</code> — không có dòng <code>import jakarta.persistence</code> hay <code>io.quarkus</code> nào. Nếu có, bạn đang để hạ tầng rò vào domain.</div>
+<div class="checkpoint"><b>✅ Checkpoint:</b> mở <code>Account.java</code>, <code>Email.java</code> — không có dòng <code>import jakarta.persistence</code> hay <code>io.quarkus</code> nào. Nếu có, bạn đang để hạ tầng lọt vào domain.</div>
 
 <h2 id="p3"><span class="lbl">Thực hành · 3/6</span>Định nghĩa ports (≈ 30 phút)</h2>
 <div class="ex-label file">application/port/out/SaveAccountPort.java &amp; LoadAccountPort.java</div>
@@ -215,7 +215,7 @@ CÓ DIP:        Service ──phụ thuộc──► «interface» TokenIssuerPo
 <div class="callout info"><span class="tag">Command vs DTO</span><p style="margin:4px 0 0">DTO (<code>CreateAccountRequest</code>) thuộc web, mang validation Bean. <i>Command</i> thuộc application, là input “sạch” của use case. Adapter web dịch DTO → command. Tách ra để domain không phụ thuộc annotation web.</p></div>
 
 <h2 id="p4"><span class="lbl">Thực hành · 4/6</span>Application service (di chuyển logic) (≈ 60 phút)</h2>
-<p>Bê logic từ <code>AccountService</code>/<code>AuthService</code> cũ vào đây, nhưng <b>chỉ gọi out-port</b> (interface), không gọi Panache/JwtIssuer trực tiếp.</p>
+<p>Chuyển logic từ <code>AccountService</code>/<code>AuthService</code> cũ vào đây, nhưng <b>chỉ gọi out-port</b> (interface), không gọi Panache/JwtIssuer trực tiếp.</p>
 <div class="ex-label file">application/service/AccountApplicationService.java</div>
 <pre><code><span class="kw">@ApplicationScoped</span>
 <span class="kw">public class</span> <span class="ty">AccountApplicationService</span>
@@ -297,7 +297,7 @@ CÓ DIP:        Service ──phụ thuộc──► «interface» TokenIssuerPo
 <table>
   <thead><tr><th>Bẫy</th><th>Dấu hiệu</th><th>Sửa</th></tr></thead>
   <tbody>
-    <tr><td><b>Entity rò vào domain</b></td><td><code>Account.java</code> có <code>@Entity</code> / import jakarta.persistence</td><td>Tách entity (adapter) khỏi domain; viết hàm map.</td></tr>
+    <tr><td><b>Entity lọt vào domain</b></td><td><code>Account.java</code> có <code>@Entity</code> / import jakarta.persistence</td><td>Tách entity (adapter) khỏi domain; viết hàm map.</td></tr>
     <tr><td><b>Anemic domain</b></td><td>Domain chỉ có getter/setter, mọi logic ở service</td><td>Đưa invariant vào VO/entity (validate trong constructor).</td></tr>
     <tr><td><b>Over-engineering</b></td><td>Tạo port cho thứ chỉ có 1 implement &amp; không bao giờ đổi</td><td>Port hợp lý nhất ở ranh giới I/O (DB, security). Đừng port hoá mọi thứ.</td></tr>
     <tr><td><b>CDI không resolve port</b></td><td>Lỗi “unsatisfied dependency” khi start</td><td>Adapter phải <code>@ApplicationScoped</code> &amp; implement đúng interface port.</td></tr>
@@ -316,7 +316,7 @@ CÓ DIP:        Service ──phụ thuộc──► «interface» TokenIssuerPo
   <li><input type="checkbox"> (tuỳ chọn) ArchUnit chặn domain phụ thuộc hạ tầng.</li>
   <li><input type="checkbox"> Ghi 3–4 dòng cảm nhận về trade-off Panache↔domain mapping.</li>
 </ul></div>
-<div class="selfcheck"><h4>✔ Câu hỏi “đậu phỏng vấn”</h4>
+<div class="selfcheck"><h4>✔ Câu hỏi tự kiểm kiểu phỏng vấn</h4>
   <ul class="small" style="margin:6px 0 0">
     <li>Nếu mai đổi Postgres → MongoDB, bạn phải sửa những file nào? (Đúng: chỉ <code>adapter/out/persistence</code>.)</li>
     <li>Vì sao test use case không cần DB nữa? (Vì mock out-port.)</li>
@@ -337,10 +337,10 @@ CÓ DIP:        Service ──phụ thuộc──► «interface» TokenIssuerPo
 
 <div class="daynav">
   <a href="day-1-java-quarkus.html"><div class="dir">⟵ Ngày trước</div><div class="ttl">Ngày 1 · Java 21 + Quarkus</div></a>
-  <a class="next" href="day-3-microprofile.html"><div class="dir">Ngày tiếp ⟶</div><div class="ttl">Ngày 3 · Quarkus MicroProfile</div></a>
+  <a class="next" href="day-3-microprofile.html"><div class="dir">Ngày tiếp ⟶</div><div class="ttl">Ngày 3 · MicroProfile + Keycloak</div></a>
 </div>
 
-<footer>DigitalWallet — Hướng dẫn học chi tiết · Ngày 2/5. Code là ví dụ minh hoạ; refactor trên nhánh <code>learning/*</code>. Áp dụng cho team cần ADR (supersede <span class="tag-file">docs/architecture</span>).</footer>
+<footer>DigitalWallet — Hướng dẫn học chi tiết · Ngày 2/4. Code là ví dụ minh hoạ; refactor trên nhánh <code>learning/*</code>. Áp dụng cho team cần ADR (supersede <span class="tag-file">docs/architecture</span>).</footer>
 
 </div>
 </body>

@@ -20,7 +20,7 @@ Auth scheme is committed in [../../project-info.md §8](../../project-info.md#8-
 
 - **Algorithm:** ES256 (ECDSA P-256). Tokens MUST be verified with the `ES256` algorithm and the configured public key. MUST NOT accept `alg: none`, `HS256`, or any algorithm not on a hard-coded allow-list — the canonical JWT-confusion attacks rely on lax allow-lists.
 - **Clock skew:** verification MUST allow ≤ 30 seconds of clock skew on `nbf` / `exp`. Tokens beyond skew are rejected.
-- **Verification placement:** the JWT MUST be verified before the JAX-RS request reaches the service layer. WebSocket upgrades MUST validate the JWT before accepting the connection ([../../docs/business-rules/real-time-admin-dashboard-rules.md](../../docs/business-rules/real-time-admin-dashboard-rules.md) RBAC).
+- **Verification placement:** the JWT MUST be verified before the JAX-RS request reaches the application service (use case). WebSocket upgrades MUST validate the JWT before accepting the connection ([../../docs/business-rules/real-time-admin-dashboard-rules.md](../../docs/business-rules/real-time-admin-dashboard-rules.md) RBAC).
 - **Password hashing:** user passwords MUST be hashed with a memory-hard algorithm (Argon2id preferred; bcrypt acceptable with cost ≥ 12). Plain SHA-256 / MD5 / SHA-1 are forbidden. The persisted column is `account.password_hash` ([../../docs/database/README.md](../../docs/database/README.md) `account`).
 - **Account recovery:** MUST be a separate authenticated flow that issues a single-use, time-bounded token; recovery tokens MUST NOT extend or re-issue an existing JWT.
 - **Enumeration prevention:** sign-in failures MUST return the same `errorKey: "auth.invalid_credentials"` regardless of whether the email exists. The same applies to password-reset acknowledgement.
@@ -29,7 +29,7 @@ Auth scheme is committed in [../../project-info.md §8](../../project-info.md#8-
 
 ## 3. Authorization
 
-- **Default-deny:** every endpoint and every service entrypoint MUST require an authenticated principal except the explicit public list (`POST /accounts`, `POST /auth/login`). New endpoints default to authenticated. Controller-level `@RolesAllowed` is the first line; the service layer re-checks the role and ownership ([../../project-info.md §8](../../project-info.md#8-security-baseline), [backend_coding.md §3](backend_coding.md#3-service-layer)).
+- **Default-deny:** every endpoint and every service entrypoint MUST require an authenticated principal except the explicit public list (`POST /accounts`, `POST /auth/login`). New endpoints default to authenticated. Controller-level `@RolesAllowed` (the controller = inbound web adapter) is the first line; the application service (use case) re-checks the role and ownership ([../../project-info.md §8](../../project-info.md#8-security-baseline), [backend_coding.md §3](backend_coding.md#3-service-layer)).
 - **Ownership checks:** any handler that takes a path parameter identifying user-owned data (`{walletId}`, `{accountId}`, `{budgetId}`) MUST verify that the authenticated principal owns the resource — even when the role is correct. Role gives capability; ownership gives access.
 - **Admin reads of user data:** *(MVP defers the `audit_log` row — see [../../docs/decisions/0009-rbac-roles.md](../../docs/decisions/0009-rbac-roles.md).)* When the table returns, admin reads MUST log to `audit_log` with `action = "admin.user.read"` and the subject `account_id`.
 - **Role separation — DEFERRED:** the dedicated `FRAUD_ANALYST` role is **deferred in MVP**; only `USER` and `ADMIN` ship ([../../project-info.md §2.2](../../project-info.md#22-roles-in-the-system), [../../docs/decisions/0009-rbac-roles.md](../../docs/decisions/0009-rbac-roles.md)). Endpoints MUST NOT promote one role's permissions to the other transitively. When `FRAUD_ANALYST` returns, the least-privilege separation between admin and analyst returns with it.
@@ -42,7 +42,7 @@ Auth scheme is committed in [../../project-info.md §8](../../project-info.md#8-
 - **SQL / JPQL injection:** queries MUST use bound parameters. MUST NOT concatenate user-supplied strings into JPQL / SQL fragments. The most common offender is a sort parameter — see [backend_coding.md §10](backend_coding.md#10-pagination--sort-safety).
 - **Sort whitelist:** every sort parameter MUST be mapped through an explicit whitelist before reaching the query layer. Unknown keys raise `validation.invalid_payload`.
 - **File upload:** out of scope in MVP (no endpoint accepts files). If a future endpoint adds uploads, it MUST validate content-type against a whitelist, cap size, and store outside the document root.
-- **XSS:** all user-supplied strings rendered in the React app MUST be rendered as text (default React behaviour). MUST NOT pass user input to `dangerouslySetInnerHTML`. The shared error reporter sanitises message strings before rendering.
+- **XSS:** all user-supplied strings rendered in the Vue app MUST be rendered as text (default Vue text-interpolation behaviour (`{{ }}`)). MUST NOT pass user input to `v-html`. The shared error reporter sanitises message strings before rendering.
 - **Open-redirect:** if a future endpoint accepts a redirect URL, it MUST validate against an allow-list of relative paths or host-equality. Never `Location` -> arbitrary attacker-controlled URL.
 - **LLM prompt injection mitigation:** prompts sent to the LLM MUST be anonymised — only aggregated amounts and category labels ([../../project-info.md §8](../../project-info.md#8-security-baseline), [../../docs/business-rules/ai-advisor-rules.md](../../docs/business-rules/ai-advisor-rules.md) Cross-cutting). Free-form user fields that could carry instructions to the model MUST be stripped or escaped before inclusion.
 
@@ -75,9 +75,9 @@ Storage trade-offs `<!-- not-yet-adopted -->` — the default below is the rule 
 | `HttpOnly` cookie | None | High — needs CSRF | Survives reload | Only when cookie auth is adopted; CSRF must be added. |
 | In-memory only | None | None | Lost on reload | Best for kiosk / shared device — too aggressive as default. |
 
-- **Default:** the JWT is held in memory (Redux store) for the lifetime of the tab; `localStorage` is used only to remember "I was logged in" via an opaque flag, NOT the token itself.
-- **Header injection:** the RTK Query `baseQuery` MUST inject `Authorization: Bearer <token>` from the in-memory store. MUST NOT read the token from `document.cookie`.
-- **Expiry & logout:** on `401`, the `baseQuery` MUST dispatch a logout action that clears the token from memory and redirects to `/login` ([frontend_coding.md §3](frontend_coding.md#3-api-calls)). MUST NOT silently retry.
+- **Default:** the JWT is held in memory (Pinia store) for the lifetime of the tab; `localStorage` is used only to remember "I was logged in" via an opaque flag, NOT the token itself.
+- **Header injection:** the shared Vue Query HTTP client (`shared/api/http.ts`) MUST inject `Authorization: Bearer <token>` from the in-memory store. MUST NOT read the token from `document.cookie`.
+- **Expiry & logout:** on `401`, the shared HTTP client MUST dispatch a logout action that clears the Pinia token from memory and redirects to `/login` ([frontend_coding.md §3](frontend_coding.md#3-api-calls)). MUST NOT silently retry.
 - **UX vs security:** a "Remember me" flow MUST NOT extend the JWT lifetime by storing the refresh token in `localStorage`. If refresh-token UX is added later, the refresh token MUST be `HttpOnly` cookie with CSRF protection.
 
 ## 7. Sensitive data exposure
@@ -137,7 +137,7 @@ See [testing.md](testing.md) for the testing contract. The required security tes
 | Wrong-tenant request | `USER` A cannot read or mutate `USER` B's wallet, budget, or notifications. | Per ownership-bound endpoint. |
 | Replay | Same `Idempotency-Key` with the same body returns the original outcome; same key with a different body returns `idempotency.replay_conflict`. | Wallet service integration tests (NFR3). |
 | Boundary | `threshold_percent` outside `[1, 100]`, `amount <= 0`, malformed currency code → `validation.*`. | DTO validation tests. |
-| XSS payload | A free-form string containing `<script>` is rendered as text in the frontend, not executed. | Vitest + React Testing Library. |
+| XSS payload | A free-form string containing `<script>` is rendered as text in the frontend, not executed. | Vitest + @testing-library/vue. |
 | Rate limit | The 11th transfer per minute returns 429 with `Retry-After`; the 6th advisor call per hour returns 429. | Rate-limit middleware tests. |
 | Outbox event on block | A fraud-driven block (FR2.1–FR2.2) writes the expected `transaction.blocked` outbox row (no ledger row). | Service integration tests. *(MVP defers the `audit_log` row originally specified here — see [../../docs/decisions/0009-rbac-roles.md](../../docs/decisions/0009-rbac-roles.md).)* |
 
@@ -148,14 +148,14 @@ The `code-review` skill checks every PR against this checklist. Each item is a r
 - [ ] No secret material in the diff (keys, passwords, tokens, full JWT, full Idempotency-Key) — §1, §10.
 - [ ] No `console.log` / unstructured `System.out.println` left in production code — §1, [backend_coding.md §11](backend_coding.md#11-logging), [frontend_coding.md §18](frontend_coding.md#18-bundle-hygiene).
 - [ ] Every new mutating money endpoint requires `Idempotency-Key` — §11 (replay), [backend_coding.md §2](backend_coding.md#2-routing--controllers).
-- [ ] Every new endpoint enforces RBAC at **both** the controller and the service layer — §3.
+- [ ] Every new endpoint enforces RBAC at **both** the inbound web adapter and the application service — §3.
 - [ ] Every new endpoint that takes an owner-scoped path parameter performs an ownership check — §3.
 - [ ] Every new endpoint that accepts a body uses `@Valid` and a Zod schema (frontend) — §4, [backend_coding.md §12](backend_coding.md#12-validation), [frontend_coding.md §4](frontend_coding.md#4-forms--validation).
 - [ ] Every new sort / filter parameter is whitelisted server-side — §4, [backend_coding.md §10](backend_coding.md#10-pagination--sort-safety).
 - [ ] Every new SQL / JPQL query uses bound parameters — §4.
 - [ ] Every new response DTO omits `password_hash`, JWT secrets, internal counters, raw stack traces — §7.
 - [ ] Every new error path returns a typed `errorKey` matching [../../docs/api/README.md](../../docs/api/README.md#error-response-shape) — [backend_coding.md §8](backend_coding.md#8-exception-handling).
-- [ ] No `dangerouslySetInnerHTML` on user input — §4, [frontend_coding.md §19](frontend_coding.md#19-anti-patterns).
+- [ ] No `v-html` on user input — §4, [frontend_coding.md §19](frontend_coding.md#19-anti-patterns).
 - [ ] No new `VITE_*` env variable holds a secret — §1.
 - [ ] LLM prompts contain only aggregated amounts and category labels — no user identifiers — §4, [../../docs/business-rules/ai-advisor-rules.md](../../docs/business-rules/ai-advisor-rules.md).
 - [ ] *(MVP defers `audit_log`. Item returns with the table — see [../../docs/decisions/0009-rbac-roles.md](../../docs/decisions/0009-rbac-roles.md).)* Audit-log row written for any new admin or money-mutation action — §3, §7.

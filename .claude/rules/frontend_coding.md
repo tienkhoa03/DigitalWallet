@@ -1,22 +1,22 @@
 # Frontend coding rules
 
-This file is the coding contract for the React app under `frontend/` (single app serving both end users and the admin dashboard, per [../../project-info.md §3.1](../../project-info.md#31-module--package-organization)). The `code-review` skill checks pull requests against the sections below.
+This file is the coding contract for the Vue app under `frontend/` (single app serving both end users and the admin dashboard, per [../../project-info.md §3.1](../../project-info.md#31-module--package-organization)). The `code-review` skill checks pull requests against the sections below.
 
 > **Status:** the codebase is not yet scaffolded. Every rule cites either `docs/` or a section of [../../project-info.md](../../project-info.md). Code examples use module names from [../../docs/architecture/README.md §4](../../docs/architecture/README.md#4-frontend-layering). Sections marked `<!-- not-yet-adopted -->` describe practices to follow once code lands.
 
-Stack (mandated): React 18.x, TypeScript 5.x **strict**, Tailwind CSS 3.x, Redux Toolkit (incl. RTK Query), React Hook Form + Zod, native WebSocket API, pnpm, Vitest + React Testing Library, Playwright. Source: [../../project-info.md §4.2](../../project-info.md#42-frontend), [../../docs/decisions/0008-frontend-stack.md](../../docs/decisions/0008-frontend-stack.md).
+Stack (mandated): Vue 3.x (Composition API, `<script setup lang="ts">` SFCs), TypeScript 5.x **strict**, Tailwind CSS 3.x, Pinia, TanStack Query (Vue Query), VeeValidate + Zod, Vue Router, native WebSocket API, pnpm, Vitest + `@testing-library/vue`, Playwright. Source: [../../project-info.md §4.2](../../project-info.md#42-frontend), [../../docs/decisions/0008-frontend-stack.md](../../docs/decisions/0008-frontend-stack.md).
 
 ## 1. Component structure
 
-- **Paradigm:** functional components only. Class components are forbidden in new code.
-- **File naming:** `kebab-case` files; the default-export component is `PascalCase`. A file MUST export at most one component as its `default`; named exports for helpers / subcomponents are allowed.
-- **Suffixes:** `<name>.tsx` for components, `<name>.hook.ts` for hooks, `<name>.slice.ts` for Redux slices, `<name>.api.ts` for RTK Query slices, `<name>.schema.ts` for Zod schemas, `<name>.test.tsx`/`<name>.test.ts` for co-located specs.
+- **Paradigm:** Single-File Components with `<script setup lang="ts">`. The Options API is allowed but the Composition API + `<script setup>` is the default for new code.
+- **File naming:** `kebab-case.vue` single-file components; the component name is `PascalCase`. One component per `.vue` file.
+- **Suffixes:** `<name>.vue` for components, `use-<name>.ts` for composables, `<feature>.store.ts` for Pinia stores, `<feature>.api.ts` for Vue Query API clients, `<name>.schema.ts` for Zod schemas, `<name>.test.ts`/`<name>.spec.ts` for co-located specs.
 - **Directory layout** `<!-- not-yet-adopted -->`:
 
   ```
   frontend/
   ├── src/
-  │   ├── app/              # routed shell, providers, store wiring
+  │   ├── app/              # App.vue root, router mount, Pinia + Vue Query plugin wiring, providers
   │   ├── features/         # one folder per backend module
   │   │   ├── wallet/
   │   │   ├── transfer/
@@ -24,7 +24,7 @@ Stack (mandated): React 18.x, TypeScript 5.x **strict**, Tailwind CSS 3.x, Redux
   │   │   ├── pfm/
   │   │   ├── advisor/
   │   │   └── dashboard/
-  │   ├── shared/           # ui primitives, hooks, money, idempotency, websocket client
+  │   ├── shared/           # ui primitives, composables, money, idempotency, websocket client
   │   └── routes/           # route table & guards
   ├── public/
   └── tests/                # cross-feature E2E specs (Playwright)
@@ -36,28 +36,28 @@ Stack (mandated): React 18.x, TypeScript 5.x **strict**, Tailwind CSS 3.x, Redux
 
 | State boundary | Tool | Rule |
 |---|---|---|
-| Local UI (toggles, input focus, disclosure) | `useState` / `useReducer` | Default for any state that does not need to be shared. MUST NOT promote to Redux out of habit. |
-| Cross-component within a feature | Redux Toolkit feature slice (`<feature>.slice.ts`) | One slice per feature; selectors live next to the slice. |
-| Cross-feature / app-wide | Redux Toolkit root slice or RTK Query cache | Keep cross-feature global state to a minimum (auth, current user, websocket connection status). |
-| Server cache | RTK Query API slice (`<feature>.api.ts`) | All REST traffic goes through RTK Query. MUST NOT hand-roll `fetch` calls inside components. |
-| Form state | React Hook Form | Forms MUST NOT push field-level state into Redux. |
+| Local UI (toggles, input focus, disclosure) | `ref` / `reactive` / `computed` | Default for any state that does not need to be shared. MUST NOT promote to Pinia out of habit. |
+| Cross-component within a feature | Pinia feature store (`<feature>.store.ts`) | One store per feature; getters live in the store. |
+| Cross-feature / app-wide | Pinia root store or Vue Query cache | Keep cross-feature global state to a minimum (auth, current user, websocket connection status). |
+| Server cache | Vue Query API client (`<feature>.api.ts`) | All REST traffic goes through Vue Query. MUST NOT hand-roll `fetch` calls inside components. |
+| Form state | VeeValidate (`useForm`) | Forms MUST NOT push field-level state into Pinia. |
 
-- Redux Toolkit is the only state library ([../../project-info.md §4.2](../../project-info.md#42-frontend)). MUST NOT introduce Zustand, Jotai, MobX, Recoil, etc.
-- Selectors MUST be memoised with `createSelector` if they produce derived data; raw inline selectors that return new object literals every call are a defect (cause re-renders).
+- Pinia is the only state library ([../../project-info.md §4.2](../../project-info.md#42-frontend)). MUST NOT introduce Vuex, Zustand, Jotai, MobX, Recoil, etc.
+- Derived data MUST be a `computed` or a Pinia getter; raw inline derivations that return new object literals on every render are a defect (cause re-renders).
 
 ## 3. API calls
 
-- **Network client:** RTK Query. The canonical endpoint catalog lives in [../../docs/api/README.md](../../docs/api/README.md); RTK Query API slices mirror it.
+- **Network client:** TanStack Query (Vue Query). The canonical endpoint catalog lives in [../../docs/api/README.md](../../docs/api/README.md); Vue Query API clients mirror it.
 - **API path constants:** every endpoint MUST be declared as a typed constant in `<feature>/<feature>.api.ts` — Never hard-code paths inline at the call site.
-- **Per-call shape:** `endpoint` definitions MUST declare both `query` (request shape) and `transformResponse` if the wire shape differs from the UI shape. Loading and error states come from RTK Query (`isLoading`, `isFetching`, `error`) — Never re-implement them.
-- **Error normalization:** the global `baseQuery` MUST translate the backend error envelope (`{ error_key, message }` per [../../docs/api/README.md](../../docs/api/README.md#error-response-shape)) into a typed `ApiError` consumed by UI code.
-- **Loading state:** components MUST render an explicit loading element while `isLoading` is true. A blank component during fetch is a defect.
-- **Token-expiry handling:** the RTK Query `baseQuery` MUST detect a 401 response, dispatch a logout action, and redirect to `/login`. MUST NOT silently retry the request. See [security.md §6](security.md#6-sessions--token-handling-frontend).
+- **Per-call shape:** `useQuery` / `useMutation` definitions MUST declare both the request shape (`queryFn` / `mutationFn`) and a `select` transform if the wire shape differs from the UI shape. Loading and error states come from Vue Query (`isPending`/`isLoading`, `isFetching`, `error`) — Never re-implement them.
+- **Error normalization:** the shared HTTP client (`shared/api/http.ts`) MUST translate the backend error envelope (`{ error_key, message }` per [../../docs/api/README.md](../../docs/api/README.md#error-response-shape)) into a typed `ApiError` consumed by UI code.
+- **Loading state:** components MUST render an explicit loading element while `isPending` / `isLoading` is true. A blank component during fetch is a defect.
+- **Token-expiry handling:** the shared HTTP client (`shared/api/http.ts`) MUST detect a 401 response, dispatch a logout (clear the in-memory token from the Pinia auth store), and redirect to `/login`. MUST NOT silently retry the request. See [security.md §6](security.md#6-sessions--token-handling-frontend).
 - **Idempotency-Key:** mutating endpoints (deposit, withdraw, transfer) MUST attach an `Idempotency-Key` header generated client-side (see §13). Resubmits of the same logical action reuse the same key.
 
 ## 4. Forms & validation
 
-- **Library:** React Hook Form + Zod ([../../project-info.md §4.2](../../project-info.md#42-frontend)).
+- **Library:** VeeValidate + Zod ([../../project-info.md §4.2](../../project-info.md#42-frontend)). The validation bridge is `toTypedSchema` from `@vee-validate/zod`.
 - **Validation MUST be backend-aligned.** The Zod schema MUST mirror the server-side rule referenced below for each form:
 
   | Form | Field | Zod rule | Backend rule source |
@@ -77,8 +77,8 @@ Stack (mandated): React 18.x, TypeScript 5.x **strict**, Tailwind CSS 3.x, Redux
 
 ## 5. Routing & route protection
 
-- **Router:** React Router (v6+). Route definitions live in `src/routes/`.
-- **Guards:** functional only — implemented as wrapper components (`<RequireAuth>`, `<RequireRole role="ADMIN">`). MUST NOT mix imperative redirects scattered inside page components with declarative guards.
+- **Router:** Vue Router (v4+). Route definitions live in `src/routes/`.
+- **Guards:** functional only — a global `router.beforeEach` reads `to.meta.requiresAuth` and `to.meta.role`, plus optional wrapper components (`<RequireAuth>`, `<RequireRole role="ADMIN">`). MUST NOT scatter imperative `router.push` redirects inside page component bodies alongside declarative guards.
 - **Role / condition map:**
 
   | Route family | Allowed roles | Source |
@@ -95,17 +95,17 @@ Stack (mandated): React 18.x, TypeScript 5.x **strict**, Tailwind CSS 3.x, Redux
 ## 6. Styling
 
 - **Library:** Tailwind CSS 3.x ([../../project-info.md §4.2](../../project-info.md#42-frontend)). MUST NOT add a second CSS-in-JS or CSS-Modules system.
-- **Design tokens:** colours, spacing, and typography are defined in `tailwind.config.ts` under `theme.extend`. Ad-hoc hex values in JSX are a defect — extend the theme instead.
+- **Design tokens:** colours, spacing, and typography are defined in `tailwind.config.ts` under `theme.extend`. Ad-hoc hex values in templates are a defect — extend the theme instead.
 - **Responsive utilities:** mobile-first; use Tailwind responsive prefixes (`sm:`, `md:`, `lg:`). Fixed pixel widths on layout containers are forbidden for non-modal content.
-- **UI library overrides:** if a shared UI primitive is wrapped, the wrapper lives in `shared/ui/` and exposes a typed prop surface — Never `dangerouslySetInnerHTML` for styling.
+- **UI library overrides:** if a shared UI primitive is wrapped, the wrapper lives in `shared/ui/` and exposes a typed prop surface — Never `v-html` for styling.
 - **Money / number formatting:** use the shared helper (`shared/money/format.ts`) — see §13. MUST NOT call `Number.toFixed(2)` directly on monetary values.
 
 ## 7. Import ordering
 
 Imports MUST be grouped and ordered as follows, with one blank line between groups:
 
-1. React / Node built-ins.
-2. Third-party packages.
+1. Node built-ins.
+2. Third-party packages (incl. `vue`, `vue-router`, `pinia`).
 3. Project-absolute imports (`@/shared`, `@/features/...`).
 4. Project-relative imports (`./...`, `../...`).
 5. Style / asset imports (`./foo.css`, `@/assets/...`).
@@ -113,9 +113,9 @@ Imports MUST be grouped and ordered as follows, with one blank line between grou
 Example `<!-- not-yet-adopted -->`:
 
 ```ts
-import { useEffect } from 'react';
+import { onMounted } from 'vue';
 
-import { useForm } from 'react-hook-form';
+import { useForm } from 'vee-validate';
 import { z } from 'zod';
 
 import { useDepositMutation } from '@/features/wallet/wallet.api';
@@ -126,7 +126,7 @@ import { DepositSchema } from './deposit.schema';
 import './deposit.css';
 ```
 
-ESLint's `import/order` rule MUST enforce this — manual ordering is not the contract.
+ESLint's `import/order` rule (with `eslint-plugin-vue`) MUST enforce this — manual ordering is not the contract.
 
 ## 8. Constants
 
@@ -137,28 +137,28 @@ ESLint's `import/order` rule MUST enforce this — manual ordering is not the co
 
 ## 9. Async patterns
 
-- **Promise vs Observable:** Promises (and async/await). Project MUST NOT introduce RxJS — RTK Query handles streaming cache invalidation.
-- **WebSocket subscriptions** subscribe through the shared client in `shared/websocket/`. Components subscribe via a hook (`useWebSocketChannel(channelName)`); the hook MUST unsubscribe on unmount. See §13 and §15.
-- **Cleanup:** every `useEffect` that opens a subscription, timer, or `fetch` MUST return a cleanup function. An effect without cleanup that owns external state is a defect.
-- **Race-condition guards:** when an effect depends on a value that may change, the cleanup MUST cancel or ignore the in-flight result. Use `AbortController` for `fetch` or a captured "stale" flag for non-cancellable work.
+- **Promise vs Observable:** Promises (and async/await). Project MUST NOT introduce RxJS — Vue Query handles streaming cache invalidation.
+- **WebSocket subscriptions** subscribe through the shared client in `shared/websocket/`. Components subscribe via a composable (`useWebSocketChannel(channelName)`); the composable MUST unsubscribe on unmount. See §13 and §15.
+- **Cleanup:** every `watch` / `watchEffect` / `onMounted` that opens a subscription, timer, or `fetch` MUST clean up in `onUnmounted` (or the watch stop handle). Setup that owns external state without cleanup is a defect.
+- **Race-condition guards:** when an effect depends on a value that may change, the cleanup MUST cancel or ignore the in-flight result. Use `AbortController` for `fetch` or a captured "stale" flag for non-cancellable work (Vue Query cancels automatically on key change).
 
 ## 10. Props / Component arguments
 
-- **Typed:** every component prop MUST have a TypeScript type. `any` is forbidden in production code; `unknown` is acceptable at trust boundaries (e.g. parsing a JSON message from WebSocket) and must be narrowed before use.
+- **Typed:** every component prop MUST have a TypeScript type via `defineProps<T>()`. `any` is forbidden in production code; `unknown` is acceptable at trust boundaries (e.g. parsing a JSON message from WebSocket) and must be narrowed before use. Use `defineEmits` for events.
 - **Discriminated unions** are preferred to boolean flags for mutually exclusive prop combinations (`{ kind: 'create' } | { kind: 'edit', id: string }`).
-- **No prop drilling beyond 3 levels.** Reach for context, Redux, or RTK Query before passing a prop through five components.
-- **Function props:** stable identity. Pass `useCallback`-wrapped handlers to memoised children; otherwise React.memo is pointless.
+- **No prop drilling beyond 3 levels.** Reach for `provide`/`inject`, Pinia, or Vue Query before passing a prop through five components.
+- **Event/function props:** stable identity. Prefer `defineEmits` for child-to-parent events; pass stable handler references to memoised children where applicable.
 
 ## 11. Testing
 
 - See [testing.md §3](testing.md#3-frontend-testing) for the full frontend testing contract.
-- **Co-location:** test files live next to the unit under test (`deposit-form.tsx` + `deposit-form.test.tsx`).
+- **Co-location:** test files live next to the unit under test (`deposit-form.vue` + `deposit-form.test.ts`).
 - **Query priority:** queries SHOULD prefer in this order:
   1. `data-test="..."` attributes (explicit contract — `getByTestId`).
   2. Accessibility role / name (`getByRole`).
   3. Visible text (`getByText`).
   Class names and CSS selectors are NEVER acceptable as test queries.
-- **Network:** mock at the RTK Query level (`msw` or `setupApiStore`) — Never stub global `fetch`.
+- **Network:** mock at the Vue Query level (`msw`) — Never stub global `fetch`.
 
 ## 12. Shared components catalogue
 
@@ -166,12 +166,12 @@ ESLint's `import/order` rule MUST enforce this — manual ordering is not the co
 
 | Component | Path | Purpose |
 |---|---|---|
-| `MoneyDisplay` | `shared/ui/money-display.tsx` | Formats `numeric(19,4)` amounts with currency code. |
-| `IdempotencyKeyField` | `shared/ui/idempotency-key-field.tsx` | Hidden field that emits a UUIDv7 per logical submission. |
-| `WebSocketProvider` | `shared/websocket/provider.tsx` | App-wide WebSocket client; one connection per session. |
-| `RequireAuth` / `RequireRole` | `routes/guards.tsx` | Route-level RBAC. |
-| `ErrorBoundary` | `shared/ui/error-boundary.tsx` | Route-level fallback (see §14). |
-| `ToastShelf` | `shared/ui/toast-shelf.tsx` | Fraud alert toasts (FR3.2) and threshold notifications (FR5.1). |
+| `MoneyDisplay` | `shared/ui/money-display.vue` | Formats `numeric(19,4)` amounts with currency code. |
+| `IdempotencyKeyField` | `shared/ui/idempotency-key-field.vue` | Hidden field that emits a UUIDv7 per logical submission. |
+| `WebSocketProvider` | `shared/websocket/provider.ts` | App-wide WebSocket client plugin; one connection per session. |
+| `RequireAuth` / `RequireRole` | `routes/guards.ts` | Route-level RBAC. |
+| `ErrorBoundary` | `shared/ui/error-boundary.vue` | Route-level fallback (see §14). |
+| `ToastShelf` | `shared/ui/toast-shelf.vue` | Fraud alert toasts (FR3.2) and threshold notifications (FR5.1). |
 
 ## 13. Domain-specific conventions
 
@@ -185,22 +185,22 @@ ESLint's `import/order` rule MUST enforce this — manual ordering is not the co
 
 ## 14. Error boundaries
 
-- A top-level `ErrorBoundary` MUST wrap the routed shell.
+- A top-level `ErrorBoundary` (using `onErrorCaptured` + `app.config.errorHandler`) MUST wrap the routed shell.
 - Each top-level route MUST have its own boundary so that a feature's failure does not blank the whole app.
 - Boundaries MUST log via the shared error reporter — Never `console.error` ([../../docs/business-rules/README.md](../../docs/business-rules/README.md) Cross-cutting security rules, no PII in logs, applies to the browser console as well).
 - A boundary MUST NOT swallow errors silently; the user-facing fallback shows "something went wrong" plus a recovery action (retry, navigate home).
 
 ## 15. Framework-specific lifecycles
 
-- **Effects:** dependencies are exhaustive (enforced by `eslint-plugin-react-hooks/exhaustive-deps`). Suppressing the rule MUST come with an inline comment explaining why; suppression without justification is a defect.
-- **Cleanup:** subscriptions (WebSocket, intervals, RTK Query manual subscriptions) MUST be cleaned up.
-- **Race-condition guards:** when fetching data based on a route param that may change before the response arrives, the effect MUST cancel via `AbortController` or guard the assignment with a captured "stale" flag.
-- **`useLayoutEffect`** is reserved for measurements that must complete before paint; default to `useEffect`.
+- **Effects:** `watch` / `watchEffect` MUST declare explicit sources (no implicit reactivity surprises). Suppressing a reactivity-lint rule MUST come with an inline comment explaining why; suppression without justification is a defect.
+- **Cleanup:** subscriptions (WebSocket, intervals, Vue Query manual subscriptions) MUST be cleaned up in `onUnmounted` or via the watch stop handle.
+- **Race-condition guards:** when fetching data based on a route param that may change before the response arrives, the effect MUST cancel via `AbortController` or guard the assignment with a captured "stale" flag (Vue Query cancels automatically on key change).
+- **`watchEffect` vs `watch`:** prefer `watch` with explicit sources when you need the previous value or fine-grained control; `watchEffect` is for tracking all reactive reads in the callback. Effects/subscriptions MUST tolerate Vue's dev remount — setup must be idempotent and cleaned up.
 
 ## 16. List rendering
 
-- **Stable keys:** every `.map` of JSX MUST use a stable id (`transaction.id`, `bucket.id`) as `key`. Array index keys are forbidden for lists whose order can change.
-- **Virtualization:** lists of more than ~200 rows MUST use a virtualizer (e.g. `@tanstack/react-virtual`). Transaction statements (FR1.4) and fraud alert backlogs are the primary candidates.
+- **Stable keys:** every `v-for` MUST use a stable id (`transaction.id`, `bucket.id`) as `:key`. Array index keys are forbidden for lists whose order can change.
+- **Virtualization:** lists of more than ~200 rows MUST use a virtualizer (e.g. `@tanstack/vue-virtual` or `vue-virtual-scroller`). Transaction statements (FR1.4) and fraud alert backlogs are the primary candidates.
 
 ## 17. Accessibility floor
 
@@ -209,7 +209,7 @@ The WCAG target is open ([../../project-info.md §17.3](../../project-info.md#17
 | Concern | Rule |
 |---|---|
 | Keyboard reachability | Every interactive element MUST be reachable by `Tab` and operable by `Enter`/`Space`. Custom controls without keyboard handlers are a defect. |
-| Labels | Every form input MUST have an associated `<label>` (explicit `htmlFor` or wrapping label). |
+| Labels | Every form input MUST have an associated `<label>` (explicit `for` or wrapping label). |
 | ARIA | ARIA attributes used to compensate for non-semantic markup MUST come in pairs (e.g. `role="dialog"` + `aria-modal` + focus trap). |
 | Contrast | Text against background MUST clear WCAG AA contrast — verified via Tailwind colour pairings, not custom hex values. |
 | Live regions | Real-time toasts (fraud alerts, budget alerts) MUST be announced via an `aria-live="polite"` region; silent updates are a defect for non-sighted users. |
@@ -218,7 +218,7 @@ The WCAG target is open ([../../project-info.md §17.3](../../project-info.md#17
 ## 18. Bundle hygiene
 
 - **devDependencies isolation:** test, lint, and storybook packages MUST live under `devDependencies`. A devDependency imported from production code is a defect.
-- **Strip console logs:** the production build MUST drop `console.log` / `console.debug` (via Vite plugin or build flag). `console.error` is allowed only inside the shared error reporter.
+- **Strip console logs:** the production build MUST drop `console.log` / `console.debug` (via Vite `esbuild.drop` or terser config). `console.error` is allowed only inside the shared error reporter.
 - **Tree-shake imports:** use named imports from large libraries (`import { format } from 'date-fns'`, not `import * as df from 'date-fns'`). MUST NOT import an entire icon library — pick the icons used.
 - **No runtime polyfills for browsers below the target.** Vite's browserslist is the source of truth.
 
@@ -226,12 +226,12 @@ The WCAG target is open ([../../project-info.md §17.3](../../project-info.md#17
 
 | Don't | Why | Do instead |
 |---|---|---|
-| Hand-rolled `fetch` inside a component | Bypasses RTK Query caching, retry, and error normalization. | Define an RTK Query endpoint in `<feature>.api.ts`. |
-| Storing form field values in Redux | Re-render storm and lost focus. | Use React Hook Form; promote to Redux only on submit. |
+| Hand-rolled `fetch` inside a component | Bypasses Vue Query caching, retry, and error normalization. | Define a Vue Query endpoint in `<feature>.api.ts`. |
+| Storing form field values in Pinia | Re-render storm and lost focus. | Use VeeValidate; promote to Pinia only on submit. |
 | `any` typed state, props, or return | Defeats TypeScript strict mode. | Use precise types or `unknown` narrowed at the boundary. |
-| `useEffect` to derive state from props | Causes extra renders and stale state bugs. | Compute the derived value in render or with `useMemo`. |
-| Index as `.map` key for orderable lists | Breaks reconciliation, eats focus. | Use a domain-stable id. |
-| Direct `document.*` manipulation in components | Hides reactive state from React. | Use refs or controlled state. |
+| `watch` to derive state from props | Causes extra renders and stale state bugs. | Compute the derived value with `computed`. |
+| Index as `v-for` `:key` for orderable lists | Breaks reconciliation, eats focus. | Use a domain-stable id. |
+| Direct `document.*` manipulation in components | Hides reactive state from Vue. | Use template refs or controlled state. |
 | Subscribing to WebSocket in many places | Reconnect storm, duplicate handlers. | Use the shared WebSocket client (§13). |
 | Showing money via `Number.toFixed(2)` | Precision loss on `numeric(19,4)`. | Use `formatMoney` from `shared/money/`. |
 | Generating a fresh `Idempotency-Key` per retry | Defeats NFR3 — retries become new transactions. | Reuse the per-submission key (see §13). |
